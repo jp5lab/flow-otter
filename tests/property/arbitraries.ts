@@ -2,10 +2,14 @@ import fc from 'fast-check';
 
 import type {
   AuthoringSpec,
+  CommentSpec,
   ConfigNodeSpec,
   ConnectionSpec,
+  GroupSpec,
+  JunctionSpec,
   NodeSpec,
   SubflowDefSpec,
+  TabEnvEntry,
   TabSpec,
 } from '../../src/toolkit/authoring/types.js';
 
@@ -49,7 +53,30 @@ interface RawTab {
   label: string;
   nodeEntries: { key: string; proto: NodeProto }[];
   rawConnections: { fromKey: string; toKey: string; outputPort: number }[];
+  junctionKeys: string[];
+  groupEntries: {
+    key: string;
+    name: string;
+    position: { x: number; y: number };
+    size: { w: number; h: number };
+    info: string | undefined;
+  }[];
+  commentEntries: {
+    key: string;
+    text: string;
+    position: { x: number; y: number };
+    size: { w: number; h: number } | undefined;
+  }[];
+  locked: boolean | undefined;
+  envEntries: { name: string; type: TabEnvEntry['type']; value: string }[];
 }
+
+const ENV_TYPES: TabEnvEntry['type'][] = ['str', 'num', 'bool', 'json'];
+const arbEnvEntry = fc.record({
+  name: alphaString(2, 8),
+  type: fc.constantFrom<TabEnvEntry['type']>(...ENV_TYPES),
+  value: alphaString(1, 6),
+});
 
 function dedupeUniqueByKey<T>(items: readonly T[], key: (t: T) => string): T[] {
   const seen = new Set<string>();
@@ -75,6 +102,38 @@ const arbTab: fc.Arbitrary<TabSpec> = fc
       fc.record({ fromKey: arbKey, toKey: arbKey, outputPort: fc.constantFrom(0) }),
       { minLength: 0, maxLength: 4 },
     ),
+    junctionKeys: fc.array(arbKey, { minLength: 0, maxLength: 2 }),
+    groupEntries: fc.array(
+      fc.record({
+        key: arbKey,
+        name: arbLabel,
+        position: arbPosition,
+        size: fc.record({
+          w: fc.integer({ min: 50, max: 600 }),
+          h: fc.integer({ min: 50, max: 400 }),
+        }),
+        info: fc.option(alphaString(1, 12)).map((s) => s ?? undefined),
+      }),
+      { minLength: 0, maxLength: 2 },
+    ),
+    commentEntries: fc.array(
+      fc.record({
+        key: arbKey,
+        text: arbLabel,
+        position: arbPosition,
+        size: fc
+          .option(
+            fc.record({
+              w: fc.integer({ min: 50, max: 400 }),
+              h: fc.integer({ min: 20, max: 200 }),
+            }),
+          )
+          .map((s) => s ?? undefined),
+      }),
+      { minLength: 0, maxLength: 2 },
+    ),
+    locked: fc.option(fc.boolean()).map((b) => b ?? undefined),
+    envEntries: fc.array(arbEnvEntry, { minLength: 0, maxLength: 2 }),
   })
   .map((raw): TabSpec => {
     // Dedupe nodes by key
@@ -85,14 +144,25 @@ const arbTab: fc.Arbitrary<TabSpec> = fc
       label: proto.label,
       position: proto.position,
     }));
-    const validKeys = new Set(nodes.map((n) => n.key));
-    // Sources cannot be debug (0 output ports)
-    const sourceKeys = new Set(nodes.filter((n) => n.type !== 'debug').map((n) => n.key));
-    // Filter connections: both endpoints must exist; from must be a valid source; no self-loop
+    const nodeKeys = new Set(nodes.map((n) => n.key));
+    // Dedupe junctions, exclude any that collide with a node key.
+    const uniqueJunctionKeys = Array.from(new Set(raw.junctionKeys)).filter(
+      (k) => !nodeKeys.has(k),
+    );
+    const junctions: JunctionSpec[] = uniqueJunctionKeys.map((key, i) => ({
+      key,
+      position: { x: 800 + (i % 4) * 60, y: 100 + Math.floor(i / 4) * 80 },
+    }));
+    const validWireKeys = new Set<string>([...nodeKeys, ...uniqueJunctionKeys]);
+    // Sources cannot be debug (0 output ports). Junctions ARE valid sources.
+    const sourceKeys = new Set<string>([
+      ...nodes.filter((n) => n.type !== 'debug').map((n) => n.key),
+      ...uniqueJunctionKeys,
+    ]);
     const filteredConn = raw.rawConnections.filter(
       (c) =>
-        validKeys.has(c.fromKey) &&
-        validKeys.has(c.toKey) &&
+        validWireKeys.has(c.fromKey) &&
+        validWireKeys.has(c.toKey) &&
         sourceKeys.has(c.fromKey) &&
         c.fromKey !== c.toKey,
     );
@@ -100,14 +170,52 @@ const arbTab: fc.Arbitrary<TabSpec> = fc
       filteredConn,
       (c) => `${c.fromKey}|${c.outputPort}|${c.toKey}`,
     );
-    return {
+
+    // Groups + comments dedupe by key against each other and against nodes/junctions.
+    const reservedKeys = new Set<string>([...validWireKeys]);
+    const uniqueGroups = dedupeUniqueByKey(raw.groupEntries, (g) => g.key).filter(
+      (g) => !reservedKeys.has(g.key),
+    );
+    for (const g of uniqueGroups) reservedKeys.add(g.key);
+    const groups: GroupSpec[] = uniqueGroups.map((g) => ({
+      key: g.key,
+      name: g.name,
+      nodeKeys: [],
+      position: g.position,
+      size: g.size,
+      ...(g.info !== undefined ? { info: g.info } : {}),
+    }));
+
+    const uniqueComments = dedupeUniqueByKey(raw.commentEntries, (c) => c.key).filter(
+      (c) => !reservedKeys.has(c.key),
+    );
+    const comments: CommentSpec[] = uniqueComments.map((c) => ({
+      key: c.key,
+      text: c.text,
+      position: c.position,
+      ...(c.size !== undefined ? { size: c.size } : {}),
+    }));
+
+    // Dedupe env entries by name.
+    const uniqueEnv = dedupeUniqueByKey(raw.envEntries, (e) => e.name);
+    const env: TabEnvEntry[] = uniqueEnv.map((e) => ({
+      name: e.name,
+      type: e.type,
+      value: e.value,
+    }));
+
+    const tab: TabSpec = {
       id: raw.id,
       label: raw.label,
       nodes,
       connections: dedupedConn,
-      groups: [],
-      comments: [],
+      groups,
+      comments,
+      ...(junctions.length > 0 ? { junctions } : {}),
+      ...(raw.locked !== undefined ? { locked: raw.locked } : {}),
+      ...(env.length > 0 ? { env } : {}),
     };
+    return tab;
   });
 
 interface RawSubflowDef {
@@ -183,15 +291,21 @@ function compareConnections(a: ConnectionSpec, b: ConnectionSpec): number {
 export function canonicalizeSpec(spec: AuthoringSpec): AuthoringSpec {
   const tabs = [...spec.tabs]
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((t) => ({
-      ...t,
-      nodes: [...t.nodes].sort((a, b) => a.key.localeCompare(b.key)),
-      connections: [...t.connections].sort(compareConnections),
-      groups: [...t.groups]
-        .sort((a, b) => a.key.localeCompare(b.key))
-        .map((g) => ({ ...g, nodeKeys: [...g.nodeKeys].sort() })),
-      comments: [...t.comments].sort((a, b) => a.key.localeCompare(b.key)),
-    }));
+    .map((t): TabSpec => {
+      const out: TabSpec = {
+        ...t,
+        nodes: [...t.nodes].sort((a, b) => a.key.localeCompare(b.key)),
+        connections: [...t.connections].sort(compareConnections),
+        groups: [...t.groups]
+          .sort((a, b) => a.key.localeCompare(b.key))
+          .map((g) => ({ ...g, nodeKeys: [...g.nodeKeys].sort() })),
+        comments: [...t.comments].sort((a, b) => a.key.localeCompare(b.key)),
+        ...(t.junctions !== undefined
+          ? { junctions: [...t.junctions].sort((a, b) => a.key.localeCompare(b.key)) }
+          : {}),
+      };
+      return out;
+    });
   const configNodes: ConfigNodeSpec[] = [...(spec.configNodes ?? [])].sort((a, b) =>
     a.key.localeCompare(b.key),
   );

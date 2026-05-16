@@ -135,6 +135,47 @@ interface InstantiateTemplateOutput {
 let ctx: ToolContext;
 let cleanup: () => Promise<void>;
 
+async function rebuildCtx(
+  fixture: unknown[],
+): Promise<{ ctx: ToolContext; cleanup: () => Promise<void>; reset: () => Promise<void> }> {
+  const root = await mkdtemp(path.join(tmpdir(), 'auth-tools-alt-'));
+  const flowsPath = path.join(root, 'flows.json');
+  await writeFile(flowsPath, JSON.stringify(fixture), 'utf8');
+  const merged = {
+    FLOW_SOURCE: 'file',
+    FLOW_FILE_PATH: flowsPath,
+    SNAPSHOT_DIR: path.join(root, 'snapshots'),
+    STAGING_DIR: path.join(root, 'staging'),
+    AUDIT_LOG_PATH: path.join(root, 'audit.jsonl'),
+    LOG_LEVEL: 'silent',
+    ENVIRONMENT_NAME: 'unit',
+    ACTOR_NAME: 'unit-test',
+  };
+  const config = loadConfig(merged);
+  const logger = createLogger({ level: 'silent' });
+  const flowSource = new FileFlowSource({ path: flowsPath });
+  const snapshots = new FilesystemSnapshotStore({ rootDir: config.SNAPSHOT_DIR });
+  const staging = new StagedStore({ dir: config.STAGING_DIR });
+  const audit = new JsonlAuditLogger({ path: config.AUDIT_LOG_PATH, logger });
+  const containerFields = {
+    config,
+    flowSource,
+    snapshots,
+    staging,
+    audit,
+    auth: new NoAuth(),
+    logger,
+    clock: (): Date => new Date('2026-05-01T00:00:00.000Z'),
+    serverVersion: '0.0.0-test',
+    agentId: 'pid-test',
+  };
+  return {
+    ctx: { ...containerFields, enrichAudit: () => undefined, container: containerFields },
+    cleanup: async () => rm(root, { recursive: true, force: true }),
+    reset: async () => staging.clear(),
+  };
+}
+
 async function buildCtx(): Promise<{ ctx: ToolContext; cleanup: () => Promise<void> }> {
   const root = await mkdtemp(path.join(tmpdir(), 'auth-tools-'));
   const flowsPath = path.join(root, 'flows.json');
@@ -364,5 +405,28 @@ describe('author tools (workflow node tools)', () => {
     expect(out.template_name).toBe('hello_world');
     expect(out.diff_summary.nodes_added).toBe(3);
     expect(out.staged_hash.length).toBe(64);
+  });
+
+  it('author tools accept either Node-RED tab ID or _authoringKey for tab_id', async () => {
+    // Custom flows where Node-RED ID and _authoringKey differ on the tab.
+    const cleanCtx = await rebuildCtx([
+      { id: 'nrid-alpha', type: 'tab', label: 'Aliased', _authoringKey: 'tab-alpha' },
+    ]);
+    try {
+      const byKey = (await addInjectNodeTool.handler(
+        { tab_id: 'tab-alpha' },
+        cleanCtx.ctx,
+      )) as AddNodeOutput;
+      expect(byKey.ok).toBe(true);
+      // Re-stage from scratch using the Node-RED ID this time.
+      await cleanCtx.reset();
+      const byNodeRedId = (await addInjectNodeTool.handler(
+        { tab_id: 'nrid-alpha' },
+        cleanCtx.ctx,
+      )) as AddNodeOutput;
+      expect(byNodeRedId.ok).toBe(true);
+    } finally {
+      await cleanCtx.cleanup();
+    }
   });
 });

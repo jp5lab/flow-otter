@@ -25,8 +25,15 @@ type Output = z.infer<typeof OutputSchema>;
 export const exportSnapshotTool: Tool<Input, Output> = {
   name: 'export_snapshot',
   description:
-    'Captures the current runtime flows as a snapshot in the local snapshot store and returns the snapshot ref. Read-only at the runtime layer (does not modify Node-RED).',
+    'Captures the current runtime flows as a snapshot in the local snapshot store and returns the snapshot ref. Read-only at the runtime layer (does not modify Node-RED) but writes to the local snapshot directory.',
   tier: 'read',
+  // Read-tier defaults set readOnlyHint: true, but export_snapshot writes
+  // a snapshot file. Override hints to accurately surface the side effect.
+  annotations: {
+    readOnlyHint: false,
+    idempotentHint: false,
+    destructiveHint: false,
+  },
   inputZod: InputSchema,
   inputJsonSchema: {
     type: 'object',

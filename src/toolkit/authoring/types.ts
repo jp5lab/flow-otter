@@ -68,15 +68,53 @@ export interface GroupSpec {
   readonly key: string;
   readonly name: string;
   readonly nodeKeys: readonly string[];
+  /** Top-left corner. Node-RED auto-fits when missing; preserved verbatim when present. */
+  readonly position?: Position;
+  /** Width/height in pixels. */
+  readonly size?: { readonly w: number; readonly h: number };
+  /** Parent group key (Node-RED 3.0+ nested groups). Compiles to the `g` field. */
+  readonly parentKey?: string;
+  /** Per-group info annotation (Node-RED 4.1+). */
+  readonly info?: string;
+  /** Visual styling (fill, stroke, label, etc.) — opaque to the toolkit. */
   readonly style?: Readonly<Record<string, unknown>>;
+  /** Forward-compat catch-all for any future Node-RED group fields. */
+  readonly passthrough?: Readonly<Record<string, unknown>>;
 }
 
 export interface CommentSpec {
   readonly key: string;
   readonly text: string;
   readonly position: Position;
+  /** Width/height in pixels. */
+  readonly size?: { readonly w: number; readonly h: number };
   readonly info?: string;
   readonly groupKey?: string;
+}
+
+/**
+ * Junction — Node-RED 3.0+ wire-routing waypoint. One input, one output port.
+ * Wires onto and off of a junction are modeled through `TabSpec.connections`
+ * like any other node.
+ */
+export interface JunctionSpec {
+  readonly key: string;
+  readonly position: Position;
+  readonly name?: string;
+  readonly groupKey?: string;
+  /** Compiles to the `d` (disabled) field. */
+  readonly disabled?: boolean;
+}
+
+/**
+ * Tab-level environment-variable entry (Node-RED uses the same shape as
+ * subflow env entries). Closed `type` set per flows-json schema.
+ */
+export interface TabEnvEntry {
+  readonly name: string;
+  readonly type: 'str' | 'num' | 'bool' | 'json' | 'env' | 'cred' | 'jsonata' | 'conf-type';
+  readonly value?: unknown;
+  readonly ui?: Readonly<Record<string, unknown>>;
 }
 
 export interface TabSpec {
@@ -84,10 +122,17 @@ export interface TabSpec {
   readonly label: string;
   readonly disabled?: boolean;
   readonly info?: string;
+  /** Tab-level lock flag (Node-RED 3.1+). */
+  readonly locked?: boolean;
+  /** Tab-level typed environment variables. */
+  readonly env?: readonly TabEnvEntry[];
   readonly nodes: readonly NodeSpec[];
   readonly connections: readonly ConnectionSpec[];
   readonly groups: readonly GroupSpec[];
   readonly comments: readonly CommentSpec[];
+  readonly junctions?: readonly JunctionSpec[];
+  /** Forward-compat catch-all for any future Node-RED tab fields. */
+  readonly passthrough?: Readonly<Record<string, unknown>>;
 }
 
 export interface SubflowDefSpec {
@@ -95,6 +140,7 @@ export interface SubflowDefSpec {
   readonly name: string;
   readonly nodes: readonly NodeSpec[];
   readonly connections: readonly ConnectionSpec[];
+  readonly junctions?: readonly JunctionSpec[];
   readonly passthrough?: Readonly<Record<string, unknown>>;
 }
 

@@ -8,6 +8,7 @@ type Input = z.infer<typeof InputSchema>;
 
 const TabSchema = z.object({
   id: z.string(),
+  authoring_key: z.string(),
   label: z.string(),
   disabled: z.boolean(),
   node_count: z.number().int().nonnegative(),
@@ -21,7 +22,8 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const listFlowsTool: Tool<Input, Output> = {
   name: 'list_flows',
-  description: 'Lists all tabs (flows) with id, label, disabled state, and node count. Read-only.',
+  description:
+    'Lists all tabs (flows). Each entry exposes both `id` (Node-RED tab ID) and `authoring_key` — author tools accept either form when resolving a tab. They are equal when the tab was not authored through FlowOtter. Read-only.',
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -34,12 +36,17 @@ export const listFlowsTool: Tool<Input, Output> = {
       const z = (node as { z?: unknown }).z;
       if (typeof z === 'string') counts.set(z, (counts.get(z) ?? 0) + 1);
     }
-    const tabs = flows.filter(isTab).map((t) => ({
-      id: t.id,
-      label: t.label,
-      disabled: t.disabled === true,
-      node_count: counts.get(t.id) ?? 0,
-    }));
+    const tabs = flows.filter(isTab).map((t) => {
+      const ext = (t as Record<string, unknown>)['_authoringKey'];
+      const authoringKey = typeof ext === 'string' ? ext : t.id;
+      return {
+        id: t.id,
+        authoring_key: authoringKey,
+        label: t.label,
+        disabled: t.disabled === true,
+        node_count: counts.get(t.id) ?? 0,
+      };
+    });
     return { rev, tabs };
   },
 };

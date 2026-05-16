@@ -67,8 +67,8 @@ export const addGroupTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ tabId: string; newGroupKey: string }, Output>(
       ctx,
       { toolName: 'add_group' },
-      (priorSpec) => {
-        const tabId = resolveTabId(priorSpec, input.tab_id);
+      (priorSpec, priorFlows) => {
+        const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }

@@ -121,8 +121,8 @@ export const updateNodeTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ updated: boolean; patchesApplied: number }, Output>(
       ctx,
       { toolName: 'update_node' },
-      (priorSpec) => {
-        const tabId = resolveTabId(priorSpec, input.tab_id);
+      (priorSpec, priorFlows) => {
+        const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }

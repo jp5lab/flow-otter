@@ -234,4 +234,165 @@ describe('decompile', () => {
     // Real fields still survive
     expect(node?.passthrough?.['topic']).toBe('sensor/temp');
   });
+
+  it('round-trips junction nodes byte-for-byte', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [
+            { key: 'src', type: 'inject', position: { x: 100, y: 100 } },
+            { key: 'dst1', type: 'debug', position: { x: 300, y: 80 } },
+            { key: 'dst2', type: 'debug', position: { x: 300, y: 120 } },
+          ],
+          junctions: [{ key: 'jct', position: { x: 200, y: 100 } }],
+          connections: [
+            { fromKey: 'src', outputPort: 0, toKey: 'jct' },
+            { fromKey: 'jct', outputPort: 0, toKey: 'dst1' },
+            { fromKey: 'jct', outputPort: 0, toKey: 'dst2' },
+          ],
+          groups: [],
+          comments: [],
+        },
+      ],
+    };
+    const first = compile(spec);
+    const back = decompile(first.flows);
+    expect(back.tabs[0]?.junctions).toBeDefined();
+    expect(back.tabs[0]?.junctions).toHaveLength(1);
+    expect(back.tabs[0]?.junctions?.[0]?.key).toBe('jct');
+    expect(back.tabs[0]?.junctions?.[0]?.position).toEqual({ x: 200, y: 100 });
+    const conns = back.tabs[0]?.connections ?? [];
+    expect(conns).toContainEqual({ fromKey: 'src', outputPort: 0, toKey: 'jct' });
+    expect(conns).toContainEqual({ fromKey: 'jct', outputPort: 0, toKey: 'dst1' });
+    expect(conns).toContainEqual({ fromKey: 'jct', outputPort: 0, toKey: 'dst2' });
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('round-trips tab locked + env fields', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          locked: true,
+          env: [
+            { name: 'API_KEY', type: 'str', value: 'redacted' },
+            { name: 'PORT', type: 'num', value: 8080 },
+          ],
+          nodes: [{ key: 'inj', type: 'inject', position: { x: 100, y: 100 } }],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+    };
+    const first = compile(spec);
+    const back = decompile(first.flows);
+    expect(back.tabs[0]?.locked).toBe(true);
+    expect(back.tabs[0]?.env).toHaveLength(2);
+    expect(back.tabs[0]?.env?.[0]).toMatchObject({ name: 'API_KEY', type: 'str' });
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('round-trips group position/size/parentKey/info as top-level fields, not nested in style', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [],
+          connections: [],
+          comments: [],
+          groups: [
+            {
+              key: 'gp',
+              name: 'Parent',
+              nodeKeys: [],
+              position: { x: 50, y: 50 },
+              size: { w: 400, h: 200 },
+              info: 'parent group annotation',
+              style: { fill: '#eee', stroke: '#888' },
+            },
+            {
+              key: 'gc',
+              name: 'Child',
+              nodeKeys: [],
+              position: { x: 80, y: 80 },
+              size: { w: 200, h: 100 },
+              parentKey: 'gp',
+            },
+          ],
+        },
+      ],
+    };
+    const first = compile(spec);
+    const back = decompile(first.flows);
+    const parent = back.tabs[0]?.groups.find((g) => g.key === 'gp');
+    const child = back.tabs[0]?.groups.find((g) => g.key === 'gc');
+    expect(parent?.position).toEqual({ x: 50, y: 50 });
+    expect(parent?.size).toEqual({ w: 400, h: 200 });
+    expect(parent?.info).toBe('parent group annotation');
+    expect(parent?.style).toEqual({ fill: '#eee', stroke: '#888' });
+    expect(child?.parentKey).toBe('gp');
+    // The emitted group node has x/y/w/h/g/info as top-level fields, not nested in style.
+    const gpEmitted = first.flows.find(
+      (n) => (n as { _authoringKey?: string })._authoringKey === 'gp',
+    ) as Record<string, unknown>;
+    expect(gpEmitted['x']).toBe(50);
+    expect(gpEmitted['y']).toBe(50);
+    expect(gpEmitted['w']).toBe(400);
+    expect(gpEmitted['h']).toBe(200);
+    expect(gpEmitted['info']).toBe('parent group annotation');
+    expect(gpEmitted['style']).toEqual({ fill: '#eee', stroke: '#888' });
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('round-trips comment width/height', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [],
+          connections: [],
+          groups: [],
+          comments: [
+            {
+              key: 'cm',
+              text: 'Hello',
+              position: { x: 100, y: 100 },
+              size: { w: 300, h: 60 },
+            },
+          ],
+        },
+      ],
+    };
+    const first = compile(spec);
+    const back = decompile(first.flows);
+    expect(back.tabs[0]?.comments[0]?.size).toEqual({ w: 300, h: 60 });
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('captures unknown tab-level fields under passthrough', () => {
+    const flows = [
+      {
+        id: 'tab1',
+        type: 'tab',
+        label: 'Main',
+        someFutureField: 'value',
+        _authoringKey: 'main',
+      },
+    ] as never;
+    const spec = decompile(flows);
+    expect(spec.tabs[0]?.passthrough).toEqual({ someFutureField: 'value' });
+    const recompiled = compile(spec, { prior: flows });
+    const tab = recompiled.flows.find((n) => n.type === 'tab') as Record<string, unknown>;
+    expect(tab['someFutureField']).toBe('value');
+  });
 });

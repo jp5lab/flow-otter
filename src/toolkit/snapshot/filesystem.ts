@@ -27,6 +27,13 @@ interface PersistedShape {
 export interface FilesystemSnapshotStoreOptions {
   /** Root directory under which `snapshots/<env>/` lives. */
   rootDir: string;
+  /**
+   * Maximum number of snapshots to keep per env. When set, `save()` prunes
+   * the oldest excess after each write. Snapshots tagged with any entry of
+   * `retentionProtectTags` are skipped by the prune step.
+   */
+  retentionKeepLast?: number;
+  retentionProtectTags?: readonly string[];
 }
 
 export class FilesystemSnapshotStore implements SnapshotStore {
@@ -61,6 +68,15 @@ export class FilesystemSnapshotStore implements SnapshotStore {
       encoding: 'utf8',
       flag: 'wx',
     });
+    if (typeof this.opts.retentionKeepLast === 'number' && this.opts.retentionKeepLast > 0) {
+      await this.prune({
+        env: input.env,
+        keepLast: this.opts.retentionKeepLast,
+        ...(this.opts.retentionProtectTags !== undefined
+          ? { protectTags: this.opts.retentionProtectTags }
+          : {}),
+      });
+    }
     return manifestToRef(manifest);
   }
 

@@ -1,6 +1,7 @@
 import {
   isComment,
   isGroup,
+  isJunction,
   isRegularNode,
   isSubflowDef,
   isSubflowInstance,
@@ -59,12 +60,16 @@ function tabIdOf(node: FlowsJsonNode): string | undefined {
   return typeof z === 'string' ? z : undefined;
 }
 
+function wiresOf(n: FlowsJsonNode): readonly (readonly string[])[] {
+  if (isRegularNode(n)) return n.wires ?? [];
+  if (isJunction(n)) return n.wires;
+  return [];
+}
+
 function countWires(nodes: FlowsJsonNode[]): number {
   let total = 0;
   for (const n of nodes) {
-    if (!isRegularNode(n)) continue;
-    const wires = n.wires ?? [];
-    for (const arr of wires) total += arr.length;
+    for (const arr of wiresOf(n)) total += arr.length;
   }
   return total;
 }
@@ -97,9 +102,7 @@ function findOrphans(nodes: FlowsJsonNode[]): string[] {
   const incoming = new Map<string, number>();
   for (const n of nodes) incoming.set(n.id, 0);
   for (const n of nodes) {
-    if (!isRegularNode(n)) continue;
-    const wires = n.wires ?? [];
-    for (const arr of wires) {
+    for (const arr of wiresOf(n)) {
       for (const id of arr) {
         if (incoming.has(id)) incoming.set(id, (incoming.get(id) ?? 0) + 1);
       }
@@ -109,7 +112,7 @@ function findOrphans(nodes: FlowsJsonNode[]): string[] {
   for (const n of nodes) {
     if (isDashboardWidget(n.type)) continue;
     const inn = incoming.get(n.id) ?? 0;
-    const outn = isRegularNode(n) ? (n.wires ?? []).reduce((s, a) => s + a.length, 0) : 0;
+    const outn = wiresOf(n).reduce((s, a) => s + a.length, 0);
     if (inn === 0 && outn === 0) orphans.push(n.id);
   }
   return orphans;

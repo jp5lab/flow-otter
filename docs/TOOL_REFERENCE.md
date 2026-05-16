@@ -13,7 +13,7 @@ Tool visibility depends on tier flags. With write, deploy, and dangerous flags e
   - `persist:true` (default) writes `~/.flow-otter/<env_name>/target.json` so the next process boot rehydrates this target. `persist:false` for ephemeral swaps.
   - **Auth tokens are NEVER persisted.** For protected runtimes, supply auth via `NODE_RED_AUTH_TOKEN` env var on the MCP registration, or re-call `set_target` with credentials each session.
 - `clear_target` — remove `~/.flow-otter/<env_name>/target.json` so the next boot does NOT rehydrate. Defaults to the live `ENVIRONMENT_NAME`. Optional `revert_in_memory:true` re-points the live container to a file source (default `./flows.json`, override via `revert_file_path`).
-- `list_flows`
+- `list_flows` — lists all tabs (flows). Each entry exposes both `id` (Node-RED tab ID) and `authoring_key` (the `_authoringKey` extension; equal to `id` when the tab was authored outside FlowOtter). Author tools accept either form for `tab_id`.
 - `get_flows_summary`
 - `get_flow`
 - `get_node`

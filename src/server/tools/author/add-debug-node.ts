@@ -86,7 +86,7 @@ export const addDebugNodeTool: Tool<Input, Output> = {
       ctx,
       { toolName: 'add_debug_node' },
       (priorSpec, priorFlows) => {
-        const tabId = resolveTabId(priorSpec, input.tab_id);
+        const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }

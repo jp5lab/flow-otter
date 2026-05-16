@@ -3,12 +3,14 @@ import {
   type FlowsJson,
   type FlowsJsonNode,
   type GroupNode,
+  type JunctionNode,
   type RegularNode,
   type SubflowDefNode,
   type TabNode,
   isComment,
   isConfigNode,
   isGroup,
+  isJunction,
   isRegularNode,
   isSubflowDef,
   isTab,
@@ -21,8 +23,10 @@ import type {
   ConfigNodeSpec,
   ConnectionSpec,
   GroupSpec,
+  JunctionSpec,
   NodeSpec,
   SubflowDefSpec,
+  TabEnvEntry,
   TabSpec,
 } from './types.js';
 
@@ -55,6 +59,8 @@ const STRUCTURAL_GROUP_FIELDS = new Set([
   'name',
   'style',
   'nodes',
+  'g',
+  'info',
   AUTHORING_KEY_FIELD,
 ]);
 
@@ -64,6 +70,8 @@ const STRUCTURAL_TAB_FIELDS = new Set([
   'label',
   'disabled',
   'info',
+  'locked',
+  'env',
   AUTHORING_KEY_FIELD,
 ]);
 
@@ -97,23 +105,28 @@ interface TabBuckets {
   nodes: RegularNode[];
   groups: GroupNode[];
   comments: CommentNode[];
+  junctions: JunctionNode[];
 }
 
 function emptyBucket(): TabBuckets {
-  return { nodes: [], groups: [], comments: [] };
+  return { nodes: [], groups: [], comments: [], junctions: [] };
+}
+
+interface WireSource {
+  readonly id: string;
+  readonly wires: ReadonlyArray<ReadonlyArray<string>>;
 }
 
 function buildBodyConnections(
-  bodyNodes: readonly RegularNode[],
+  sources: readonly WireSource[],
   idToKey: Map<string, string>,
 ): ConnectionSpec[] {
   const connections: ConnectionSpec[] = [];
-  for (const n of bodyNodes) {
-    const fromKey = idToKey.get(n.id);
+  for (const src of sources) {
+    const fromKey = idToKey.get(src.id);
     if (!fromKey) continue;
-    const wires = n.wires ?? [];
-    for (let port = 0; port < wires.length; port++) {
-      const targets = wires[port] ?? [];
+    for (let port = 0; port < src.wires.length; port++) {
+      const targets = src.wires[port] ?? [];
       for (const tid of targets) {
         const toKey = idToKey.get(tid);
         if (!toKey) continue;
@@ -160,6 +173,13 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
       buckets.set(z, bucket);
       continue;
     }
+    if (isJunction(node)) {
+      const z = node.z;
+      const bucket = buckets.get(z) ?? emptyBucket();
+      bucket.junctions.push(node);
+      buckets.set(z, bucket);
+      continue;
+    }
     if (isRegularNode(node)) {
       const regularNode = node as RegularNode;
       const z = regularNode.z;
@@ -179,24 +199,35 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     for (const n of bucket.nodes) idToKey.set(n.id, authoringKey(n));
     for (const g of bucket.groups) idToKey.set(g.id, authoringKey(g));
     for (const c of bucket.comments) idToKey.set(c.id, authoringKey(c));
+    for (const j of bucket.junctions) idToKey.set(j.id, authoringKey(j));
 
     const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey));
     const groups: GroupSpec[] = bucket.groups.map((g) => buildGroupSpec(g, idToKey));
     const comments: CommentSpec[] = bucket.comments.map((c) => buildCommentSpec(c, idToKey));
-    const connections = buildBodyConnections(bucket.nodes, idToKey);
+    const junctions: JunctionSpec[] = bucket.junctions.map((j) => buildJunctionSpec(j, idToKey));
+
+    const wireSources: WireSource[] = [
+      ...bucket.nodes.map((n) => ({ id: n.id, wires: n.wires ?? [] })),
+      ...bucket.junctions.map((j) => ({ id: j.id, wires: j.wires })),
+    ];
+    const connections = buildBodyConnections(wireSources, idToKey);
 
     const tabPassthrough = pickPassthrough(tabNode, STRUCTURAL_TAB_FIELDS);
-    void tabPassthrough;
+    const env = parseTabEnv(tabNode.env);
 
     tabs.push({
       id: authoringKey(tabNode),
       label: tabNode.label,
       ...(tabNode.disabled !== undefined ? { disabled: tabNode.disabled } : {}),
       ...(typeof tabNode.info === 'string' ? { info: tabNode.info } : {}),
+      ...(tabNode.locked !== undefined ? { locked: tabNode.locked } : {}),
+      ...(env !== undefined ? { env } : {}),
       nodes,
       connections,
       groups,
       comments,
+      ...(junctions.length > 0 ? { junctions } : {}),
+      ...(Object.keys(tabPassthrough).length > 0 ? { passthrough: tabPassthrough } : {}),
     });
   }
 
@@ -205,14 +236,21 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     const bucket = buckets.get(defId) ?? emptyBucket();
     const idToKey = new Map<string, string>();
     for (const n of bucket.nodes) idToKey.set(n.id, authoringKey(n));
+    for (const j of bucket.junctions) idToKey.set(j.id, authoringKey(j));
     const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey));
-    const connections = buildBodyConnections(bucket.nodes, idToKey);
+    const junctions: JunctionSpec[] = bucket.junctions.map((j) => buildJunctionSpec(j, idToKey));
+    const wireSources: WireSource[] = [
+      ...bucket.nodes.map((n) => ({ id: n.id, wires: n.wires ?? [] })),
+      ...bucket.junctions.map((j) => ({ id: j.id, wires: j.wires })),
+    ];
+    const connections = buildBodyConnections(wireSources, idToKey);
     const passthrough = pickPassthrough(defNode, STRUCTURAL_SUBFLOW_DEF_FIELDS);
     subflowDefs.push({
       id: authoringKey(defNode),
       name: defNode.name,
       nodes,
       connections,
+      ...(junctions.length > 0 ? { junctions } : {}),
       ...(Object.keys(passthrough).length > 0 ? { passthrough } : {}),
     });
   }
@@ -224,6 +262,20 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
       : {}),
     ...(subflowDefs.length > 0 ? { subflowDefs } : {}),
   };
+}
+
+function parseTabEnv(env: TabNode['env']): TabEnvEntry[] | undefined {
+  if (!Array.isArray(env)) return undefined;
+  const out: TabEnvEntry[] = env.map((e) => {
+    const entry: TabEnvEntry = {
+      name: e.name,
+      type: e.type,
+      ...(e.value !== undefined ? { value: e.value } : {}),
+      ...(e.ui !== undefined ? { ui: e.ui } : {}),
+    };
+    return entry;
+  });
+  return out;
 }
 
 function buildNodeSpec(node: RegularNode, idToKey: Map<string, string>): NodeSpec {
@@ -244,27 +296,47 @@ function buildGroupSpec(node: GroupNode, idToKey: Map<string, string>): GroupSpe
   const nodeKeys = node.nodes
     .map((id) => idToKey.get(id))
     .filter((x): x is string => typeof x === 'string');
-  const style = pickPassthrough(node, STRUCTURAL_GROUP_FIELDS);
+  const passthrough = pickPassthrough(node, STRUCTURAL_GROUP_FIELDS);
+  const position =
+    typeof node.x === 'number' && typeof node.y === 'number' ? { x: node.x, y: node.y } : undefined;
+  const size =
+    typeof node.w === 'number' && typeof node.h === 'number' ? { w: node.w, h: node.h } : undefined;
+  const parentKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
   return {
     key: authoringKey(node),
     name: node.name ?? '',
     nodeKeys,
-    ...(node.style !== undefined
-      ? { style: node.style }
-      : Object.keys(style).length > 0
-        ? { style }
-        : {}),
+    ...(position !== undefined ? { position } : {}),
+    ...(size !== undefined ? { size } : {}),
+    ...(parentKey !== undefined ? { parentKey } : {}),
+    ...(typeof node.info === 'string' ? { info: node.info } : {}),
+    ...(node.style !== undefined ? { style: node.style } : {}),
+    ...(Object.keys(passthrough).length > 0 ? { passthrough } : {}),
   };
 }
 
 function buildCommentSpec(node: CommentNode, idToKey: Map<string, string>): CommentSpec {
   const groupKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
+  const size =
+    typeof node.w === 'number' && typeof node.h === 'number' ? { w: node.w, h: node.h } : undefined;
   return {
     key: authoringKey(node),
     text: node.name ?? '',
     position: { x: node.x, y: node.y },
+    ...(size !== undefined ? { size } : {}),
     ...(typeof node.info === 'string' ? { info: node.info } : {}),
     ...(groupKey !== undefined ? { groupKey } : {}),
+  };
+}
+
+function buildJunctionSpec(node: JunctionNode, idToKey: Map<string, string>): JunctionSpec {
+  const groupKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
+  return {
+    key: authoringKey(node),
+    position: { x: node.x, y: node.y },
+    ...(typeof node.name === 'string' ? { name: node.name } : {}),
+    ...(groupKey !== undefined ? { groupKey } : {}),
+    ...(node.d !== undefined ? { disabled: node.d } : {}),
   };
 }
 

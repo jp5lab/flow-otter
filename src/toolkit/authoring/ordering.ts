@@ -1,6 +1,7 @@
 import {
   isComment,
   isGroup,
+  isJunction,
   isSubflowDef,
   isTab,
   type FlowsJsonNode,
@@ -12,13 +13,14 @@ import {
  *
  * Tabs / subflow defs / config nodes have no `z`; they sort before any node
  * with a real `z` because empty string < any tab id. Within the same `z`,
- * groups come before regular/subflow-instance nodes, then comments.
+ * groups come before regular/subflow-instance/junction nodes, then comments.
  */
 export function typeRank(node: FlowsJsonNode): number {
   if (isTab(node)) return 0;
   if (isSubflowDef(node)) return 1;
   if (isGroup(node)) return 3;
   if (isComment(node)) return 5;
+  if (isJunction(node)) return 4;
   if (typeof node.type === 'string' && node.type.startsWith(SUBFLOW_INSTANCE_PREFIX)) return 4;
   if ('x' in node && 'y' in node && 'wires' in node) return 4; // regular workspace node
   return 2; // config node

@@ -106,4 +106,57 @@ describe('FilesystemSnapshotStore', () => {
     // pinned is older but protected; only the unpinned one would be eligible — but keepLast=1 keeps the newest, so pinned would be removed except it's protected.
     expect(removed.find((r) => r.tags.includes('pinned'))).toBeUndefined();
   });
+
+  it('auto-prunes per env when retentionKeepLast is set', async () => {
+    const cap = new FilesystemSnapshotStore({ rootDir: dir, retentionKeepLast: 2 });
+    for (let i = 0; i < 5; i++) {
+      const ts = `2026-05-02T00:0${i}:00.000Z`;
+      await cap.save({
+        flows: [
+          ...flows,
+          { id: `cap${i}`.padEnd(16, 'a'), type: 'debug', z: 'tab', x: 0, y: 0, wires: [] },
+        ] as never,
+        rev: null,
+        env: 'capped',
+        actor: 'a',
+        reason: `r${i}`,
+        takenAt: ts,
+      });
+    }
+    const remaining = await cap.list({ env: 'capped' });
+    expect(remaining).toHaveLength(2);
+  });
+
+  it('auto-prune respects retentionProtectTags', async () => {
+    const cap = new FilesystemSnapshotStore({
+      rootDir: dir,
+      retentionKeepLast: 1,
+      retentionProtectTags: ['pre-dangerous'],
+    });
+    await cap.save({
+      flows: flows,
+      rev: null,
+      env: 'safe',
+      actor: 'a',
+      reason: 'preserve',
+      takenAt: '2026-05-03T00:00:00.000Z',
+      tags: ['pre-dangerous'],
+    });
+    for (let i = 0; i < 3; i++) {
+      const ts = `2026-05-03T01:0${i}:00.000Z`;
+      await cap.save({
+        flows: [
+          ...flows,
+          { id: `sf${i}`.padEnd(16, 'a'), type: 'debug', z: 'tab', x: 0, y: 0, wires: [] },
+        ] as never,
+        rev: null,
+        env: 'safe',
+        actor: 'a',
+        reason: `r${i}`,
+        takenAt: ts,
+      });
+    }
+    const remaining = await cap.list({ env: 'safe' });
+    expect(remaining.some((r) => r.tags.includes('pre-dangerous'))).toBe(true);
+  });
 });

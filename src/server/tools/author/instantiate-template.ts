@@ -59,7 +59,7 @@ export const instantiateTemplateTool: Tool<Input, Output> = {
     runStagedAuthorOp<Record<string, never>, Output>(
       ctx,
       { toolName: 'instantiate_template' },
-      (priorSpec) => {
+      (priorSpec, _priorFlows) => {
         const nextSpec = instantiateTemplate(priorSpec, input.template_name, input.params);
         return { nextSpec, extras: {} };
       },

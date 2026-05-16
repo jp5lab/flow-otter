@@ -146,11 +146,36 @@ describe('read tools (file flow source)', () => {
 
   it('list_flows returns one tab', async () => {
     const out = (await listFlowsTool.handler({}, ctx)) as {
-      tabs: Array<{ id: string; node_count: number }>;
+      tabs: Array<{ id: string; authoring_key: string; node_count: number }>;
     };
     expect(out.tabs).toHaveLength(1);
     expect(out.tabs[0]?.id).toBe('tab1');
+    // No _authoringKey on the fixture tab, so authoring_key falls back to id.
+    expect(out.tabs[0]?.authoring_key).toBe('tab1');
     expect(out.tabs[0]?.node_count).toBe(2);
+  });
+
+  it('list_flows surfaces _authoringKey separately from Node-RED id when present', async () => {
+    const localRoot = await mkdtemp(path.join(tmpdir(), 'rt-tagged-'));
+    const localFlows = path.join(localRoot, 'flows.json');
+    await writeFile(
+      localFlows,
+      JSON.stringify([{ id: 'nrid1', type: 'tab', label: 'Tagged', _authoringKey: 'tag-key' }]),
+      'utf8',
+    );
+    const localCtx: ToolContext = {
+      ...ctx,
+      flowSource: new FileFlowSource({ path: localFlows }),
+    };
+    try {
+      const out = (await listFlowsTool.handler({}, localCtx)) as {
+        tabs: Array<{ id: string; authoring_key: string }>;
+      };
+      expect(out.tabs[0]?.id).toBe('nrid1');
+      expect(out.tabs[0]?.authoring_key).toBe('tag-key');
+    } finally {
+      await rm(localRoot, { recursive: true, force: true });
+    }
   });
 
   it('get_flows_summary returns counts and hash', async () => {

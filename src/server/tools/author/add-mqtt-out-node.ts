@@ -75,8 +75,8 @@ export const addMqttOutNodeTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ tabId: string; newNodeKey: string }, Output>(
       ctx,
       { toolName: 'add_mqtt_out_node' },
-      (priorSpec) => {
-        const tabId = resolveTabId(priorSpec, input.tab_id);
+      (priorSpec, priorFlows) => {
+        const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }

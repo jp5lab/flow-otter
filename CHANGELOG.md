@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.1.0 - 2026-05-16 — Roundtrip fidelity + config-knob enforcement + tool-ID symmetry
+
+Correctness pass: the v0.3.0 schema additions (junction, tab `locked`/`env`, group `g`/`info`/x/y/w/h, comment w/h) were declared in `flows-json.ts` but never propagated through the decompile→compile pipeline, so any author tool re-staging a flow silently dropped them. This release closes that gap, wires the dead config knobs to their documented behavior, and resolves the asymmetry between Node-RED IDs in `list_flows` output and authoring keys in author-tool inputs.
+
+### Fixed — lossy decompile/compile roundtrip
+
+- **Junction nodes**: previously dropped entirely on roundtrip. The decompile loop now collects them into `TabSpec.junctions` / `SubflowDefSpec.junctions`; the compile emitter walks them and rebuilds wires through the shared connection model.
+- **Tab `locked` (3.1+) and `env`**: previously dropped because `emitTab` only wrote label/disabled/info. Now typed on `TabSpec.locked` + `TabSpec.env: TabEnvEntry[]` and round-tripped.
+- **Group `x`/`y`/`w`/`h`/`g` (parent)/`info`**: previously either dropped (x/y/w/h) or misshaped into the `style` field (g/info). Typed explicitly on `GroupSpec.position` / `size` / `parentKey` / `info` and emitted as top-level Node-RED fields.
+- **Comment `w`/`h`**: previously dropped. Now on `CommentSpec.size` and round-tripped.
+- **Tab unknown fields**: `TabSpec.passthrough` catch-all added for forward-compatibility with future Node-RED tab-level fields.
+- **`wire-targets` validator**: previously only checked regular-node wires. Now also checks junction outgoing wires.
+- **`analyze` structural counters and orphan-detection**: now include junctions for wire-counting and don't false-flag wired junctions as orphans.
+
+### Added — config-knob enforcement (previously declared but unenforced)
+
+- **`MAX_FLOW_SIZE_BYTES`**: enforced in `runStagedAuthorOp` (every author tool) and in `replace_flows` / `create_flow` / `update_flow`. Throws `ValidationFailedError` when the compiled / supplied flow body would exceed the cap (default 10MB).
+- **`ALLOWED_NODE_TYPES`** (comma-separated allowlist; empty = allow-all) and **`BLOCKED_NODE_TYPES`** (comma-separated denylist) — enforced in the same pipelines. Structural nodes (tab/subflow/group/comment/junction) are exempt.
+- **`REQUIRE_SNAPSHOT_BEFORE_DEPLOY`** (default true): when false, `deploy_staged_change` skips the pre-deploy snapshot and returns `snapshot_before: null`. Output schema changed from `string` to `string | null`.
+- **`REQUIRE_DIFF_BEFORE_DEPLOY`** (default true): refuses no-op deploys (`staged.stagedHash === runtimeHash`). Set false to allow idempotent re-deploys.
+- **`SNAPSHOT_RETENTION`** (default 50): `FilesystemSnapshotStore.save()` auto-prunes the env's snapshot list down to the cap on every write. Tags `pre-dangerous` and `forced` are protected from automatic eviction.
+
+### Changed — `list_flows` and `resolveTabId` accept either form
+
+- `list_flows` now exposes both `id` (Node-RED tab ID) and `authoring_key` on each tab entry. They're equal when the tab was authored outside FlowOtter (no `_authoringKey` extension); they differ when FlowOtter created the tab via a template or `instantiate_template`.
+- Every author tool's `tab_id` parameter now accepts either form. Internally, `resolveTabId` takes the prior flows directly and matches against both Node-RED ID and `_authoringKey`, returning the authoring key the spec uses.
+
+### Changed — read-tier annotation overrides
+
+- `set_target` and `export_snapshot` now declare `readOnlyHint: false, idempotentHint: false` in their MCP annotations. They mutate local state (container rebind / snapshot file), so client UIs displaying intent badges shouldn't treat them as side-effect-free.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
+- `npm run test:unit`: 538 tests across 80 files (was 521/79; +17 new).
+- `npm run test:property`: 17 tests (round-trip arbitraries extended to generate junctions + tab locked/env + group fields + comment size at 1000 random runs).
+- `node scripts/check-tool-coverage.mjs`: 60/60 tools covered.
+- `npm audit --omit=dev`: 0 vulnerabilities.
+
+### Breaking changes
+
+- `deploy_staged_change.snapshot_before` output type widened from `string` to `string | null`. Consumers that assumed a non-null string will break only when `REQUIRE_SNAPSHOT_BEFORE_DEPLOY` is explicitly set to false; default behavior is unchanged.
+- Author tools that pass through a stale spec containing junctions / tab `locked` / group `position`-and-friends will now compile them into flows.json instead of silently dropping them. If any caller relied on the old lossy behavior, they'll see the new fields persist on disk.
+
 ## 1.0.1 - 2026-05-10 — Bug fix: set_target schema rejected by Anthropic API
 
 ### Fixed

@@ -63,8 +63,8 @@ export const wireNodesTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ added: boolean }, Output>(
       ctx,
       { toolName: 'wire_nodes' },
-      (priorSpec) => {
-        const tabId = resolveTabId(priorSpec, input.tab_id);
+      (priorSpec, priorFlows) => {
+        const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }

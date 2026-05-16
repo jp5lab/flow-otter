@@ -31,7 +31,11 @@ const OutputSchema = z.object({
   deployment_mode: z.enum(['full', 'nodes', 'flows', 'reload']),
   rev_before: z.string().nullable(),
   rev_after: z.string().nullable(),
-  snapshot_before: z.string(),
+  /**
+   * Snapshot id taken pre-deploy. Null only when `REQUIRE_SNAPSHOT_BEFORE_DEPLOY=false`
+   * and the snapshot step was skipped.
+   */
+  snapshot_before: z.string().nullable(),
   forced: z.boolean(),
   takeover: z.boolean(),
   /**
@@ -124,16 +128,27 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
       );
     }
 
-    const preSnap = await ctx.snapshots.save({
-      flows: runtimeFlows,
-      rev: runtimeRev,
-      env: ctx.config.ENVIRONMENT_NAME,
-      actor: ctx.config.ACTOR_NAME,
-      reason: 'pre-deploy',
-      takenAt: ctx.clock().toISOString(),
-      tags: force ? ['pre-deploy', 'forced'] : ['pre-deploy'],
-      serverVersion: ctx.serverVersion,
-    });
+    if (ctx.config.REQUIRE_DIFF_BEFORE_DEPLOY && staged.stagedHash === runtimeHash) {
+      throw new ValidationFailedError(
+        `Staged change has no diff vs the runtime (hash ${runtimeHash}); refusing no-op deploy. Set REQUIRE_DIFF_BEFORE_DEPLOY=false to allow.`,
+        [],
+      );
+    }
+
+    let preSnapId: string | null = null;
+    if (ctx.config.REQUIRE_SNAPSHOT_BEFORE_DEPLOY) {
+      const preSnap = await ctx.snapshots.save({
+        flows: runtimeFlows,
+        rev: runtimeRev,
+        env: ctx.config.ENVIRONMENT_NAME,
+        actor: ctx.config.ACTOR_NAME,
+        reason: 'pre-deploy',
+        takenAt: ctx.clock().toISOString(),
+        tags: force ? ['pre-deploy', 'forced'] : ['pre-deploy'],
+        serverVersion: ctx.serverVersion,
+      });
+      preSnapId = preSnap.id;
+    }
 
     const saveOpts: { reason: string; deployMode: DeployMode; expectedRev?: string } = {
       reason: 'deploy_staged_change',
@@ -196,7 +211,7 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
 
     ctx.enrichAudit({
       mode: 'deploy',
-      snapshot_before: preSnap.id,
+      ...(preSnapId !== null ? { snapshot_before: preSnapId } : {}),
       deployment_mode: requestedMode,
       ...(force || retriedOnRevMismatch || recoveredFromPartial ? { result: 'warning' } : {}),
     });
@@ -207,7 +222,7 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
       deployment_mode: requestedMode,
       rev_before: runtimeRev,
       rev_after: newRev || null,
-      snapshot_before: preSnap.id,
+      snapshot_before: preSnapId,
       forced: force,
       takeover: stagedAgentId !== undefined && stagedAgentId !== ctx.agentId && wantedTakeover,
       recovered_from_partial: recoveredFromPartial,

@@ -6,6 +6,7 @@ import type { AuthoringSpec } from '../../../toolkit/authoring/types.js';
 import { diffFlows, summarizeDiff } from '../../../toolkit/diff/semantic.js';
 import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
 import { runValidators } from '../../../toolkit/validate/index.js';
+import { enforceMaxFlowSize, enforceNodeTypePolicy } from '../../policy/flow-policy.js';
 import { ValidationFailedError, type ToolContext } from '../_tool.js';
 
 export interface AuthorOpInput {
@@ -72,6 +73,13 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   const { nextSpec, extras } = op(priorSpec, priorFlows);
 
   const compiled = compile(nextSpec, { prior: priorFlows });
+
+  enforceMaxFlowSize(compiled.flows, ctx.config.MAX_FLOW_SIZE_BYTES);
+  enforceNodeTypePolicy(
+    compiled.flows,
+    ctx.config.ALLOWED_NODE_TYPES,
+    ctx.config.BLOCKED_NODE_TYPES,
+  );
 
   const validateReport = runValidators(compiled.flows, {
     labelCap: ctx.config.LABEL_CAP_CHARS,
@@ -140,12 +148,21 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
 }
 
 /**
- * Resolve a tab id from either a Node-RED id or an authoring key. Returns
- * undefined when neither matches. Author tools should throw a ValidationFailedError
- * on undefined to surface a clear error.
+ * Resolve a tab reference (either a Node-RED tab ID or an `_authoringKey`)
+ * to the authoring key the AuthoringSpec uses. Author tools call this with
+ * the priorFlows handed to their op so users can pass whichever form they
+ * have — `list_flows` exposes both. Returns undefined when neither matches.
  */
-export function resolveTabId(spec: AuthoringSpec, tabIdOrKey: string): string | undefined {
-  return spec.tabs.find((t) => t.id === tabIdOrKey)?.id;
+export function resolveTabId(priorFlows: FlowsJson, tabIdOrKey: string): string | undefined {
+  for (const node of priorFlows) {
+    if ((node as { type?: string }).type !== 'tab') continue;
+    const ext = (node as Record<string, unknown>)['_authoringKey'];
+    const authoringKey = typeof ext === 'string' ? ext : node.id;
+    if (node.id === tabIdOrKey || authoringKey === tabIdOrKey) {
+      return authoringKey;
+    }
+  }
+  return undefined;
 }
 
 /**

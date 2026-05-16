@@ -152,7 +152,13 @@ function buildTargetBound(
   } else {
     flowSource = new UnconfiguredAdminApiFlowSource();
   }
-  const snapshots: SnapshotStore = new FilesystemSnapshotStore({ rootDir: config.SNAPSHOT_DIR });
+  const snapshots: SnapshotStore = new FilesystemSnapshotStore({
+    rootDir: config.SNAPSHOT_DIR,
+    retentionKeepLast: config.SNAPSHOT_RETENTION,
+    // Snapshots tagged 'pre-dangerous' or 'pre-deploy-forced' are operator
+    // safety nets — keep them even when over the retention budget.
+    retentionProtectTags: ['pre-dangerous', 'forced'],
+  });
   const staging = new StagedStore({ dir: config.STAGING_DIR });
   const audit: AuditLogger = new JsonlAuditLogger({ path: config.AUDIT_LOG_PATH, logger });
   return {

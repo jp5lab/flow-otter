@@ -3,6 +3,7 @@ import {
   type FlowsJson,
   type FlowsJsonNode,
   type GroupNode,
+  type JunctionNode,
   type RegularNode,
   type TabNode,
   SUBFLOW_INSTANCE_PREFIX,
@@ -17,6 +18,7 @@ import {
   type ConfigNodeSpec,
   type ConnectionSpec,
   type GroupSpec,
+  type JunctionSpec,
   type NodeSpec,
   type SubflowDefSpec,
   type TabSpec,
@@ -39,7 +41,7 @@ export interface CompileResult {
   hash: string;
 }
 
-type Kind = 'tab' | 'node' | 'group' | 'comment' | 'subflowDef' | 'config';
+type Kind = 'tab' | 'node' | 'group' | 'comment' | 'subflowDef' | 'config' | 'junction';
 
 const AMBIGUOUS = Symbol('ambiguous');
 type ByKindKeyVal = string | typeof AMBIGUOUS;
@@ -73,6 +75,7 @@ function kindOf(node: FlowsJsonNode): Kind {
   if (node.type === 'subflow') return 'subflowDef';
   if (node.type === 'group') return 'group';
   if (node.type === 'comment') return 'comment';
+  if (node.type === 'junction') return 'junction';
   if (!('z' in node) && !('x' in node) && !('y' in node) && !('wires' in node)) return 'config';
   return 'node';
 }
@@ -138,12 +141,16 @@ function deriveId(
 }
 
 function emitTab(spec: TabSpec, id: string): TabNode {
+  const env = spec.env !== undefined ? spec.env.map((e) => ({ ...e })) : undefined;
   return {
+    ...(spec.passthrough ?? {}),
     id,
     type: 'tab',
     label: spec.label,
     ...(spec.disabled !== undefined ? { disabled: spec.disabled } : {}),
     ...(spec.info !== undefined ? { info: spec.info } : {}),
+    ...(spec.locked !== undefined ? { locked: spec.locked } : {}),
+    ...(env !== undefined ? { env } : {}),
     [AUTHORING_KEY_FIELD]: spec.id,
   };
 }
@@ -177,13 +184,24 @@ function emitNode(
   return node as RegularNode;
 }
 
-function emitGroup(spec: GroupSpec, id: string, tabId: string, containedIds: string[]): GroupNode {
+function emitGroup(
+  spec: GroupSpec,
+  id: string,
+  tabId: string,
+  containedIds: string[],
+  parentId: string | undefined,
+): GroupNode {
   return {
+    ...(spec.passthrough ?? {}),
     id,
     type: 'group',
     z: tabId,
     name: spec.name,
     nodes: containedIds,
+    ...(spec.position !== undefined ? { x: spec.position.x, y: spec.position.y } : {}),
+    ...(spec.size !== undefined ? { w: spec.size.w, h: spec.size.h } : {}),
+    ...(parentId !== undefined ? { g: parentId } : {}),
+    ...(spec.info !== undefined ? { info: spec.info } : {}),
     ...(spec.style !== undefined ? { style: spec.style } : {}),
     [AUTHORING_KEY_FIELD]: spec.key,
   };
@@ -222,9 +240,31 @@ function emitComment(
     z: tabId,
     x: spec.position.x,
     y: spec.position.y,
+    ...(spec.size !== undefined ? { w: spec.size.w, h: spec.size.h } : {}),
     name: spec.text,
     ...(spec.info !== undefined ? { info: spec.info } : {}),
     ...(groupId !== undefined ? { g: groupId } : {}),
+    [AUTHORING_KEY_FIELD]: spec.key,
+  };
+}
+
+function emitJunction(
+  spec: JunctionSpec,
+  id: string,
+  tabId: string,
+  groupId: string | undefined,
+  wires: string[][],
+): JunctionNode {
+  return {
+    id,
+    type: 'junction',
+    z: tabId,
+    x: spec.position.x,
+    y: spec.position.y,
+    wires,
+    ...(spec.name !== undefined ? { name: spec.name } : {}),
+    ...(groupId !== undefined ? { g: groupId } : {}),
+    ...(spec.disabled !== undefined ? { d: spec.disabled } : {}),
     [AUTHORING_KEY_FIELD]: spec.key,
   };
 }
@@ -302,6 +342,10 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
     for (const n of tabSpec.nodes) {
       nodeKeyToId.set(n.key, deriveId(prior, tabId, 'node', n.key, strategy));
     }
+    const junctionKeyToId = new Map<string, string>();
+    for (const j of tabSpec.junctions ?? []) {
+      junctionKeyToId.set(j.key, deriveId(prior, tabId, 'junction', j.key, strategy));
+    }
     const groupKeyToId = new Map<string, string>();
     for (const g of tabSpec.groups) {
       groupKeyToId.set(g.key, deriveId(prior, tabId, 'group', g.key, strategy));
@@ -311,26 +355,39 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
       commentKeyToId.set(c.key, deriveId(prior, tabId, 'comment', c.key, strategy));
     }
 
+    const wireTargetMap = new Map<string, string>([...nodeKeyToId, ...junctionKeyToId]);
+
     flows.push(emitTab(tabSpec, tabId));
 
     for (const nodeSpec of tabSpec.nodes) {
       const id = nodeKeyToId.get(nodeSpec.key);
       if (!id) continue;
       const portCount = portCountForNode(nodeSpec, subflowDefOutCount);
-      const wires = buildWiresForNode(nodeSpec.key, portCount, tabSpec.connections, nodeKeyToId);
+      const wires = buildWiresForNode(nodeSpec.key, portCount, tabSpec.connections, wireTargetMap);
       const groupId =
         nodeSpec.groupKey !== undefined ? groupKeyToId.get(nodeSpec.groupKey) : undefined;
       flows.push(emitNode(nodeSpec, id, tabId, groupId, wires, configKeyToId));
+    }
+
+    for (const junctionSpec of tabSpec.junctions ?? []) {
+      const id = junctionKeyToId.get(junctionSpec.key);
+      if (!id) continue;
+      const wires = buildWiresForNode(junctionSpec.key, 1, tabSpec.connections, wireTargetMap);
+      const groupId =
+        junctionSpec.groupKey !== undefined ? groupKeyToId.get(junctionSpec.groupKey) : undefined;
+      flows.push(emitJunction(junctionSpec, id, tabId, groupId, wires));
     }
 
     for (const groupSpec of tabSpec.groups) {
       const id = groupKeyToId.get(groupSpec.key);
       if (!id) continue;
       const containedIds = groupSpec.nodeKeys
-        .map((k) => nodeKeyToId.get(k) ?? commentKeyToId.get(k))
+        .map((k) => nodeKeyToId.get(k) ?? junctionKeyToId.get(k) ?? commentKeyToId.get(k))
         .filter((x): x is string => typeof x === 'string')
         .sort();
-      flows.push(emitGroup(groupSpec, id, tabId, containedIds));
+      const parentId =
+        groupSpec.parentKey !== undefined ? groupKeyToId.get(groupSpec.parentKey) : undefined;
+      flows.push(emitGroup(groupSpec, id, tabId, containedIds, parentId));
     }
 
     for (const commentSpec of tabSpec.comments) {
@@ -354,6 +411,11 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
     for (const n of defSpec.nodes) {
       nodeKeyToId.set(n.key, deriveId(prior, defId, 'node', n.key, strategy));
     }
+    const junctionKeyToId = new Map<string, string>();
+    for (const j of defSpec.junctions ?? []) {
+      junctionKeyToId.set(j.key, deriveId(prior, defId, 'junction', j.key, strategy));
+    }
+    const wireTargetMap = new Map<string, string>([...nodeKeyToId, ...junctionKeyToId]);
 
     flows.push(emitSubflowDef(defSpec, defId));
 
@@ -361,8 +423,14 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
       const id = nodeKeyToId.get(nodeSpec.key);
       if (!id) continue;
       const portCount = portCountForNode(nodeSpec, subflowDefOutCount);
-      const wires = buildWiresForNode(nodeSpec.key, portCount, defSpec.connections, nodeKeyToId);
+      const wires = buildWiresForNode(nodeSpec.key, portCount, defSpec.connections, wireTargetMap);
       flows.push(emitNode(nodeSpec, id, defId, undefined, wires, configKeyToId));
+    }
+    for (const junctionSpec of defSpec.junctions ?? []) {
+      const id = junctionKeyToId.get(junctionSpec.key);
+      if (!id) continue;
+      const wires = buildWiresForNode(junctionSpec.key, 1, defSpec.connections, wireTargetMap);
+      flows.push(emitJunction(junctionSpec, id, defId, undefined, wires));
     }
   }
 

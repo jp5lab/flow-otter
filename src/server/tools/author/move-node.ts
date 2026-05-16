@@ -80,8 +80,8 @@ export const moveNodeTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ sourceTabId: string; destTabId: string }, Output>(
       ctx,
       { toolName: 'move_node' },
-      (priorSpec) => {
-        const sourceTabId = resolveTabId(priorSpec, input.source_tab_id);
+      (priorSpec, priorFlows) => {
+        const sourceTabId = resolveTabId(priorFlows, input.source_tab_id);
         if (!sourceTabId) {
           throw new ValidationFailedError(
             `Source tab '${input.source_tab_id}' not found in current flows.`,
@@ -90,7 +90,7 @@ export const moveNodeTool: Tool<Input, Output> = {
         }
         const destTabId =
           input.dest_tab_id !== undefined
-            ? resolveTabId(priorSpec, input.dest_tab_id)
+            ? resolveTabId(priorFlows, input.dest_tab_id)
             : sourceTabId;
         if (!destTabId) {
           throw new ValidationFailedError(

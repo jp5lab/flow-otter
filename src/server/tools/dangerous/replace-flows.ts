@@ -8,6 +8,7 @@ import {
 import type { DeployMode } from '../../../shared/flow-source.js';
 import { FlowsJsonSchema, type FlowsJson } from '../../../shared/flows-json.js';
 import { canonicalHash } from '../../../shared/hash.js';
+import { enforceMaxFlowSize, enforceNodeTypePolicy } from '../../policy/flow-policy.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { assertDangerousToken, requireAllowedDeployMode } from './_confirmation.js';
@@ -58,6 +59,12 @@ export const replaceFlowsTool: Tool<Input, Output> = {
       );
     }
     const replacement: FlowsJson = parsed.data;
+    enforceMaxFlowSize(replacement, ctx.config.MAX_FLOW_SIZE_BYTES);
+    enforceNodeTypePolicy(
+      replacement,
+      ctx.config.ALLOWED_NODE_TYPES,
+      ctx.config.BLOCKED_NODE_TYPES,
+    );
     const replacementHash = canonicalHash(replacement);
     assertDangerousToken(input.confirmation_token, {
       operation: 'replace_flows',

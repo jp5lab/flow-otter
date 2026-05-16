@@ -91,3 +91,17 @@ describe('makeInvokable annotations', () => {
     expect(invokable.annotations.title).toBe('Demo Deploy');
   });
 });
+
+describe('per-tool annotation overrides for read-tier tools with side effects', () => {
+  it('set_target and export_snapshot mark readOnlyHint: false', async () => {
+    const { setTargetTool } = await import('../../../../src/server/tools/read/set-target.js');
+    const { exportSnapshotTool } =
+      await import('../../../../src/server/tools/read/export-snapshot.js');
+    const setTargetInvokable = makeInvokable(setTargetTool);
+    const exportSnapshotInvokable = makeInvokable(exportSnapshotTool);
+    expect(setTargetInvokable.annotations.readOnlyHint).toBe(false);
+    expect(setTargetInvokable.annotations.idempotentHint).toBe(false);
+    expect(exportSnapshotInvokable.annotations.readOnlyHint).toBe(false);
+    expect(exportSnapshotInvokable.annotations.idempotentHint).toBe(false);
+  });
+});

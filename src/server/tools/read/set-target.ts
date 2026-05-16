@@ -69,8 +69,16 @@ function isFileInput(input: Input): input is z.infer<typeof FileInput> {
 export const setTargetTool: Tool<Input, Output> = {
   name: 'set_target',
   description:
-    'Point the server at a Node-RED target at runtime. Switches FLOW_SOURCE, swaps client/auth/file source, and re-scopes snapshot/staging/audit storage under ~/.flow-otter/<env_name>/. By default writes ~/.flow-otter/<env_name>/target.json so the next process boot rehydrates this target automatically; pass persist:false to skip. Auth tokens are NEVER persisted. Read-tier (always available).',
+    'Point the server at a Node-RED target at runtime. Switches FLOW_SOURCE, swaps client/auth/file source, and re-scopes snapshot/staging/audit storage under ~/.flow-otter/<env_name>/. By default writes ~/.flow-otter/<env_name>/target.json so the next process boot rehydrates this target automatically; pass persist:false to skip. Auth tokens are NEVER persisted. Read-tier (always available) but does mutate local state (live container rebind + target.json by default), so client UIs should not treat it as side-effect-free.',
   tier: 'read',
+  // Read-tier defaults set readOnlyHint: true, but set_target rebinds the
+  // live container and writes target.json by default. Override hints to
+  // accurately surface the side effect to client UIs.
+  annotations: {
+    readOnlyHint: false,
+    idempotentHint: false,
+    destructiveHint: false,
+  },
   inputZod: InputSchema,
   inputJsonSchema: {
     type: 'object',

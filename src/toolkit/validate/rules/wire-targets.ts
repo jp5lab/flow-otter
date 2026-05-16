@@ -1,4 +1,4 @@
-import { isRegularNode, type FlowsJson } from '../../../shared/flows-json.js';
+import { isJunction, isRegularNode, type FlowsJson } from '../../../shared/flows-json.js';
 import type { Diagnostic } from '../report.js';
 
 export const RULE = 'wire-targets';
@@ -8,7 +8,7 @@ export function check(flows: FlowsJson): Diagnostic[] {
   const idSet = new Set(flows.map((n) => n.id));
 
   for (const node of flows) {
-    if (!isRegularNode(node)) continue;
+    if (!isRegularNode(node) && !isJunction(node)) continue;
     const wires = node.wires ?? [];
     for (let port = 0; port < wires.length; port++) {
       const targets = wires[port] ?? [];

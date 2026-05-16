@@ -121,7 +121,7 @@ export const addDashboardWidgetTool: Tool<Input, Output> = {
     >(
       ctx,
       { toolName: 'add_dashboard_widget', reason: `add_dashboard_widget:${input.widget_type}` },
-      (priorSpec) => {
+      (priorSpec, priorFlows) => {
         const widgetType = input.widget_type;
         const schema = getWidgetSchema(widgetType);
         if (!schema) {
@@ -180,7 +180,7 @@ export const addDashboardWidgetTool: Tool<Input, Output> = {
           if (!input.tab_id) {
             throw new ValidationFailedError(`Widget '${widgetType}' requires tab_id.`, []);
           }
-          tabId = resolveTabId(priorSpec, input.tab_id);
+          tabId = resolveTabId(priorFlows, input.tab_id);
           if (!tabId) {
             throw new ValidationFailedError(
               `Tab '${input.tab_id}' not found in current flows.`,

@@ -1,6 +1,6 @@
 {
   "name": "@jp5lab/flow-otter",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "FlowOtter — MCP server that lets AI agents safely understand, author, validate, diff, deploy, and roll back Node-RED flows through a typed authoring layer. Target Node-RED runtime is selectable at startup or at runtime via the set_target tool.",
   "type": "module",
   "license": "MPL-2.0",

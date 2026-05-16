@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
+import type { FlowsJson } from '../../../shared/flows-json.js';
 import { canonicalHash } from '../../../shared/hash.js';
+import { enforceMaxFlowSize, enforceNodeTypePolicy } from '../../policy/flow-policy.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { assertDangerousToken } from './_confirmation.js';
@@ -45,6 +47,13 @@ export const updateFlowTool: Tool<Input, Output> = {
         [],
       );
     }
+    const flowAsRecord = input.flow as Record<string, unknown> | null;
+    const flowNodes: FlowsJson =
+      flowAsRecord !== null && Array.isArray(flowAsRecord['nodes'])
+        ? (flowAsRecord['nodes'] as FlowsJson)
+        : [];
+    enforceMaxFlowSize(flowNodes, ctx.config.MAX_FLOW_SIZE_BYTES);
+    enforceNodeTypePolicy(flowNodes, ctx.config.ALLOWED_NODE_TYPES, ctx.config.BLOCKED_NODE_TYPES);
     const flowsHash = canonicalHash(input.flow);
     assertDangerousToken(input.confirmation_token, {
       operation: 'update_flow',

@@ -32,11 +32,13 @@ The server re-scopes snapshots / staging / audit to `~/.flow-otter/lab/`. By def
 ### 2. Inspect the runtime
 
 ```jsonc
-{ "tool": "list_flows" }                                       // tabs + node counts
+{ "tool": "list_flows" }                                       // tabs + authoring_key + node counts
 { "tool": "get_flow", "arguments": { "flow_id": "abc..." } }   // one tab's full content
 { "tool": "search_nodes", "arguments": { "query": "inject" } } // grep
 { "tool": "render_flow_svg", "arguments": { "flow_id": "abc..." } }
 ```
+
+Each entry from `list_flows` exposes both `id` (the Node-RED tab ID) and `authoring_key` (the `_authoringKey` extension property if FlowOtter created the tab, else identical to `id`). Author tools' `tab_id` parameter accepts either form — pass whichever you have.
 
 ### 3. Stage a change
 
@@ -44,7 +46,7 @@ The server re-scopes snapshots / staging / audit to `~/.flow-otter/lab/`. By def
 {
   "tool": "add_debug_node",
   "arguments": {
-    "tab_id": "abc...",
+    "tab_id": "abc...", // Node-RED tab ID OR _authoringKey — both work.
     "source_node_id": "inj-123",
     "opts": { "label": "Tick Out" },
   },

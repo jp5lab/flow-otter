@@ -127,7 +127,7 @@ export const createSubflowDefinitionTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ newDefId: string }, Output>(
       ctx,
       { toolName: 'create_subflow_definition' },
-      (priorSpec) => {
+      (priorSpec, _priorFlows) => {
         const opts: Parameters<typeof createSubflowDefinition>[1] = { name: input.name };
         if (input.id !== undefined) opts.id = input.id;
         if (input.nodes !== undefined) {

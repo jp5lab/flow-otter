@@ -77,8 +77,8 @@ export const addSubflowInstanceTool: Tool<Input, Output> = {
     runStagedAuthorOp<{ tabId: string; newNodeKey: string }, Output>(
       ctx,
       { toolName: 'add_subflow_instance' },
-      (priorSpec) => {
-        const tabId = resolveTabId(priorSpec, input.tab_id);
+      (priorSpec, priorFlows) => {
+        const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
