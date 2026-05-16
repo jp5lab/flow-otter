@@ -34,7 +34,7 @@ Correctness pass: the v0.3.0 schema additions (junction, tab `locked`/`env`, gro
 ### Verification
 
 - `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
-- `npm run test:unit`: 538 tests across 80 files (was 521/79; +17 new).
+- `npm run test:unit`: 541 tests across 80 files (was 521/79; +20 new — roundtrip fidelity, tool-ID symmetry, policy enforcement, deploy gates).
 - `npm run test:property`: 17 tests (round-trip arbitraries extended to generate junctions + tab locked/env + group fields + comment size at 1000 random runs).
 - `node scripts/check-tool-coverage.mjs`: 60/60 tools covered.
 - `npm audit --omit=dev`: 0 vulnerabilities.

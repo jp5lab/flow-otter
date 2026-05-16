@@ -72,7 +72,11 @@ let root: string;
 let staging: StagedStore;
 let cleanup: () => Promise<void>;
 
-function buildCtx(opts: { flowSource: FlowSource; agentIdOverride?: string }): ToolContext {
+function buildCtx(opts: {
+  flowSource: FlowSource;
+  agentIdOverride?: string;
+  envOverrides?: Record<string, string>;
+}): ToolContext {
   const config = loadConfig({
     FLOW_SOURCE: 'admin-api',
     NODE_RED_BASE_URL: 'http://localhost:1880',
@@ -86,6 +90,7 @@ function buildCtx(opts: { flowSource: FlowSource; agentIdOverride?: string }): T
     ENABLE_DEPLOY_TOOLS: 'true',
     READ_ONLY_MODE: 'false',
     ALLOWED_DEPLOYMENT_MODES: 'nodes,flows,full',
+    ...(opts.envOverrides ?? {}),
   });
   const logger = createLogger({ level: 'silent' });
   const containerFields = {
@@ -234,6 +239,72 @@ describe('deploy_staged_change failure injection', () => {
     )) as { ok: boolean; forced: boolean };
     expect(out.ok).toBe(true);
     expect(out.forced).toBe(true);
+  });
+
+  it('(f) REQUIRE_DIFF_BEFORE_DEPLOY=true refuses no-op deploy (staged equals runtime)', async () => {
+    // Stage a change whose stagedHash matches the runtime hash → no diff.
+    await staging.write({
+      flows: BASE_FLOWS,
+      basedOnSnapshotHash: BASE_HASH,
+      basedOnRev: 'rev-0',
+      stagedHash: BASE_HASH,
+      stagedAt: '2026-05-01T00:00:00.000Z',
+      actor: 'unit-test',
+      agent_id: 'agent-A',
+      reason: 'no-op',
+    });
+    const saveImpl = vi.fn();
+    const loadImpl = (): Promise<{ flows: FlowsJson; rev: string | null }> =>
+      Promise.resolve({ flows: BASE_FLOWS, rev: 'rev-0' });
+    const ctx = buildCtx({
+      flowSource: mkMockFlowSource({ loadFlows: loadImpl, saveImpl }),
+    });
+    await expect(deployStagedChangeTool.handler({ staged_hash: BASE_HASH }, ctx)).rejects.toThrow(
+      /no diff vs the runtime/i,
+    );
+    expect(saveImpl).not.toHaveBeenCalled();
+  });
+
+  it('(g) REQUIRE_DIFF_BEFORE_DEPLOY=false allows no-op deploy', async () => {
+    await staging.write({
+      flows: BASE_FLOWS,
+      basedOnSnapshotHash: BASE_HASH,
+      basedOnRev: 'rev-0',
+      stagedHash: BASE_HASH,
+      stagedAt: '2026-05-01T00:00:00.000Z',
+      actor: 'unit-test',
+      agent_id: 'agent-A',
+      reason: 'no-op',
+    });
+    const saveImpl = vi.fn().mockResolvedValue({ rev: 'rev-noop' });
+    const loadImpl = (): Promise<{ flows: FlowsJson; rev: string | null }> =>
+      Promise.resolve({ flows: BASE_FLOWS, rev: 'rev-0' });
+    const ctx = buildCtx({
+      flowSource: mkMockFlowSource({ loadFlows: loadImpl, saveImpl }),
+      envOverrides: { REQUIRE_DIFF_BEFORE_DEPLOY: 'false' },
+    });
+    const out = (await deployStagedChangeTool.handler({ staged_hash: BASE_HASH }, ctx)) as {
+      ok: boolean;
+    };
+    expect(out.ok).toBe(true);
+    expect(saveImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('(h) REQUIRE_SNAPSHOT_BEFORE_DEPLOY=false skips pre-deploy snapshot and returns snapshot_before:null', async () => {
+    await stageChange('agent-A');
+    const saveImpl = vi.fn().mockResolvedValue({ rev: 'rev-1' });
+    const loadImpl = (): Promise<{ flows: FlowsJson; rev: string | null }> =>
+      Promise.resolve({ flows: BASE_FLOWS, rev: 'rev-0' });
+    const ctx = buildCtx({
+      flowSource: mkMockFlowSource({ loadFlows: loadImpl, saveImpl }),
+      envOverrides: { REQUIRE_SNAPSHOT_BEFORE_DEPLOY: 'false' },
+    });
+    const out = (await deployStagedChangeTool.handler({ staged_hash: STAGED_HASH }, ctx)) as {
+      ok: boolean;
+      snapshot_before: string | null;
+    };
+    expect(out.ok).toBe(true);
+    expect(out.snapshot_before).toBeNull();
   });
 
   it('(e) cross-process stage refused unless force_takeover=true', async () => {

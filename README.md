@@ -19,7 +19,7 @@ If you cloned this repo via an agent (Claude Code, Cursor, etc.), the project-sc
 
 ### Verification
 
-`538 unit + 17 property + 82 integration tests`. Property tests run fast-check at `numRuns:1000` and now exercise junctions, tab `locked`/`env`, group geometry, and comment size in the round-trip arbitraries. `node scripts/check-tool-coverage.mjs` reports 0 unit / 0 integration gaps across all 60 tools.
+`541 unit + 17 property + 82 integration tests`. Property tests run fast-check at `numRuns:1000` and now exercise junctions, tab `locked`/`env`, group geometry, and comment size in the round-trip arbitraries. `node scripts/check-tool-coverage.mjs` reports 0 unit / 0 integration gaps across all 60 tools.
 
 ## Showcase
 
