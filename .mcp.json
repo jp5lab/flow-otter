@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "FlowOtter": {
+      "command": "node",
+      "args": ["./dist/bin/flow-otter.js"],
+      "env": {
+        "FLOW_SOURCE": "file",
+        "READ_ONLY_MODE": "true",
+        "ENVIRONMENT_NAME": "default"
+      }
+    }
+  }
+}

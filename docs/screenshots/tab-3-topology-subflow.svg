@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="664" height="154" viewBox="0 0 664 154">
+  <rect width="664" height="154" fill="#fafafa"/>
+  <rect x="360" y="40" width="160" height="30" rx="2" ry="2" fill="#ffffbf" stroke="#cdba66" stroke-width="1"/>
+  <text x="368" y="56" font-family="Arial,sans-serif" font-size="12" fill="#333333" text-anchor="start">Topology · subflow + set_links</text>
+  <path d="M 180 115 C 250 115, 250 115, 320 115" stroke="#888" stroke-width="2" fill="none"/>
+  <path d="M 403 115 C 481.50 115, 481.50 115, 560 115" stroke="#888" stroke-width="2" fill="none"/>
+  <rect x="100" y="100" width="80" height="30" rx="4" ry="4" fill="#a6bbcf" stroke="#888888" stroke-width="1"/>
+  <text x="140" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Input</text>
+  <circle cx="100" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="180" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="320" y="100" width="83" height="30" rx="4" ry="4" fill="#dddddd" stroke="#888888" stroke-width="1"/>
+  <text x="361.50" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Reusable</text>
+  <circle cx="320" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="403" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="140" y="100" width="114" height="30" rx="4" ry="4" fill="#dddddd" stroke="#888888" stroke-width="1"/>
+  <text x="197" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Cross-tab entry</text>
+  <circle cx="254" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="560" y="100" width="80" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
+  <text x="600" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Output</text>
+  <circle cx="560" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+</svg>

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "1111111111111111",
+    "type": "tab",
+    "label": "Main",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "2222222222222222",
+    "type": "inject",
+    "z": "1111111111111111",
+    "x": 100,
+    "y": 100,
+    "wires": [[]],
+    "name": "Tick",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date"
+  }
+]

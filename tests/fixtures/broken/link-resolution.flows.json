@@ -1,0 +1,20 @@
+[
+  {
+    "id": "tab1aaaaaaaaaaaaa",
+    "type": "tab",
+    "label": "Link broken",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "linkout1aaaaaaaaa",
+    "type": "link out",
+    "z": "tab1aaaaaaaaaaaaa",
+    "x": 200,
+    "y": 100,
+    "wires": [],
+    "name": "out",
+    "mode": "link",
+    "links": ["nonexistent00000"]
+  }
+]

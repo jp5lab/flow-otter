@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.DS_Store
+
+# Local snapshot / staging / audit dirs created at runtime
+snapshots/local/
+.staging/
+.audit.log
+audit.jsonl
+
+# IDE
+.vscode/
+.idea/
+.obsidian/
+*.swp
+*.swo

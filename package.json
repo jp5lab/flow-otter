@@ -1,0 +1,88 @@
+{
+  "name": "@jp5lab/flow-otter",
+  "version": "1.0.1",
+  "description": "FlowOtter — MCP server that lets AI agents safely understand, author, validate, diff, deploy, and roll back Node-RED flows through a typed authoring layer. Target Node-RED runtime is selectable at startup or at runtime via the set_target tool.",
+  "type": "module",
+  "license": "MPL-2.0",
+  "author": "JP5Lab <104044759+jp5lab@users.noreply.github.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jp5lab/flow-otter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jp5lab/flow-otter/issues"
+  },
+  "homepage": "https://github.com/jp5lab/flow-otter#readme",
+  "keywords": [
+    "node-red",
+    "mcp",
+    "mcp-server",
+    "modelcontextprotocol",
+    "ai",
+    "ai-agents",
+    "claude",
+    "flow",
+    "authoring",
+    "automation",
+    "iot"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "main": "./dist/src/toolkit/index.js",
+  "exports": {
+    ".": "./dist/src/toolkit/index.js",
+    "./toolkit": "./dist/src/toolkit/index.js"
+  },
+  "bin": {
+    "flow-otter": "./dist/bin/flow-otter.js",
+    "flows-lint": "./dist/bin/flows-lint.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:property": "vitest run tests/property",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "dev": "tsx bin/flow-otter.ts",
+    "start": "node dist/bin/flow-otter.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@types/dagre": "0.7.54",
+    "@types/ws": "8.18.1",
+    "acorn": "8.16.0",
+    "dagre": "0.8.5",
+    "pino": "^9.0.0",
+    "proper-lockfile": "^4.1.2",
+    "ws": "8.20.0",
+    "yaml": "2.8.3",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "eslint": "^9.10.0",
+    "eslint-plugin-import": "^2.30.0",
+    "fast-check": "^3.21.0",
+    "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.5.0",
+    "vitest": "^2.1.0"
+  }
+}

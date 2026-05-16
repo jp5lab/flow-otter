@@ -1,0 +1,28 @@
+[
+  {
+    "id": "tab1aaaaaaaaaaaaa",
+    "type": "tab",
+    "label": "Subflow ports broken",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "subdef1aaaaaaaaaa",
+    "type": "subflow",
+    "name": "Two-out",
+    "in": [{ "x": 0, "y": 0, "wires": [] }],
+    "out": [
+      { "x": 100, "y": 0, "wires": [] },
+      { "x": 100, "y": 100, "wires": [] }
+    ]
+  },
+  {
+    "id": "subinst1aaaaaaaaa",
+    "type": "subflow:subdef1aaaaaaaaaa",
+    "z": "tab1aaaaaaaaaaaaa",
+    "x": 200,
+    "y": 100,
+    "wires": [[]],
+    "name": "Mismatched"
+  }
+]

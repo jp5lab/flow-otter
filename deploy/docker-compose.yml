@@ -1,0 +1,48 @@
+services:
+  node-red:
+    image: nodered/node-red:3.1
+    container_name: node-red-mcp-test-nodered
+    ports:
+      - '1880:1880'
+    volumes:
+      - ./node-red/settings.js:/data/settings.js:ro
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:1880/flows', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: node-red-mcp-test-mosquitto
+    ports:
+      - '1883:1883'
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'mosquitto_sub',
+          '-h',
+          'localhost',
+          '-p',
+          '1883',
+          '-t',
+          '$$SYS/#',
+          '-C',
+          '1',
+          '-W',
+          '2',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s

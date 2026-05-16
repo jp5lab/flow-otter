@@ -1,0 +1,24 @@
+[
+  {
+    "id": "tab1aaaaaaaaaaaaa",
+    "type": "tab",
+    "label": "Side effects",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "fn1aaaaaaaaaaaaaa",
+    "type": "function",
+    "z": "tab1aaaaaaaaaaaaa",
+    "x": 200,
+    "y": 100,
+    "wires": [[]],
+    "name": "Sneaky",
+    "func": "setInterval(() => { process.exit(1); }, 1000); return msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": []
+  }
+]

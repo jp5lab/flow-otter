@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="464" height="254" viewBox="0 0 464 254">
+  <rect width="464" height="254" fill="#fafafa"/>
+  <rect x="60" y="60" width="280" height="100" rx="4" ry="4" fill="#ffffff" stroke="#a4a4a4" stroke-width="1" stroke-dasharray="4 2"/>
+  <text x="68" y="76" font-family="Arial,sans-serif" font-size="12" fill="#666666" text-anchor="start">Group A</text>
+  <rect x="60" y="200" width="160" height="30" rx="2" ry="2" fill="#ffffbf" stroke="#cdba66" stroke-width="1"/>
+  <text x="68" y="216" font-family="Arial,sans-serif" font-size="12" fill="#333333" text-anchor="start">A note</text>
+  <path d="M 180 115 C 190 115, 190 115, 200 115" stroke="#888" stroke-width="2" fill="none"/>
+  <rect x="100" y="100" width="80" height="30" rx="4" ry="4" fill="#a6bbcf" stroke="#888888" stroke-width="1"/>
+  <text x="140" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">In</text>
+  <circle cx="100" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="180" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="200" y="100" width="240" height="30" rx="4" ry="4" fill="#fdd0a2" stroke="#888888" stroke-width="1"/>
+  <text x="320" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">this is a deliberately long label that sh…</text>
+  <circle cx="200" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="440" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+</svg>

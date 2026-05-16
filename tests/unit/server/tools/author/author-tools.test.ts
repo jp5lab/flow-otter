@@ -1,0 +1,368 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { FileFlowSource } from '../../../../../src/adapters/flowsource/file.js';
+import { NoAuth } from '../../../../../src/adapters/nodered/auth.js';
+import { JsonlAuditLogger } from '../../../../../src/server/audit/jsonl.js';
+import { loadConfig } from '../../../../../src/server/config/load.js';
+import type { ToolContext } from '../../../../../src/server/tools/_tool.js';
+import { addCatchNodeTool } from '../../../../../src/server/tools/author/add-catch-node.js';
+import { addCommentTool } from '../../../../../src/server/tools/author/add-comment.js';
+import { addCompleteNodeTool } from '../../../../../src/server/tools/author/add-complete-node.js';
+import { addFunctionNodeTool } from '../../../../../src/server/tools/author/add-function-node.js';
+import { addGroupTool } from '../../../../../src/server/tools/author/add-group.js';
+import { addInjectNodeTool } from '../../../../../src/server/tools/author/add-inject-node.js';
+import { addLinkCallNodeTool } from '../../../../../src/server/tools/author/add-link-call-node.js';
+import { addLinkInNodeTool } from '../../../../../src/server/tools/author/add-link-in-node.js';
+import { addLinkOutNodeTool } from '../../../../../src/server/tools/author/add-link-out-node.js';
+import { addMqttInNodeTool } from '../../../../../src/server/tools/author/add-mqtt-in-node.js';
+import { addMqttOutNodeTool } from '../../../../../src/server/tools/author/add-mqtt-out-node.js';
+import { addStatusNodeTool } from '../../../../../src/server/tools/author/add-status-node.js';
+import { addSubflowInstanceTool } from '../../../../../src/server/tools/author/add-subflow-instance.js';
+import { createSubflowDefinitionTool } from '../../../../../src/server/tools/author/create-subflow-definition.js';
+import { instantiateTemplateTool } from '../../../../../src/server/tools/author/instantiate-template.js';
+import { moveNodeTool } from '../../../../../src/server/tools/author/move-node.js';
+import { removeNodeTool } from '../../../../../src/server/tools/author/remove-node.js';
+import { updateNodeTool } from '../../../../../src/server/tools/author/update-node.js';
+import { wireNodesTool } from '../../../../../src/server/tools/author/wire-nodes.js';
+import { createLogger } from '../../../../../src/shared/logger.js';
+import { FilesystemSnapshotStore } from '../../../../../src/toolkit/snapshot/filesystem.js';
+import { StagedStore } from '../../../../../src/toolkit/staging/staged-store.js';
+
+const FIXTURE_FLOWS = [
+  { id: 'tab1', type: 'tab', label: 'Main', _authoringKey: 'tab1' },
+  { id: 'tab2', type: 'tab', label: 'Aux', _authoringKey: 'tab2' },
+  {
+    id: 'subflow1',
+    type: 'subflow',
+    name: 'Reusable',
+    in: [],
+    out: [{ x: 40, y: 80, wires: [] }],
+    _authoringKey: 'subflow1',
+  },
+  {
+    id: 'source1',
+    type: 'inject',
+    z: 'tab1',
+    x: 80,
+    y: 160,
+    wires: [[]],
+    name: 'Source',
+    _authoringKey: 'source',
+  },
+  {
+    id: 'target1',
+    type: 'debug',
+    z: 'tab1',
+    x: 260,
+    y: 160,
+    wires: [],
+    name: 'Target',
+    _authoringKey: 'target',
+  },
+  {
+    id: 'linkin1',
+    type: 'link in',
+    z: 'tab1',
+    x: 80,
+    y: 80,
+    wires: [[]],
+    name: 'Link In Target',
+    links: [],
+    _authoringKey: 'link-in-target',
+  },
+];
+
+interface AddNodeOutput {
+  ok: boolean;
+  diff_summary: { nodes_added: number };
+  added_node_id?: string;
+}
+
+interface AddGroupOutput {
+  ok: boolean;
+  diff_summary: { nodes_added: number };
+  added_group_id?: string;
+}
+
+interface AddCommentOutput {
+  ok: boolean;
+  diff_summary: { nodes_added: number };
+  added_comment_id?: string;
+}
+
+interface WireNodesOutput {
+  ok: boolean;
+  diff_summary: { wires_added: number };
+  wire_added: boolean;
+}
+
+interface RemoveNodeOutput {
+  ok: boolean;
+  diff_summary: { nodes_removed: number };
+  removed: boolean;
+}
+
+interface UpdateNodeOutput {
+  ok: boolean;
+  diff_summary: { nodes_modified: number };
+  updated: boolean;
+}
+
+interface MoveNodeOutput {
+  ok: boolean;
+  moved_node_key: string;
+  source_tab_id: string;
+  dest_tab_id: string;
+}
+
+interface CreateSubflowDefinitionOutput {
+  ok: boolean;
+  diff_summary: { nodes_added: number };
+  new_def_id?: string;
+}
+
+interface InstantiateTemplateOutput {
+  ok: boolean;
+  template_name: string;
+  diff_summary: { nodes_added: number };
+  staged_hash: string;
+}
+
+let ctx: ToolContext;
+let cleanup: () => Promise<void>;
+
+async function buildCtx(): Promise<{ ctx: ToolContext; cleanup: () => Promise<void> }> {
+  const root = await mkdtemp(path.join(tmpdir(), 'auth-tools-'));
+  const flowsPath = path.join(root, 'flows.json');
+  await writeFile(flowsPath, JSON.stringify(FIXTURE_FLOWS), 'utf8');
+
+  const merged = {
+    FLOW_SOURCE: 'file',
+    FLOW_FILE_PATH: flowsPath,
+    SNAPSHOT_DIR: path.join(root, 'snapshots'),
+    STAGING_DIR: path.join(root, 'staging'),
+    AUDIT_LOG_PATH: path.join(root, 'audit.jsonl'),
+    LOG_LEVEL: 'silent',
+    ENVIRONMENT_NAME: 'unit',
+    ACTOR_NAME: 'unit-test',
+  };
+  const config = loadConfig(merged);
+  const logger = createLogger({ level: 'silent' });
+  const flowSource = new FileFlowSource({ path: flowsPath });
+  const snapshots = new FilesystemSnapshotStore({ rootDir: config.SNAPSHOT_DIR });
+  const staging = new StagedStore({ dir: config.STAGING_DIR });
+  const audit = new JsonlAuditLogger({ path: config.AUDIT_LOG_PATH, logger });
+  const fixedClock = (): Date => new Date('2026-05-01T00:00:00.000Z');
+
+  const containerFields = {
+    config,
+    flowSource,
+    snapshots,
+    staging,
+    audit,
+    auth: new NoAuth(),
+    logger,
+    clock: fixedClock,
+    serverVersion: '0.0.0-test',
+    agentId: 'pid-test',
+  };
+  const builtCtx: ToolContext = {
+    ...containerFields,
+    enrichAudit: () => undefined,
+    container: containerFields,
+  };
+  return {
+    ctx: builtCtx,
+    cleanup: async () => {
+      await rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
+beforeEach(async () => {
+  const built = await buildCtx();
+  ctx = built.ctx;
+  cleanup = built.cleanup;
+});
+
+afterEach(async () => {
+  await cleanup();
+});
+
+const HEX16 = /^[0-9a-f]{16}$/;
+
+describe('author tools (workflow node tools)', () => {
+  it('add_inject_node stages a new inject node', async () => {
+    const out = (await addInjectNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_function_node stages a new function node', async () => {
+    const out = (await addFunctionNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_catch_node stages a new catch node', async () => {
+    const out = (await addCatchNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_status_node stages a new status node', async () => {
+    const out = (await addStatusNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_complete_node stages a new complete node', async () => {
+    const out = (await addCompleteNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_mqtt_in_node stages a new mqtt in node', async () => {
+    const out = (await addMqttInNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_mqtt_out_node stages a new mqtt out node', async () => {
+    const out = (await addMqttOutNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_link_in_node stages a new link in node', async () => {
+    const out = (await addLinkInNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_link_out_node stages a new link out node', async () => {
+    const out = (await addLinkOutNodeTool.handler({ tab_id: 'tab1' }, ctx)) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_link_call_node stages a new link call node', async () => {
+    const out = (await addLinkCallNodeTool.handler(
+      { tab_id: 'tab1', opts: { passthrough: { links: ['linkin1'] } } },
+      ctx,
+    )) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_subflow_instance stages a new subflow instance', async () => {
+    const out = (await addSubflowInstanceTool.handler(
+      { tab_id: 'tab1', defId: 'subflow1' },
+      ctx,
+    )) as AddNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_node_id).toMatch(HEX16);
+  });
+
+  it('add_group stages a new group', async () => {
+    const out = (await addGroupTool.handler(
+      { tab_id: 'tab1', name: 'Group A' },
+      ctx,
+    )) as AddGroupOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_group_id).toMatch(HEX16);
+  });
+
+  it('add_comment stages a new comment', async () => {
+    const out = (await addCommentTool.handler(
+      { tab_id: 'tab1', text: 'Note', position: { x: 100, y: 280 } },
+      ctx,
+    )) as AddCommentOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.added_comment_id).toMatch(HEX16);
+  });
+
+  it('wire_nodes stages a new wire', async () => {
+    const out = (await wireNodesTool.handler(
+      { tab_id: 'tab1', from_key: 'source', to_key: 'target' },
+      ctx,
+    )) as WireNodesOutput;
+    expect(out.ok).toBe(true);
+    expect(out.wire_added).toBe(true);
+    expect(out.diff_summary.wires_added).toBe(1);
+  });
+
+  it('remove_node stages node removal', async () => {
+    const out = (await removeNodeTool.handler(
+      { tab_id: 'tab1', node_key: 'target' },
+      ctx,
+    )) as RemoveNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.removed).toBe(true);
+    expect(out.diff_summary.nodes_removed).toBe(1);
+  });
+
+  it('update_node stages node updates', async () => {
+    const out = (await updateNodeTool.handler(
+      { tab_id: 'tab1', node_key: 'source', label: 'Updated Source', position: { x: 120, y: 180 } },
+      ctx,
+    )) as UpdateNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.updated).toBe(true);
+    expect(out.diff_summary.nodes_modified).toBe(1);
+  });
+
+  it('move_node stages a cross-tab move', async () => {
+    const out = (await moveNodeTool.handler(
+      {
+        source_tab_id: 'tab1',
+        node_key: 'source',
+        dest_tab_id: 'tab2',
+        position: { x: 120, y: 120 },
+      },
+      ctx,
+    )) as MoveNodeOutput;
+    expect(out.ok).toBe(true);
+    expect(out.moved_node_key).toBe('source');
+    expect(out.source_tab_id).toBe('tab1');
+    expect(out.dest_tab_id).toBe('tab2');
+  });
+
+  it('create_subflow_definition stages a new subflow definition', async () => {
+    const out = (await createSubflowDefinitionTool.handler(
+      { name: 'Created Subflow' },
+      ctx,
+    )) as CreateSubflowDefinitionOutput;
+    expect(out.ok).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+    expect(out.new_def_id).toMatch(HEX16);
+  });
+
+  it('instantiate_template stages a built-in template', async () => {
+    const out = (await instantiateTemplateTool.handler(
+      { template_name: 'hello_world', params: { tab_label: 'Hello Tool' } },
+      ctx,
+    )) as InstantiateTemplateOutput;
+    expect(out.ok).toBe(true);
+    expect(out.template_name).toBe('hello_world');
+    expect(out.diff_summary.nodes_added).toBe(3);
+    expect(out.staged_hash.length).toBe(64);
+  });
+});

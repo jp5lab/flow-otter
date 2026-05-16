@@ -1,0 +1,18 @@
+[
+  {
+    "id": "tab1aaaaaaaaaaaaa",
+    "type": "tab",
+    "label": "Naming",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "debug1aaaaaaaaaaa",
+    "type": "debug",
+    "z": "tab1aaaaaaaaaaaaa",
+    "x": 100,
+    "y": 100,
+    "wires": [],
+    "name": "TODO rename me"
+  }
+]

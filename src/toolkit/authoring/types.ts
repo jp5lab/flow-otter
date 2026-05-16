@@ -1,0 +1,140 @@
+/**
+ * Authoring spec model — the typed surface that agents and tools manipulate.
+ *
+ * The compiler (`compile.ts`) turns this into Node-RED `flows.json`.
+ * The decompiler (`decompile.ts`) recovers it from `flows.json` (with the
+ * `_authoringKey` extension property bridging spec keys ↔ Node-RED IDs).
+ *
+ * The model covers tabs, workspace nodes, config nodes, subflow definitions,
+ * groups, comments, and wires. Dashboard widgets are represented as regular
+ * NodeSpecs plus dashboard config nodes.
+ */
+
+export interface Position {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * Anchor kinds for Dashboard 2.0 widget → config-node references. A `ui-template`
+ * widget anchors to a `ui-base` (`templateScope='widget:ui'`), a `ui-page`
+ * (`templateScope='widget:page'`), or a `ui-group` (the default scope).
+ * Other dashboard widgets always anchor to a group.
+ */
+export type WidgetAnchorKind = 'group' | 'page' | 'ui';
+
+export interface WidgetAnchor {
+  readonly kind: WidgetAnchorKind;
+  /** Authoring-key of the target config node (resolved by the compiler). */
+  readonly refKey: string;
+}
+
+export interface NodeSpec {
+  /** Stable, agent-meaningful identifier within the tab. Bridges to flows.json id. */
+  readonly key: string;
+  /** Node-RED node type, e.g. 'inject', 'debug', 'function'. */
+  readonly type: string;
+  /** Visible label (≤ 24 chars by default; enforced by `label-cap` validator). */
+  readonly label?: string;
+  readonly position: Position;
+  /** Membership in a group declared in the same TabSpec. */
+  readonly groupKey?: string;
+  /**
+   * Dashboard 2.0 widget anchor (group / page / ui). When set, the compiler
+   * emits `passthrough.<kind> = compiledConfigId(refKey)`. Backward-compatible:
+   * widgets without this field can still set `group` directly via passthrough.
+   */
+  readonly widgetAnchor?: WidgetAnchor;
+  /** Type-specific fields (payload, func code, mqtt topic, etc.). */
+  readonly passthrough?: Readonly<Record<string, unknown>>;
+}
+
+export interface ConfigNodeSpec {
+  /** Stable identifier for a global Node-RED config node. */
+  readonly key: string;
+  /** Node-RED config node type, e.g. 'mqtt-broker' or 'ui_group'. */
+  readonly type: string;
+  readonly label?: string;
+  readonly passthrough?: Readonly<Record<string, unknown>>;
+}
+
+export interface ConnectionSpec {
+  readonly fromKey: string;
+  readonly outputPort: number;
+  readonly toKey: string;
+}
+
+export interface GroupSpec {
+  readonly key: string;
+  readonly name: string;
+  readonly nodeKeys: readonly string[];
+  readonly style?: Readonly<Record<string, unknown>>;
+}
+
+export interface CommentSpec {
+  readonly key: string;
+  readonly text: string;
+  readonly position: Position;
+  readonly info?: string;
+  readonly groupKey?: string;
+}
+
+export interface TabSpec {
+  readonly id: string;
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly info?: string;
+  readonly nodes: readonly NodeSpec[];
+  readonly connections: readonly ConnectionSpec[];
+  readonly groups: readonly GroupSpec[];
+  readonly comments: readonly CommentSpec[];
+}
+
+export interface SubflowDefSpec {
+  readonly id: string;
+  readonly name: string;
+  readonly nodes: readonly NodeSpec[];
+  readonly connections: readonly ConnectionSpec[];
+  readonly passthrough?: Readonly<Record<string, unknown>>;
+}
+
+export interface AuthoringSpec {
+  readonly tabs: readonly TabSpec[];
+  readonly configNodes?: readonly ConfigNodeSpec[];
+  readonly subflowDefs?: readonly SubflowDefSpec[];
+}
+
+/**
+ * Default output-port count by node type. The compiler uses this to size each
+ * node's `wires` array. `function` nodes can override via passthrough.outputs.
+ */
+export const DEFAULT_OUTPUT_PORT_COUNT: Readonly<Record<string, number>> = {
+  inject: 1,
+  debug: 0,
+  function: 1,
+  switch: 1,
+  change: 1,
+  template: 1,
+  link_in: 1,
+  'link in': 1,
+  link_out: 0,
+  'link out': 0,
+  'link call': 1,
+  'mqtt in': 1,
+  'mqtt out': 0,
+  catch: 1,
+  status: 1,
+  complete: 1,
+  comment: 0,
+};
+
+export function getOutputPortCount(
+  type: string,
+  passthrough?: Readonly<Record<string, unknown>>,
+): number {
+  if (type === 'function' && typeof passthrough?.['outputs'] === 'number') {
+    return passthrough['outputs'];
+  }
+  const known = DEFAULT_OUTPUT_PORT_COUNT[type];
+  return known ?? 1;
+}

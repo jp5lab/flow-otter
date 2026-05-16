@@ -1,0 +1,33 @@
+[
+  {
+    "id": "tabaaaaaaaaaaaaaa",
+    "type": "tab",
+    "label": "Main",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "tabbbbbbbbbbbbbbb",
+    "type": "tab",
+    "label": "Main",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "groupaaaaaaaaaaaa",
+    "type": "group",
+    "z": "tabaaaaaaaaaaaaaa",
+    "name": "Cross-tab group",
+    "nodes": ["debug1aaaaaaaaaaa"]
+  },
+  {
+    "id": "debug1aaaaaaaaaaa",
+    "type": "debug",
+    "z": "tabbbbbbbbbbbbbbb",
+    "x": 300,
+    "y": 100,
+    "wires": [],
+    "name": "Out",
+    "g": "groupaaaaaaaaaaaa"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "tab1aaaaaaaaaaaaa",
+    "type": "tab",
+    "label": "Dashboard hierarchy group no page",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "uibase1aaaaaaaaaa",
+    "type": "ui_base",
+    "name": "Base"
+  },
+  {
+    "id": "uipage1aaaaaaaaaa",
+    "type": "ui_page",
+    "name": "Page A",
+    "ui": "uibase1aaaaaaaaaa"
+  },
+  {
+    "id": "uigroup1aaaaaaaaa",
+    "type": "ui_group",
+    "name": "Group A",
+    "page": "missing0000000000"
+  },
+  {
+    "id": "uibutton1aaaaaaaa",
+    "type": "ui_button",
+    "z": "tab1aaaaaaaaaaaaa",
+    "x": 200,
+    "y": 100,
+    "wires": [[]],
+    "name": "Press",
+    "group": "uigroup1aaaaaaaaa",
+    "order": 1,
+    "label": "Press"
+  }
+]
