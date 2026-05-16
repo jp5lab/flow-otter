@@ -27,7 +27,7 @@ The three tabs below were authored end-to-end through MCP calls in a single agen
 
 ### Tab 1 — Author → Stage → Deploy → Observe → Rollback
 
-> *"Stand up a tab that exercises every common author tool. Add inject, function, debug, plus catch, status, complete, mqtt in, mqtt out, link in, link out, link call. Label each node with the MCP tool that produced it. Wire inject → function → debug, and fan function's output to mqtt out via `set_wires`. Pair link_call to link_in with `set_links`. Group the canonical author loop as 'Idempotent compile' and drop comments explaining the staging contract."*
+> _"Stand up a tab that exercises every common author tool. Add inject, function, debug, plus catch, status, complete, mqtt in, mqtt out, link in, link out, link call. Label each node with the MCP tool that produced it. Wire inject → function → debug, and fan function's output to mqtt out via `set_wires`. Pair link_call to link_in with `set_links`. Group the canonical author loop as 'Idempotent compile' and drop comments explaining the staging contract."_
 
 ![Tab 1 — Author Loop](docs/screenshots/tab-1-author-loop-canvas.png)
 
@@ -37,7 +37,7 @@ The three tabs below were authored end-to-end through MCP calls in a single agen
 
 ### Tab 2 — Template composition (operator-console example)
 
-> *"Lay down an operator console using the six bundled dashboard-2 templates: `dashboard_2_alarm_panel`, `dashboard_2_mode_banner`, `dashboard_2_confirmed_button` (hold-to-confirm e-stop), `dashboard_2_live_value` (with stale-data badge), `dashboard_2_gauge_grid` (four process metrics), `dashboard_2_audit_log_tail`. All widgets should share one ui-base / ui-page / ui-group skeleton — no duplicate scaffolding."*
+> _"Lay down an operator console using the six bundled dashboard-2 templates: `dashboard_2_alarm_panel`, `dashboard_2_mode_banner`, `dashboard_2_confirmed_button` (hold-to-confirm e-stop), `dashboard_2_live_value` (with stale-data badge), `dashboard_2_gauge_grid` (four process metrics), `dashboard_2_audit_log_tail`. All widgets should share one ui-base / ui-page / ui-group skeleton — no duplicate scaffolding."_
 
 ![Tab 2 — Template composition](docs/screenshots/tab-2-industrial-defaults-canvas.png)
 
@@ -49,7 +49,7 @@ A handful of the bundled templates use opinionated defaults loosely inspired by 
 
 ### Tab 3 — Topology · Subflow + Cross-Tab Links
 
-> *"Create a reusable subflow with its instance on a dedicated tab. Add a `link in` here that's the cross-tab counterpart of Tab 1's `link out` — pair them via `set_links` so the Tab 1 outbound resolves to this tab's entry. Wire the link in to the subflow's debug so we can see what arrives."*
+> _"Create a reusable subflow with its instance on a dedicated tab. Add a `link in` here that's the cross-tab counterpart of Tab 1's `link out` — pair them via `set_links` so the Tab 1 outbound resolves to this tab's entry. Wire the link in to the subflow's debug so we can see what arrives."_
 
 ![Tab 3 — Topology · Subflow](docs/screenshots/tab-3-topology-subflow-canvas.png)
 
@@ -72,7 +72,7 @@ The showcase deliberately ran into FlowOtter's edges so they could be named clea
 - Templates auto-create dependent config nodes (`ui-base`, `ui-page`, `ui-group`, `mqtt-broker`); bare author tools don't. If the agent calls `add_mqtt_in_node` directly, the broker config is the agent's responsibility.
 - `render_flow_svg` output is checked in alongside the editor screenshots — vector-deterministic for the same input, useful for diff-based regression checks: [tab-1](docs/screenshots/tab-1-author-loop.svg), [tab-2](docs/screenshots/tab-2-industrial-defaults.svg), [tab-3](docs/screenshots/tab-3-topology-subflow.svg).
 
-The division of labor: FlowOtter guarantees the *shape* of the flow (idempotent compile, ID-stable IDs, topologically valid, snapshot-backed). The agent owns the *content* (per-plugin field values, runtime config like broker hostnames, layout coordinates).
+The division of labor: FlowOtter guarantees the _shape_ of the flow (idempotent compile, ID-stable IDs, topologically valid, snapshot-backed). The agent owns the _content_ (per-plugin field values, runtime config like broker hostnames, layout coordinates).
 
 ## Quickstart
 
