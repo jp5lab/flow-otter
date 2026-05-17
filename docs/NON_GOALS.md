@@ -1,6 +1,6 @@
 # Non-Goals
 
-FlowOtter ships v1.0 as a sealed release. The items below are explicitly **out of scope** for v1.0 and are not planned for any subsequent version. They appear here so future work can prove "is this a v1 problem?" against a documented list, not against the original `~/.claude/plans/you-will-work-from-enchanted-pine.md` which lives outside the repo.
+The FlowOtter v1.x line is feature-frozen — only bug fixes and security patches land. The items below are explicitly **out of scope** for v1.x and are not planned for any subsequent v1 release. They appear here so future work can prove "is this a v1 problem?" against a documented list.
 
 ## Auth + connectivity
 
