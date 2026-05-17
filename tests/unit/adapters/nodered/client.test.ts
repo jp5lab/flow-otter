@@ -252,3 +252,60 @@ describe('NodeRedClient User-Agent', () => {
     expect((init.headers as Record<string, string>)['User-Agent']).toBe('FlowOtter/unknown');
   });
 });
+
+describe('NodeRedClient retry idempotency', () => {
+  it('does NOT retry POST /flow on 5xx (createFlow is non-idempotent)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('boom', { status: 500 }));
+    const client = new NodeRedClient({
+      baseUrl: 'http://localhost:1880',
+      auth: new NoAuth(),
+      fetchImpl,
+      retries: 3,
+    });
+    await expect(client.createFlow({ label: 'x', nodes: [] })).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT retry DELETE /flow on 5xx (deleteFlow is non-idempotent in terms of response)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('boom', { status: 500 }));
+    const client = new NodeRedClient({
+      baseUrl: 'http://localhost:1880',
+      auth: new NoAuth(),
+      fetchImpl,
+      retries: 3,
+    });
+    await expect(client.deleteFlow('tab1')).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('DOES retry GET /flows on 5xx', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('boom', { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({ flows: [], rev: 'r1' }));
+    const client = new NodeRedClient({
+      baseUrl: 'http://localhost:1880',
+      auth: new NoAuth(),
+      fetchImpl,
+      retries: 2,
+    });
+    const out = await client.getFlows();
+    expect(out.rev).toBe('r1');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('DOES retry POST /flows on 5xx (bulk replace is body-idempotent)', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('boom', { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({ rev: 'r2' }));
+    const client = new NodeRedClient({
+      baseUrl: 'http://localhost:1880',
+      auth: new NoAuth(),
+      fetchImpl,
+      retries: 2,
+    });
+    await client.postFlows([] as never, { deployMode: 'nodes' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});

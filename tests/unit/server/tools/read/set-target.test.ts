@@ -101,17 +101,40 @@ describe('applyTarget(admin-api)', () => {
     expect(applied.snapshot_dir).toContain(path.join('.flow-otter', 'production'));
   });
 
-  it('honours explicit state-path overrides', () => {
+  it('honours explicit state-path overrides under the user home directory', () => {
+    // Paths must resolve under ~/ — agent-supplied paths outside home are
+    // rejected by validateUserSuppliedStatePath. Operators who need state on
+    // a different root set SNAPSHOT_DIR / STAGING_DIR / AUDIT_LOG_PATH via
+    // process env vars at startup; those bypass the agent-input check.
+    const customSnap = path.join(homeDir, 'custom', 'snapshots');
+    const customStage = path.join(homeDir, 'custom', 'staging');
+    const customAudit = path.join(homeDir, 'custom', 'audit.jsonl');
     const applied = applyTarget(container, {
       kind: 'admin-api',
       base_url: 'http://localhost:1880',
-      snapshot_dir: '/tmp/custom/snapshots',
-      staging_dir: '/tmp/custom/staging',
-      audit_log_path: '/tmp/custom/audit.jsonl',
+      snapshot_dir: customSnap,
+      staging_dir: customStage,
+      audit_log_path: customAudit,
     });
-    expect(applied.snapshot_dir).toBe('/tmp/custom/snapshots');
-    expect(applied.staging_dir).toBe('/tmp/custom/staging');
-    expect(applied.audit_log_path).toBe('/tmp/custom/audit.jsonl');
+    expect(applied.snapshot_dir).toBe(customSnap);
+    expect(applied.staging_dir).toBe(customStage);
+    expect(applied.audit_log_path).toBe(customAudit);
+  });
+
+  it('rejects path-traversal env_name', () => {
+    expect(() =>
+      applyTarget(container, { kind: 'admin-api', base_url: 'http://x:1880', env_name: '../etc' }),
+    ).toThrow(/env_name/);
+  });
+
+  it('rejects state paths outside the home directory', () => {
+    expect(() =>
+      applyTarget(container, {
+        kind: 'admin-api',
+        base_url: 'http://x:1880',
+        snapshot_dir: '/etc/cron.d',
+      }),
+    ).toThrow(/snapshot_dir.*home directory/);
   });
 
   it('rejects non-http(s) URLs', () => {

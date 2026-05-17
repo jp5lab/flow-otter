@@ -216,8 +216,17 @@ export class NodeRedClient {
     };
     let finalHeaders = await buildHeaders();
 
+    // Non-idempotent methods (POST /flow, DELETE /flow) must NOT retry
+    // automatically: a lost response after a successful mutation would
+    // duplicate state or misreport it. GET is always safe; PUT and POST
+    // /flows (bulk replace) are idempotent in content and may retry on
+    // 5xx / network — caller-side rev-mismatch handling covers the
+    // concurrent-update race. The retry budget below is gated on this.
+    const isSafeToRetry =
+      method === 'GET' || method === 'PUT' || (method === 'POST' && pathname === '/flows');
+
     let lastErr: unknown;
-    let totalAttempts = this.retries + 1;
+    let totalAttempts = isSafeToRetry ? this.retries + 1 : 1;
     let authReissued = false;
     for (let attempt = 0; attempt < totalAttempts; attempt++) {
       const controller = new AbortController();

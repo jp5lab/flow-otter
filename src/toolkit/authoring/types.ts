@@ -174,12 +174,34 @@ export const DEFAULT_OUTPUT_PORT_COUNT: Readonly<Record<string, number>> = {
   comment: 0,
 };
 
+/**
+ * Node types that declare their output port count via a `passthrough.outputs`
+ * number. The compiler honors this on any of these types; otherwise it
+ * derives the count from `DEFAULT_OUTPUT_PORT_COUNT` or, for switch nodes,
+ * `passthrough.rules.length` when `outputs` is absent.
+ */
+const OUTPUTS_FIELD_TYPES = new Set([
+  'function',
+  'switch',
+  'trigger',
+  // `delay` in `rate-limit` mode can split into 2 outputs; honor `outputs`
+  // if explicitly set on the node spec.
+  'delay',
+]);
+
 export function getOutputPortCount(
   type: string,
   passthrough?: Readonly<Record<string, unknown>>,
 ): number {
-  if (type === 'function' && typeof passthrough?.['outputs'] === 'number') {
+  if (OUTPUTS_FIELD_TYPES.has(type) && typeof passthrough?.['outputs'] === 'number') {
     return passthrough['outputs'];
+  }
+  // Switch nodes commonly omit `outputs` and let the rule count determine
+  // it. Read the array length if it's there; rules.length wins over the
+  // generic default of 1.
+  if (type === 'switch') {
+    const rules = passthrough?.['rules'];
+    if (Array.isArray(rules)) return rules.length;
   }
   const known = DEFAULT_OUTPUT_PORT_COUNT[type];
   return known ?? 1;

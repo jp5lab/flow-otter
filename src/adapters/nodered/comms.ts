@@ -34,9 +34,15 @@ export interface NodeRedCommsClientOptions {
   webSocketImpl?: typeof WebSocket;
   /** Override the reconnect schedule (ms per attempt). */
   reconnectSchedule?: readonly number[];
+  /**
+   * Hard cap on the open handshake. Without this, a stalled TCP connect
+   * leaves the awaiter hanging indefinitely. Defaults to 10 seconds.
+   */
+  connectTimeoutMs?: number;
 }
 
 const DEFAULT_RECONNECT_SCHEDULE: readonly number[] = [1_000, 2_000, 5_000, 15_000, 30_000];
+const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
 interface CommsFrame {
   topic?: string;
@@ -209,11 +215,17 @@ export class NodeRedCommsClient {
     // Wait for the open handshake so callers' next action (e.g. firing a
     // debug-emitting flow) doesn't race ahead of subscription. If open never
     // arrives, the close handler above will schedule the next reconnect.
+    // Hard timeout: if the upstream stalls mid-handshake, terminate the
+    // socket so we don't leak it AND the awaiter resolves so the caller
+    // (`get_recent_debug_messages`) doesn't hang.
+    const connectTimeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
     await new Promise<void>((resolve) => {
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
       const cleanup = (): void => {
         socket.off('open', onOpen);
         socket.off('close', onCloseOrError);
         socket.off('error', onCloseOrError);
+        if (timeoutHandle !== null) clearTimeout(timeoutHandle);
       };
       const onOpen = (): void => {
         this.connected = true;
@@ -236,6 +248,19 @@ export class NodeRedCommsClient {
       socket.once('open', onOpen);
       socket.once('close', onCloseOrError);
       socket.once('error', onCloseOrError);
+      timeoutHandle = setTimeout(() => {
+        this.opts.logger?.warn(
+          { url: wsUrl, timeoutMs: connectTimeoutMs },
+          'comms: connect timeout; terminating socket and scheduling reconnect',
+        );
+        cleanup();
+        try {
+          socket.terminate();
+        } catch {
+          // best-effort
+        }
+        resolve();
+      }, connectTimeoutMs);
     });
   }
 

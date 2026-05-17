@@ -14,6 +14,7 @@ import {
   isRegularNode,
   isSubflowDef,
   isTab,
+  SUBFLOW_INSTANCE_PREFIX,
 } from '../../shared/flows-json.js';
 
 import { AUTHORING_KEY_FIELD } from './compile.js';
@@ -191,6 +192,13 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     }
   }
 
+  // Map subflow-def Node-RED ids → authoring keys so subflow-instance type
+  // strings round-trip as `subflow:<authoringKey>` in the spec.
+  const subflowDefIdToKey = new Map<string, string>();
+  for (const [defId, defNode] of subflowDefsById) {
+    subflowDefIdToKey.set(defId, authoringKey(defNode));
+  }
+
   const tabs: TabSpec[] = [];
   for (const [tabId, tabNode] of tabsById) {
     const bucket = buckets.get(tabId) ?? emptyBucket();
@@ -201,7 +209,7 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     for (const c of bucket.comments) idToKey.set(c.id, authoringKey(c));
     for (const j of bucket.junctions) idToKey.set(j.id, authoringKey(j));
 
-    const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey));
+    const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey, subflowDefIdToKey));
     const groups: GroupSpec[] = bucket.groups.map((g) => buildGroupSpec(g, idToKey));
     const comments: CommentSpec[] = bucket.comments.map((c) => buildCommentSpec(c, idToKey));
     const junctions: JunctionSpec[] = bucket.junctions.map((j) => buildJunctionSpec(j, idToKey));
@@ -237,7 +245,7 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     const idToKey = new Map<string, string>();
     for (const n of bucket.nodes) idToKey.set(n.id, authoringKey(n));
     for (const j of bucket.junctions) idToKey.set(j.id, authoringKey(j));
-    const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey));
+    const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey, subflowDefIdToKey));
     const junctions: JunctionSpec[] = bucket.junctions.map((j) => buildJunctionSpec(j, idToKey));
     const wireSources: WireSource[] = [
       ...bucket.nodes.map((n) => ({ id: n.id, wires: n.wires ?? [] })),
@@ -278,12 +286,28 @@ function parseTabEnv(env: TabNode['env']): TabEnvEntry[] | undefined {
   return out;
 }
 
-function buildNodeSpec(node: RegularNode, idToKey: Map<string, string>): NodeSpec {
+function buildNodeSpec(
+  node: RegularNode,
+  idToKey: Map<string, string>,
+  subflowDefIdToKey?: ReadonlyMap<string, string>,
+): NodeSpec {
   const passthrough = pickPassthrough(node, STRUCTURAL_FIELDS);
   const groupKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
+  // Reverse the compile-time rewrite: `subflow:<noderedId>` → `subflow:<authoringKey>`
+  // when the def has an `_authoringKey`. Without this, a recompile from the
+  // spec would emit two diverging type strings (instance vs def) and fail
+  // subflow-ports validation.
+  let nodeType = node.type;
+  if (subflowDefIdToKey !== undefined && nodeType.startsWith(SUBFLOW_INSTANCE_PREFIX)) {
+    const noderedId = nodeType.slice(SUBFLOW_INSTANCE_PREFIX.length);
+    const key = subflowDefIdToKey.get(noderedId);
+    if (key !== undefined) {
+      nodeType = `${SUBFLOW_INSTANCE_PREFIX}${key}`;
+    }
+  }
   const spec: NodeSpec = {
     key: authoringKey(node),
-    type: node.type,
+    type: nodeType,
     ...(typeof node.name === 'string' ? { label: node.name } : {}),
     position: { x: node.x ?? 0, y: node.y ?? 0 },
     ...(groupKey !== undefined ? { groupKey } : {}),

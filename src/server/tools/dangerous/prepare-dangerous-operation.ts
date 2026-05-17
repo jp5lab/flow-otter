@@ -64,6 +64,51 @@ export const prepareDangerousOperationTool: Tool<Input, Output> = {
     if (input.operation === 'reset_runtime' && input.target !== undefined) {
       throw new ValidationFailedError('reset_runtime does not accept target.', []);
     }
+    // Per-flow CRUD ops bind their dangerous token to the flow being touched
+    // and (for create / update) the body hash. Without these here, prepare
+    // can hand out a token the execute tool will reject — so refuse early.
+    if (input.operation === 'create_flow') {
+      if (input.target === undefined) {
+        throw new ValidationFailedError(
+          'create_flow requires target (the new flow label) when preparing a token.',
+          [],
+        );
+      }
+      if (input.flows_hash === undefined) {
+        throw new ValidationFailedError(
+          'create_flow requires flows_hash (canonicalHash of the flow body) when preparing a token.',
+          [],
+        );
+      }
+    }
+    if (input.operation === 'update_flow') {
+      if (input.target === undefined) {
+        throw new ValidationFailedError(
+          'update_flow requires target (the flow_id to update) when preparing a token.',
+          [],
+        );
+      }
+      if (input.flows_hash === undefined) {
+        throw new ValidationFailedError(
+          'update_flow requires flows_hash (canonicalHash of the new flow body) when preparing a token.',
+          [],
+        );
+      }
+    }
+    if (input.operation === 'delete_flow') {
+      if (input.target === undefined) {
+        throw new ValidationFailedError(
+          'delete_flow requires target (the flow_id to delete) when preparing a token.',
+          [],
+        );
+      }
+      if (input.flows_hash !== undefined) {
+        throw new ValidationFailedError(
+          'delete_flow does not accept flows_hash (the flow body is not part of the token scope).',
+          [],
+        );
+      }
+    }
 
     const scope = {
       operation: input.operation,

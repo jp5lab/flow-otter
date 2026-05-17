@@ -1,6 +1,6 @@
 # Tool Reference
 
-Tool visibility depends on tier flags. With write, deploy, and dangerous flags enabled, `ALL_TOOLS` contains 58 tools. Each tool surfaces MCP-spec annotation hints (`readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`) on `tools/list` for client UIs (Claude Desktop, Cursor) to communicate intent.
+Tool visibility depends on tier flags. With write, deploy, and dangerous flags enabled, `ALL_TOOLS` contains 60 tools. Each tool surfaces MCP-spec annotation hints (`readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`) on `tools/list` for client UIs (Claude Desktop, Cursor) to communicate intent.
 
 ## Read Tools
 

@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { z } from 'zod';
 
+import { validateEnvName } from '../policy/path-policy.js';
+
 const SCHEMA_VERSION = 1 as const;
 
 const PersistedTargetSchema = z.discriminatedUnion('flow_source', [
@@ -67,6 +69,23 @@ function stableJson(value: unknown): string {
 export async function readPersistedTarget(
   envName: string,
 ): Promise<{ target: PersistedTarget | null; warnings: readonly PersistenceWarning[] }> {
+  // Reject path-traversal env names before computing the read path. A
+  // malicious ENVIRONMENT_NAME at boot would otherwise let us read
+  // arbitrary files under the user's home directory.
+  try {
+    validateEnvName(envName);
+  } catch (err) {
+    return {
+      target: null,
+      warnings: [
+        {
+          code: 'schema-mismatch',
+          path: '<env-name>',
+          message: err instanceof Error ? err.message : String(err),
+        },
+      ],
+    };
+  }
   const filePath = persistedTargetPath(envName);
   let raw: string;
   try {
@@ -143,6 +162,7 @@ export async function writePersistedTarget(
   target: WriteTargetInput,
   opts: WriteOptions = {},
 ): Promise<PersistedTarget> {
+  validateEnvName(envName);
   const stateRoot = targetStateRoot(envName);
   await mkdir(stateRoot, { recursive: true });
   const setAt = opts.setAt ?? new Date().toISOString();

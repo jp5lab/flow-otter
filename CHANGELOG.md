@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.2.0 - 2026-05-16 — Security hardening + non-idempotent-retry guard + correctness audit
+
+Second-round-review pass: closes path-traversal exposure on `set_target`, fixes a subflow-instance authoring bug that left every staged subflow failing validation, eliminates an audit race against `set_target`, surfaces silently-dropped authoring refs as diagnostics, hardens HTTP retry semantics for non-idempotent operations, and wires sensible network timeouts.
+
+### Security hardening
+
+- **Path-traversal on `set_target`** — `env_name`, `snapshot_dir`, `staging_dir`, and `audit_log_path` were agent-supplied path-traversal vectors. New `src/server/policy/path-policy.ts` rejects illegal `env_name` characters (allowed: `[A-Za-z0-9._-]`, ≤ 64 chars, no leading dot, no `.`/`..`) and requires absolute custom paths to resolve inside the user's home directory. Defense-in-depth: same validation runs in `applyTarget`, `readPersistedTarget`, and `writePersistedTarget` so a malicious `target.json` or `ENVIRONMENT_NAME` env var cannot escape the state sandbox.
+- **`prepare_dangerous_operation` token scope** — previously could issue tokens for `create_flow` / `update_flow` / `delete_flow` without the `target` + `flows_hash` scopes the execute tools require. Now refuses with a clear error so callers don't get an unusable token. (`replace_flows` + `delete_tab` were already correctly scoped.)
+- **Audit attribution race** — `makeInvokable` previously read `container.config` and `container.flowSource` live at audit-event creation time. A tool that rebinds the container mid-call (`set_target` is the canonical example) caused the audit row to attribute the call to the post-rebind environment. The invocation now snapshots `actor`, `environment`, `flow_source`, and the audit sink at call start.
+- **WebSocket connect timeout** — `NodeRedCommsClient.openSocket()` could hang forever waiting on `open`/`close`/`error` if the TCP handshake stalled. Hard timeout (default 10s, configurable via `REQUEST_TIMEOUT_MS`) now terminates the socket and frees the awaiter.
+- **Auth fetch/revoke timeout** — `PasswordGrantAuth.fetchToken()` and `PasswordGrantAuth.revoke()` were unbounded fetches; an unresponsive Node-RED could stall the call AND the shutdown path. Both now use `AbortController` with `REQUEST_TIMEOUT_MS` (default 30s).
+
+### Correctness fixes
+
+- **Subflow-instance authoring** — `add_subflow_instance` stored `type: subflow:<authoringKey>` and compile didn't rewrite it to `subflow:<noderedId>`, so the `subflow-ports` validator failed every staged subflow ("references missing subflow definition"). Compile now pre-resolves subflow-def ids and rewrites instance types at emit time. Decompile reverses the rewrite so the spec stays in agent-friendly `subflow:<authoringKey>` form.
+- **Authoring-ref drop diagnostics** — compile previously dropped unresolved wire targets, group `nodeKeys`, group `parentKey`, node `groupKey`, and node `widgetAnchor.refKey` silently. Compile now returns a `diagnostics: CompileDiagnostic[]` array; the stage pipeline merges these into its `diagnostics` output so the agent sees `compile/unresolved-*` warnings instead of silent data loss.
+- **Output-port modeling for switch/trigger/delay** — `getOutputPortCount` only honored `function.outputs`. The spec schemas allow `outputs` on `switch` and `trigger` (and the schema for `switch` also permits multi-output via `rules.length`). Compile now honors `passthrough.outputs` for `function`, `switch`, `trigger`, `delay`, and falls back to `rules.length` for `switch` when `outputs` is absent. Multi-output wiring no longer silently truncates to one port.
+
+### HTTP retry semantics
+
+- **Non-idempotent ops no longer retry** — `request()` retried 5xx and network errors generically. For `POST /flow` (create) and `DELETE /flow` (the per-flow CRUD endpoints) a retry after a successful server-side mutation could duplicate or misreport state. Retries are now gated on method idempotency: `GET`, `PUT`, and `POST /flows` (bulk replace, body-idempotent + caller-side rev-mismatch recovery) retry as before; `POST /flow` and `DELETE /flow` fail fast.
+
+### Release packaging
+
+- **`prepack` hook** — `package.json` now runs `npm run build` before pack. `dist/` is gitignored, so previously `npm pack` from a fresh clone produced a tarball with no compiled artifacts. The hook closes that gap so `npm install` from a git ref or tarball always has a runnable `bin/`.
+- **`package-lock.json` version drift fixed** — root `version` field now matches `package.json`'s `1.2.0`.
+
+### Stale docs
+
+- `docs/TOOL_REFERENCE.md` corrected: 60 tools (was 58).
+- `docs/PARALLEL-SESSIONS.md` corrected: the auth-env-var-ref scheme is shipped (since v0.5.0), not planned.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
+- `npm run test:unit`: 579 tests across 81 files (was 538/80; +41 new for path policy, audit race, dangerous-token scope, output ports, compile diagnostics, HTTP retry semantics).
+- `npm run test:property`: 17 tests (round-trip arbitraries continue to exercise junctions, tab locked/env, group geometry, comment size, subflow instances at numRuns: 1000).
+- `node scripts/check-tool-coverage.mjs`: 60/60 tools covered.
+- `npm audit --omit=dev`: 0 vulnerabilities.
+
+### Breaking changes
+
+- `set_target` now rejects `env_name` containing path separators, `..`, `.`, leading `.`, or characters outside `[A-Za-z0-9._-]`. Calls supplying state-directory overrides outside the user's home directory are also rejected; operators who need state on a different root must set `SNAPSHOT_DIR` / `STAGING_DIR` / `AUDIT_LOG_PATH` via process env vars at startup.
+- `compile()`'s return shape adds `diagnostics: readonly CompileDiagnostic[]`. Existing consumers that destructure `{ flows, hash }` continue to work.
+- `prepare_dangerous_operation` now refuses unscoped tokens for `create_flow` / `update_flow` / `delete_flow`. Existing callers that already supplied the required scopes are unaffected.
+- `POST /flow` and `DELETE /flow` no longer retry on 5xx / network errors. The change is a safety upgrade — duplicate-mutation hazards under retry — but a previously-flaky operator setup may see new errors instead of silent retries.
+
 ## 1.1.0 - 2026-05-16 — Roundtrip fidelity + config-knob enforcement + tool-ID symmetry
 
 Correctness pass: the v0.3.0 schema additions (junction, tab `locked`/`env`, group `g`/`info`/x/y/w/h, comment w/h) were declared in `flows-json.ts` but never propagated through the decompile→compile pipeline, so any author tool re-staging a flow silently dropped them. This release closes that gap, wires the dead config knobs to their documented behavior, and resolves the asymmetry between Node-RED IDs in `list_flows` output and authoring keys in author-tool inputs.

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { applyTarget, type ApplyTargetOptions, persistAppliedTarget } from '../../container.js';
+import { validateEnvName, validateUserSuppliedStatePath } from '../../policy/path-policy.js';
 import { persistedTargetPath } from '../../state/persisted-target.js';
 import type { Tool } from '../_tool.js';
 
@@ -141,6 +142,20 @@ export const setTargetTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: async (input, ctx) => {
+    // Agent-supplied env_name and custom state-directory paths are path-
+    // traversal vectors. Reject anything that could escape the user's
+    // home directory before we go anywhere near `mkdir`.
+    if (input.env_name !== undefined) validateEnvName(input.env_name);
+    if (input.snapshot_dir !== undefined) {
+      validateUserSuppliedStatePath('snapshot_dir', input.snapshot_dir);
+    }
+    if (input.staging_dir !== undefined) {
+      validateUserSuppliedStatePath('staging_dir', input.staging_dir);
+    }
+    if (input.audit_log_path !== undefined) {
+      validateUserSuppliedStatePath('audit_log_path', input.audit_log_path);
+    }
+
     let applyOpts: ApplyTargetOptions;
     if (isFileInput(input)) {
       applyOpts = {

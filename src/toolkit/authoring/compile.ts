@@ -36,9 +36,26 @@ export interface CompileOptions {
   idStrategy?: 'hash' | 'fixed';
 }
 
+export interface CompileDiagnostic {
+  readonly severity: 'error' | 'warning' | 'info';
+  readonly rule: string;
+  readonly message: string;
+  readonly tabId?: string;
+  readonly nodeKey?: string;
+  readonly context?: Record<string, unknown>;
+}
+
 export interface CompileResult {
   flows: FlowsJson;
   hash: string;
+  /**
+   * Authoring-time diagnostics surfaced by the compiler — unresolved wire
+   * targets, group members, parent-group refs, and widget anchors. The
+   * compiler does not throw on these (a re-compile of a previously-dirty
+   * flows.json must succeed) but callers (e.g. the stage pipeline) surface
+   * them in tool output so agents see the data loss.
+   */
+  diagnostics: readonly CompileDiagnostic[];
 }
 
 type Kind = 'tab' | 'node' | 'group' | 'comment' | 'subflowDef' | 'config' | 'junction';
@@ -162,11 +179,24 @@ function emitNode(
   groupId: string | undefined,
   wires: string[][],
   configKeyToId: ReadonlyMap<string, string>,
+  subflowDefKeyToId: ReadonlyMap<string, string>,
+  diagnostics: CompileDiagnostic[],
 ): RegularNode {
+  // Rewrite `subflow:<authoringKey>` → `subflow:<noderedId>` so the emitted
+  // node references the compiled def by its real id. Without this, the
+  // subflow-ports validator can't resolve the def at validation time.
+  let effectiveType = spec.type;
+  if (effectiveType.startsWith(SUBFLOW_INSTANCE_PREFIX)) {
+    const defKey = effectiveType.slice(SUBFLOW_INSTANCE_PREFIX.length);
+    const defId = subflowDefKeyToId.get(defKey);
+    if (defId !== undefined) {
+      effectiveType = `${SUBFLOW_INSTANCE_PREFIX}${defId}`;
+    }
+  }
   const node: Record<string, unknown> = {
     ...(spec.passthrough ?? {}),
     id,
-    type: spec.type,
+    type: effectiveType,
     z: tabId,
     x: spec.position.x,
     y: spec.position.y,
@@ -179,6 +209,15 @@ function emitNode(
     const targetId = configKeyToId.get(spec.widgetAnchor.refKey);
     if (targetId !== undefined) {
       node[spec.widgetAnchor.kind] = targetId;
+    } else {
+      diagnostics.push({
+        severity: 'warning',
+        rule: 'compile/unresolved-widget-anchor',
+        message: `Node '${spec.key}' widgetAnchor.refKey '${spec.widgetAnchor.refKey}' was dropped: no matching config node.`,
+        tabId,
+        nodeKey: spec.key,
+        context: { kind: spec.widgetAnchor.kind, refKey: spec.widgetAnchor.refKey },
+      });
     }
   }
   return node as RegularNode;
@@ -273,6 +312,8 @@ function buildWiresForNode(
   fromKey: string,
   portCount: number,
   connections: readonly ConnectionSpec[],
+  tabId: string,
+  diagnostics: CompileDiagnostic[],
   keyToId: Map<string, string>,
 ): string[][] {
   const wires: string[][] = [];
@@ -282,7 +323,17 @@ function buildWiresForNode(
       if (conn.fromKey !== fromKey) continue;
       if (conn.outputPort !== port) continue;
       const targetId = keyToId.get(conn.toKey);
-      if (targetId === undefined) continue;
+      if (targetId === undefined) {
+        diagnostics.push({
+          severity: 'warning',
+          rule: 'compile/unresolved-wire-target',
+          message: `Wire from '${fromKey}' port ${port} → '${conn.toKey}' was dropped: target key not present on this tab.`,
+          tabId,
+          nodeKey: fromKey,
+          context: { outputPort: port, toKey: conn.toKey },
+        });
+        continue;
+      }
       targets.push(targetId);
     }
     targets.sort();
@@ -325,6 +376,7 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   const strategy = opts.idStrategy ?? 'hash';
   const prior = buildPriorIndex(opts.prior);
   const flows: FlowsJsonNode[] = [];
+  const diagnostics: CompileDiagnostic[] = [];
   const subflowDefOutCount = buildSubflowDefOutCount(spec.subflowDefs);
 
   // Pre-resolve config-node ids so per-tab nodes can resolve `widgetAnchor`.
@@ -333,6 +385,14 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   const configKeyToId = new Map<string, string>();
   for (const configSpec of spec.configNodes ?? []) {
     configKeyToId.set(configSpec.key, deriveId(prior, '', 'config', configSpec.key, strategy));
+  }
+
+  // Pre-resolve subflow-def ids so per-tab subflow-instance nodes can rewrite
+  // `subflow:<authoringKey>` → `subflow:<noderedId>` at emit time. Without
+  // this the subflow-ports validator can't find the def at validation time.
+  const subflowDefKeyToId = new Map<string, string>();
+  for (const defSpec of spec.subflowDefs ?? []) {
+    subflowDefKeyToId.set(defSpec.id, deriveId(prior, '', 'subflowDef', defSpec.id, strategy));
   }
 
   for (const tabSpec of spec.tabs) {
@@ -363,38 +423,124 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
       const id = nodeKeyToId.get(nodeSpec.key);
       if (!id) continue;
       const portCount = portCountForNode(nodeSpec, subflowDefOutCount);
-      const wires = buildWiresForNode(nodeSpec.key, portCount, tabSpec.connections, wireTargetMap);
-      const groupId =
-        nodeSpec.groupKey !== undefined ? groupKeyToId.get(nodeSpec.groupKey) : undefined;
-      flows.push(emitNode(nodeSpec, id, tabId, groupId, wires, configKeyToId));
+      const wires = buildWiresForNode(
+        nodeSpec.key,
+        portCount,
+        tabSpec.connections,
+        tabId,
+        diagnostics,
+        wireTargetMap,
+      );
+      let groupId: string | undefined;
+      if (nodeSpec.groupKey !== undefined) {
+        groupId = groupKeyToId.get(nodeSpec.groupKey);
+        if (groupId === undefined) {
+          diagnostics.push({
+            severity: 'warning',
+            rule: 'compile/unresolved-group-ref',
+            message: `Node '${nodeSpec.key}' groupKey '${nodeSpec.groupKey}' was dropped: no group with that key on this tab.`,
+            tabId,
+            nodeKey: nodeSpec.key,
+            context: { groupKey: nodeSpec.groupKey },
+          });
+        }
+      }
+      flows.push(
+        emitNode(
+          nodeSpec,
+          id,
+          tabId,
+          groupId,
+          wires,
+          configKeyToId,
+          subflowDefKeyToId,
+          diagnostics,
+        ),
+      );
     }
 
     for (const junctionSpec of tabSpec.junctions ?? []) {
       const id = junctionKeyToId.get(junctionSpec.key);
       if (!id) continue;
-      const wires = buildWiresForNode(junctionSpec.key, 1, tabSpec.connections, wireTargetMap);
-      const groupId =
-        junctionSpec.groupKey !== undefined ? groupKeyToId.get(junctionSpec.groupKey) : undefined;
+      const wires = buildWiresForNode(
+        junctionSpec.key,
+        1,
+        tabSpec.connections,
+        tabId,
+        diagnostics,
+        wireTargetMap,
+      );
+      let groupId: string | undefined;
+      if (junctionSpec.groupKey !== undefined) {
+        groupId = groupKeyToId.get(junctionSpec.groupKey);
+        if (groupId === undefined) {
+          diagnostics.push({
+            severity: 'warning',
+            rule: 'compile/unresolved-group-ref',
+            message: `Junction '${junctionSpec.key}' groupKey '${junctionSpec.groupKey}' was dropped: no group with that key on this tab.`,
+            tabId,
+            nodeKey: junctionSpec.key,
+            context: { groupKey: junctionSpec.groupKey },
+          });
+        }
+      }
       flows.push(emitJunction(junctionSpec, id, tabId, groupId, wires));
     }
 
     for (const groupSpec of tabSpec.groups) {
       const id = groupKeyToId.get(groupSpec.key);
       if (!id) continue;
-      const containedIds = groupSpec.nodeKeys
-        .map((k) => nodeKeyToId.get(k) ?? junctionKeyToId.get(k) ?? commentKeyToId.get(k))
-        .filter((x): x is string => typeof x === 'string')
-        .sort();
-      const parentId =
-        groupSpec.parentKey !== undefined ? groupKeyToId.get(groupSpec.parentKey) : undefined;
+      const containedIds: string[] = [];
+      for (const k of groupSpec.nodeKeys) {
+        const cid = nodeKeyToId.get(k) ?? junctionKeyToId.get(k) ?? commentKeyToId.get(k);
+        if (cid !== undefined) {
+          containedIds.push(cid);
+        } else {
+          diagnostics.push({
+            severity: 'warning',
+            rule: 'compile/unresolved-group-member',
+            message: `Group '${groupSpec.key}' member '${k}' was dropped: no node/junction/comment with that key on this tab.`,
+            tabId,
+            nodeKey: groupSpec.key,
+            context: { memberKey: k },
+          });
+        }
+      }
+      containedIds.sort();
+      let parentId: string | undefined;
+      if (groupSpec.parentKey !== undefined) {
+        parentId = groupKeyToId.get(groupSpec.parentKey);
+        if (parentId === undefined) {
+          diagnostics.push({
+            severity: 'warning',
+            rule: 'compile/unresolved-group-parent',
+            message: `Group '${groupSpec.key}' parentKey '${groupSpec.parentKey}' was dropped: no parent group with that key.`,
+            tabId,
+            nodeKey: groupSpec.key,
+            context: { parentKey: groupSpec.parentKey },
+          });
+        }
+      }
       flows.push(emitGroup(groupSpec, id, tabId, containedIds, parentId));
     }
 
     for (const commentSpec of tabSpec.comments) {
       const id = commentKeyToId.get(commentSpec.key);
       if (!id) continue;
-      const groupId =
-        commentSpec.groupKey !== undefined ? groupKeyToId.get(commentSpec.groupKey) : undefined;
+      let groupId: string | undefined;
+      if (commentSpec.groupKey !== undefined) {
+        groupId = groupKeyToId.get(commentSpec.groupKey);
+        if (groupId === undefined) {
+          diagnostics.push({
+            severity: 'warning',
+            rule: 'compile/unresolved-group-ref',
+            message: `Comment '${commentSpec.key}' groupKey '${commentSpec.groupKey}' was dropped: no group with that key on this tab.`,
+            tabId,
+            nodeKey: commentSpec.key,
+            context: { groupKey: commentSpec.groupKey },
+          });
+        }
+      }
       flows.push(emitComment(commentSpec, id, tabId, groupId));
     }
   }
@@ -406,7 +552,8 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   }
 
   for (const defSpec of spec.subflowDefs ?? []) {
-    const defId = deriveId(prior, '', 'subflowDef', defSpec.id, strategy);
+    const defId = subflowDefKeyToId.get(defSpec.id);
+    if (defId === undefined) continue;
     const nodeKeyToId = new Map<string, string>();
     for (const n of defSpec.nodes) {
       nodeKeyToId.set(n.key, deriveId(prior, defId, 'node', n.key, strategy));
@@ -423,13 +570,38 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
       const id = nodeKeyToId.get(nodeSpec.key);
       if (!id) continue;
       const portCount = portCountForNode(nodeSpec, subflowDefOutCount);
-      const wires = buildWiresForNode(nodeSpec.key, portCount, defSpec.connections, wireTargetMap);
-      flows.push(emitNode(nodeSpec, id, defId, undefined, wires, configKeyToId));
+      const wires = buildWiresForNode(
+        nodeSpec.key,
+        portCount,
+        defSpec.connections,
+        defId,
+        diagnostics,
+        wireTargetMap,
+      );
+      flows.push(
+        emitNode(
+          nodeSpec,
+          id,
+          defId,
+          undefined,
+          wires,
+          configKeyToId,
+          subflowDefKeyToId,
+          diagnostics,
+        ),
+      );
     }
     for (const junctionSpec of defSpec.junctions ?? []) {
       const id = junctionKeyToId.get(junctionSpec.key);
       if (!id) continue;
-      const wires = buildWiresForNode(junctionSpec.key, 1, defSpec.connections, wireTargetMap);
+      const wires = buildWiresForNode(
+        junctionSpec.key,
+        1,
+        defSpec.connections,
+        defId,
+        diagnostics,
+        wireTargetMap,
+      );
       flows.push(emitJunction(junctionSpec, id, defId, undefined, wires));
     }
   }
@@ -439,5 +611,6 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   return {
     flows,
     hash: canonicalHash(flows),
+    diagnostics,
   };
 }

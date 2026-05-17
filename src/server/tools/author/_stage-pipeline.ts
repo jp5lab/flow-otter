@@ -97,7 +97,21 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
       lintReport.errors,
     );
   }
-  const diagnostics = [...validateReport.diagnostics, ...lintReport.diagnostics];
+  // Surface compile-time authoring losses (unresolved wires / group refs /
+  // group members / widget anchors) so agents see them in the stage output
+  // and can fix the spec instead of discovering missing wires post-deploy.
+  const diagnostics = [
+    ...compiled.diagnostics.map((d) => ({
+      severity: d.severity,
+      rule: d.rule,
+      message: d.message,
+      ...(d.nodeKey !== undefined ? { nodeId: d.nodeKey } : {}),
+      ...(d.tabId !== undefined ? { tabId: d.tabId } : {}),
+      ...(d.context !== undefined ? { context: d.context } : {}),
+    })),
+    ...validateReport.diagnostics,
+    ...lintReport.diagnostics,
+  ];
 
   const diff = diffFlows(priorFlows, compiled.flows);
   const diffSummary = summarizeDiff(diff);

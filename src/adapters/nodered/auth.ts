@@ -100,9 +100,16 @@ export interface PasswordGrantOptions {
    * the client will send the raw token (no `Bearer ` prefix).
    */
   headerName?: string;
+  /**
+   * Per-request timeout for `/auth/token` and `/auth/revoke`. Without this
+   * an unresponsive runtime stalls the caller (and the shutdown path).
+   * Defaults to 30 seconds when omitted.
+   */
+  requestTimeoutMs?: number;
 }
 
 const TOKEN_REFRESH_BUFFER_MS = 30_000;
+const DEFAULT_AUTH_REQUEST_TIMEOUT_MS = 30_000;
 
 export class PasswordGrantAuth implements NodeRedAuth {
   private cached: CachedToken | null = null;
@@ -136,14 +143,20 @@ export class PasswordGrantAuth implements NodeRedAuth {
     const fetchImpl = this.opts.fetchImpl ?? fetch;
     const url = new URL('/auth/revoke', this.opts.baseUrl).toString();
     const body = new URLSearchParams({ token: this.cached.value }).toString();
+    const timeoutMs = this.opts.requestTimeoutMs ?? DEFAULT_AUTH_REQUEST_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       await fetchImpl(url, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body,
+        signal: controller.signal,
       });
     } catch {
-      // Best-effort; don't throw on shutdown path.
+      // Best-effort; don't throw on shutdown path (covers timeout + network).
+    } finally {
+      clearTimeout(timer);
     }
     this.cached = null;
   }
@@ -165,15 +178,21 @@ export class PasswordGrantAuth implements NodeRedAuth {
       password: this.opts.password,
       client_id: this.opts.clientId ?? 'node-red-admin',
     });
+    const timeoutMs = this.opts.requestTimeoutMs ?? DEFAULT_AUTH_REQUEST_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response;
     try {
       res = await fetchImpl(url, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
+        signal: controller.signal,
       });
     } catch (err) {
       throw new NodeRedDownError(`Password grant request failed at ${url}.`, err);
+    } finally {
+      clearTimeout(timer);
     }
     if (!res.ok) {
       throw new AuthFailedError(res.status, `Password grant rejected (HTTP ${res.status}).`);
@@ -228,7 +247,11 @@ export async function probeAuthLogin(
   return tokenHeader !== undefined ? { type, tokenHeader } : { type };
 }
 
-export function authFromEnv(env: NodeJS.ProcessEnv, baseUrl: string): NodeRedAuth {
+export function authFromEnv(
+  env: NodeJS.ProcessEnv,
+  baseUrl: string,
+  opts: { requestTimeoutMs?: number } = {},
+): NodeRedAuth {
   const headerName = env['NODE_RED_AUTH_HEADER'];
   const token = env['NODE_RED_AUTH_TOKEN'];
   if (typeof token === 'string' && token.length > 0) {
@@ -242,6 +265,7 @@ export function authFromEnv(env: NodeJS.ProcessEnv, baseUrl: string): NodeRedAut
       username,
       password,
       ...(headerName ? { headerName } : {}),
+      ...(opts.requestTimeoutMs !== undefined ? { requestTimeoutMs: opts.requestTimeoutMs } : {}),
     });
   }
   return new NoAuth();

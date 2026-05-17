@@ -1,6 +1,9 @@
 import type { AuthoringSpec } from '../../src/toolkit/authoring/types.js';
 
-const SUBFLOW_DEF_COMPILED_ID = 'b412ea0361d32c3f';
+// Subflow-instance types reference the def by its `_authoringKey`. Compile
+// rewrites this to the Node-RED id at emit time so flows.json is consistent
+// for the subflow-ports validator.
+const SUBFLOW_DEF_KEY = 'ks-subflow';
 
 export const KITCHEN_SINK_SPEC: AuthoringSpec = {
   tabs: [
@@ -87,7 +90,7 @@ export const KITCHEN_SINK_SPEC: AuthoringSpec = {
         },
         {
           key: 'subflow-instance',
-          type: `subflow:${SUBFLOW_DEF_COMPILED_ID}`,
+          type: `subflow:${SUBFLOW_DEF_KEY}`,
           label: 'Subflow',
           position: { x: 740, y: 100 },
           passthrough: { env: [] },

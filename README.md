@@ -8,7 +8,7 @@ If you cloned this repo via an agent (Claude Code, Cursor, etc.), the project-sc
 
 ## Status
 
-**v1.1.0 — correctness pass.** 60 MCP tools, deterministic TypeScript authoring layer, snapshot/diff/deploy pipeline with drift detection, in-toolkit debug observation via Node-RED `/comms` WebSocket, multi-target state isolation, substring-level secret redaction. The v1.0 surface was feature-frozen; v1.1 is a quality release that fixes lossy decompile/compile fields (junctions, tab `locked`/`env`, group geometry, comment size), wires the previously dead config knobs (`MAX_FLOW_SIZE_BYTES`, `ALLOWED_NODE_TYPES`, `BLOCKED_NODE_TYPES`, `REQUIRE_SNAPSHOT_BEFORE_DEPLOY`, `REQUIRE_DIFF_BEFORE_DEPLOY`, `SNAPSHOT_RETENTION`), and lets author tools accept either Node-RED IDs or `_authoringKey` for `tab_id`. See [`CHANGELOG.md`](CHANGELOG.md) for details and [`docs/NON_GOALS.md`](docs/NON_GOALS.md) for what's explicitly out of scope.
+**v1.2.0 — security hardening + correctness audit.** 60 MCP tools, deterministic TypeScript authoring layer, snapshot/diff/deploy pipeline with drift detection, in-toolkit debug observation via Node-RED `/comms` WebSocket, multi-target state isolation, substring-level secret redaction. v1.2 closes path-traversal exposure on `set_target`, fixes a subflow-instance authoring bug, eliminates an audit race, surfaces silently-dropped authoring refs as diagnostics, drops retries on non-idempotent HTTP, and wires network timeouts. v1.1 fixed lossy roundtrip (junctions, tab `locked`/`env`, group geometry, comment size) and wired the previously dead config knobs. See [`CHANGELOG.md`](CHANGELOG.md) for details and [`docs/NON_GOALS.md`](docs/NON_GOALS.md) for what's explicitly out of scope.
 
 ### Tool surface
 
@@ -19,7 +19,7 @@ If you cloned this repo via an agent (Claude Code, Cursor, etc.), the project-sc
 
 ### Verification
 
-`541 unit + 17 property + 82 integration tests`. Property tests run fast-check at `numRuns:1000` and now exercise junctions, tab `locked`/`env`, group geometry, and comment size in the round-trip arbitraries. `node scripts/check-tool-coverage.mjs` reports 0 unit / 0 integration gaps across all 60 tools.
+`579 unit + 17 property + 82 integration tests`. Property tests run fast-check at `numRuns:1000` and exercise junctions, tab `locked`/`env`, group geometry, and comment size in the round-trip arbitraries. `node scripts/check-tool-coverage.mjs` reports 0 unit / 0 integration gaps across all 60 tools.
 
 ## Showcase
 

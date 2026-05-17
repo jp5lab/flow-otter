@@ -166,6 +166,20 @@ export function makeInvokable<TIn, TOut>(tool: Tool<TIn, TOut>): InvokableTool {
       const startedAt = container.clock();
       const argsHash = canonicalHash(rawInput ?? null);
       const enrichments: Partial<AuditEvent> = {};
+      // Snapshot audit-relevant container state at invocation time. If the
+      // tool is `set_target` (or anything else that rebinds the live
+      // container), the audit event still attributes the call to the env /
+      // target / actor that issued it — not to whatever the container
+      // happens to point at after the rebind. The audit sink is also
+      // snapshotted so the event is written to the env-scoped log file
+      // that was active when the call started.
+      const snapshot = {
+        actor: container.config.ACTOR_NAME,
+        environment: container.config.ENVIRONMENT_NAME,
+        flowSourceTarget: container.flowSource.describe().target,
+        audit: container.audit,
+        logger: container.logger,
+      };
       const ctx: ToolContext = Object.assign({}, container, {
         enrichAudit: (patch: Partial<AuditEvent>): void => {
           Object.assign(enrichments, patch);
@@ -190,14 +204,14 @@ export function makeInvokable<TIn, TOut>(tool: Tool<TIn, TOut>): InvokableTool {
         const durationMs = finishedAt.getTime() - startedAt.getTime();
         const event: AuditEvent = {
           ts: startedAt.toISOString(),
-          actor: container.config.ACTOR_NAME,
+          actor: snapshot.actor,
           tool: tool.name,
           tier: tool.tier,
           args_hash: argsHash,
           result: outResult,
           duration_ms: durationMs,
-          flow_source: container.flowSource.describe().target,
-          environment: container.config.ENVIRONMENT_NAME,
+          flow_source: snapshot.flowSourceTarget,
+          environment: snapshot.environment,
           server_version: container.serverVersion,
           ...(errorMessage !== null ? { error: errorMessage } : {}),
           ...enrichments,
@@ -206,9 +220,9 @@ export function makeInvokable<TIn, TOut>(tool: Tool<TIn, TOut>): InvokableTool {
         event.result = outResult;
         if (errorMessage !== null) event.error = errorMessage;
         try {
-          await container.audit.record(event);
+          await snapshot.audit.record(event);
         } catch (auditErr) {
-          container.logger.error(
+          snapshot.logger.error(
             { auditErr: String(auditErr), tool: tool.name },
             'audit emit failed',
           );

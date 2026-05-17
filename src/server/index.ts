@@ -66,7 +66,7 @@ import { installShutdown } from './transport/shutdown.js';
 
 export const SERVER_INFO = {
   name: 'flow-otter',
-  version: '1.1.0',
+  version: '1.2.0',
 };
 
 export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [

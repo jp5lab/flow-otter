@@ -92,6 +92,57 @@ describe('makeInvokable annotations', () => {
   });
 });
 
+describe('makeInvokable audit snapshotting', () => {
+  it('attributes the audit event to the actor/environment/flow_source at invocation start, even if container is rebound mid-call', async () => {
+    const records: Array<Record<string, unknown>> = [];
+    const auditA = { record: (e: Record<string, unknown>) => Promise.resolve(records.push(e)) };
+    const auditB = {
+      record: (e: Record<string, unknown>) => Promise.resolve(records.push({ wrong: true, ...e })),
+    };
+    const flowSourceA = {
+      describe: () => ({ kind: 'adminapi', target: 'http://A:1880' }),
+      load: () => Promise.resolve({ flows: [], rev: null }),
+      save: () => Promise.resolve({ rev: 'r1' }),
+      fingerprint: () => Promise.resolve({ sha256: '', rev: null }),
+      inspectWarnings: () => Promise.resolve([]),
+    };
+    const flowSourceB = {
+      ...flowSourceA,
+      describe: () => ({ kind: 'adminapi', target: 'http://B:1880' }),
+    };
+    const container: Record<string, unknown> = {
+      config: { ACTOR_NAME: 'actor-A', ENVIRONMENT_NAME: 'env-A' },
+      flowSource: flowSourceA,
+      audit: auditA,
+      logger: { error: () => undefined },
+      clock: () => new Date('2026-05-16T00:00:00.000Z'),
+      serverVersion: 'test',
+    };
+    const tool = {
+      name: 'rebind-tool',
+      description: '',
+      tier: 'read' as const,
+      inputZod: z.object({}).strict(),
+      inputJsonSchema: { type: 'object', additionalProperties: false, properties: {} },
+      handler: (_in: unknown, _ctx: unknown) => {
+        // Rebind mid-call — emulate what set_target does.
+        container['config'] = { ACTOR_NAME: 'actor-B', ENVIRONMENT_NAME: 'env-B' };
+        container['flowSource'] = flowSourceB;
+        container['audit'] = auditB;
+        return Promise.resolve({});
+      },
+    };
+    const invokable = makeInvokable(tool);
+    await invokable.invoke({}, container as never);
+    expect(records).toHaveLength(1);
+    const event = records[0]!;
+    expect(event['actor']).toBe('actor-A');
+    expect(event['environment']).toBe('env-A');
+    expect(event['flow_source']).toBe('http://A:1880');
+    expect(event['wrong']).toBeUndefined();
+  });
+});
+
 describe('per-tool annotation overrides for read-tier tools with side effects', () => {
   it('set_target and export_snapshot mark readOnlyHint: false', async () => {
     const { setTargetTool } = await import('../../../../src/server/tools/read/set-target.js');

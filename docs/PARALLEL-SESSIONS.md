@@ -141,4 +141,4 @@ The persistence layer never writes auth tokens to disk. For protected Node-RED r
 
 - **Easiest**: put `NODE_RED_AUTH_TOKEN` in the MCP registration env. Persistence + rehydration carries the URL and env-name; auth comes from env at every boot.
 - **Per-session**: pass `auth_token` into `set_target` each session.
-- **Env-var-ref scheme** (planned): `target.json` stores `auth_env_var: "NODE_RED_TOKEN_<env>"` and the rehydrator reads that env var at boot. Additive when shipped.
+- **Env-var-ref scheme**: pass `auth_env_var: "NODE_RED_TOKEN_<env>"` into `set_target` — the variable NAME is persisted to `target.json` but the token VALUE is never written. The rehydrator reads the env var at boot and bridges the token in. Available since v0.5.0.

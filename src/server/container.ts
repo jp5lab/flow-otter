@@ -32,6 +32,7 @@ import type { AuditLogger } from './audit/jsonl.js';
 import { JsonlAuditLogger } from './audit/jsonl.js';
 import { loadConfig } from './config/load.js';
 import type { Config } from './config/schema.js';
+import { validateEnvName, validateUserSuppliedStatePath } from './policy/path-policy.js';
 import {
   type PersistedTarget,
   readPersistedTarget,
@@ -148,6 +149,7 @@ function buildTargetBound(
       auth,
       bufferSize: config.DEBUG_BUFFER_SIZE,
       logger,
+      connectTimeoutMs: config.REQUEST_TIMEOUT_MS,
     });
   } else {
     flowSource = new UnconfiguredAdminApiFlowSource();
@@ -179,7 +181,9 @@ export function buildContainer(opts: BuildContainerOptions): Container {
   const clock = opts.clock ?? ((): Date => new Date());
 
   const auth: NodeRedAuth = config.NODE_RED_BASE_URL
-    ? authFromEnv(env, config.NODE_RED_BASE_URL)
+    ? authFromEnv(env, config.NODE_RED_BASE_URL, {
+        requestTimeoutMs: config.REQUEST_TIMEOUT_MS,
+      })
     : new NoAuth();
   const bound = buildTargetBound(config, auth, logger, opts.serverVersion, opts.fetchImpl);
 
@@ -266,6 +270,18 @@ function deriveEnvNameFromPath(filePath: string): string {
  * the set_target tool) must call `writePersistedTarget` separately.
  */
 export function applyTarget(container: Container, opts: ApplyTargetOptions): AppliedTarget {
+  // Defense-in-depth: validate env_name and custom state paths even if the
+  // caller bypassed the set_target tool's input layer.
+  if (opts.env_name !== undefined) validateEnvName(opts.env_name);
+  if (opts.snapshot_dir !== undefined) {
+    validateUserSuppliedStatePath('snapshot_dir', opts.snapshot_dir);
+  }
+  if (opts.staging_dir !== undefined) {
+    validateUserSuppliedStatePath('staging_dir', opts.staging_dir);
+  }
+  if (opts.audit_log_path !== undefined) {
+    validateUserSuppliedStatePath('audit_log_path', opts.audit_log_path);
+  }
   if (opts.kind === 'admin-api') {
     return applyAdminApiTarget(container, opts);
   }
@@ -313,6 +329,7 @@ function applyAdminApiTarget(
       baseUrl: opts.base_url,
       username: opts.username,
       password: opts.password,
+      requestTimeoutMs: container.config.REQUEST_TIMEOUT_MS,
     });
   } else {
     auth = new NoAuth();

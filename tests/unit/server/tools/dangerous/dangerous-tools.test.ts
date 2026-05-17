@@ -171,4 +171,50 @@ describe('dangerous tools', () => {
       deleteTabTool.handler({ tab_id: 'tab1', confirmation_token: 'wrong' }, ctx),
     ).rejects.toThrow(/Invalid confirmation_token/);
   });
+
+  it('prepare_dangerous_operation rejects per-flow scopes that the execute tool would reject', async () => {
+    const prepare = async (input: Record<string, unknown>): Promise<unknown> =>
+      prepareDangerousOperationTool.handler(
+        { ...input, confirmation_text: DANGEROUS_CONFIRMATION_TEXT } as never,
+        ctx,
+      );
+    // create_flow needs both target and flows_hash
+    await expect(prepare({ operation: 'create_flow', flows_hash: 'a'.repeat(64) })).rejects.toThrow(
+      /create_flow requires target/,
+    );
+    await expect(prepare({ operation: 'create_flow', target: 'Label' })).rejects.toThrow(
+      /create_flow requires flows_hash/,
+    );
+    // update_flow same
+    await expect(prepare({ operation: 'update_flow', flows_hash: 'a'.repeat(64) })).rejects.toThrow(
+      /update_flow requires target/,
+    );
+    await expect(prepare({ operation: 'update_flow', target: 'tab1' })).rejects.toThrow(
+      /update_flow requires flows_hash/,
+    );
+    // delete_flow needs target only — flows_hash is rejected
+    await expect(prepare({ operation: 'delete_flow' })).rejects.toThrow(
+      /delete_flow requires target/,
+    );
+    await expect(
+      prepare({ operation: 'delete_flow', target: 'tab1', flows_hash: 'a'.repeat(64) }),
+    ).rejects.toThrow(/delete_flow does not accept flows_hash/);
+    // Happy paths
+    const okCreate = (await prepare({
+      operation: 'create_flow',
+      target: 'My Tab',
+      flows_hash: 'a'.repeat(64),
+    })) as { confirmation_token: string };
+    const okUpdate = (await prepare({
+      operation: 'update_flow',
+      target: 'tab1',
+      flows_hash: 'a'.repeat(64),
+    })) as { confirmation_token: string };
+    const okDelete = (await prepare({ operation: 'delete_flow', target: 'tab1' })) as {
+      confirmation_token: string;
+    };
+    expect(okCreate.confirmation_token).toMatch(/^[0-9a-f]{32}$/);
+    expect(okUpdate.confirmation_token).toMatch(/^[0-9a-f]{32}$/);
+    expect(okDelete.confirmation_token).toMatch(/^[0-9a-f]{32}$/);
+  });
 });

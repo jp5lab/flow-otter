@@ -11,6 +11,7 @@ import {
   statusNode,
   subflowInstance,
 } from '../../../../src/toolkit/authoring/builders.js';
+import { getOutputPortCount } from '../../../../src/toolkit/authoring/types.js';
 
 const POS = { x: 0, y: 0 };
 
@@ -62,5 +63,35 @@ describe('node-type builders', () => {
     expect(n.label).toBe('My MQTT');
     expect(n.groupKey).toBe('g1');
     expect(n.passthrough).toEqual({ topic: 'foo/bar', broker: 'b1' });
+  });
+});
+
+describe('getOutputPortCount', () => {
+  it('honors passthrough.outputs for function nodes', () => {
+    expect(getOutputPortCount('function', { outputs: 3 })).toBe(3);
+  });
+
+  it('honors passthrough.outputs for switch / trigger / delay nodes', () => {
+    expect(getOutputPortCount('switch', { outputs: 4 })).toBe(4);
+    expect(getOutputPortCount('trigger', { outputs: 2 })).toBe(2);
+    expect(getOutputPortCount('delay', { outputs: 2 })).toBe(2);
+  });
+
+  it('derives switch outputs from rules.length when outputs is absent', () => {
+    expect(
+      getOutputPortCount('switch', { rules: [{ t: 'eq' }, { t: 'neq' }, { t: 'else' }] }),
+    ).toBe(3);
+  });
+
+  it('falls back to the per-type default when neither field is present', () => {
+    expect(getOutputPortCount('inject')).toBe(1);
+    expect(getOutputPortCount('debug')).toBe(0);
+    expect(getOutputPortCount('mqtt out')).toBe(0);
+    expect(getOutputPortCount('something-unknown')).toBe(1);
+  });
+
+  it('does not honor outputs on types not in the OUTPUTS_FIELD_TYPES set', () => {
+    // mqtt in is single-output by convention; spec injecting `outputs` is ignored.
+    expect(getOutputPortCount('mqtt in', { outputs: 5 })).toBe(1);
   });
 });

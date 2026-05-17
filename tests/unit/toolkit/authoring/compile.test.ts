@@ -365,12 +365,96 @@ describe('compile baseline-merge ID preservation', () => {
       ],
     };
     const { flows } = compile(spec);
-    const inst = flows.find((n) => typeof n.type === 'string' && n.type === 'subflow:my-sub');
+    // Instance type is rewritten from authoring-key form (`subflow:my-sub`) to
+    // the compiled-id form (`subflow:<noderedId>`) so the subflow-ports
+    // validator can resolve the def. Find the instance by the rewritten form.
+    const def = flows.find((n) => n.type === 'subflow');
+    const inst = flows.find((n) => typeof n.type === 'string' && n.type === `subflow:${def!.id}`);
     expect(inst).toBeDefined();
     const wires = (inst as { wires?: unknown[][] }).wires;
     expect(wires).toBeDefined();
     expect(wires).toHaveLength(3);
     for (const portWires of wires!) expect(portWires).toEqual([]);
+  });
+
+  it('rewrites subflow:<authoringKey> → subflow:<noderedId> so the validator can resolve the def', async () => {
+    const { runValidators } = await import('../../../../src/toolkit/validate/index.js');
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          nodes: [{ key: 'sub-inst', type: 'subflow:my-sub', position: { x: 100, y: 100 } }],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      subflowDefs: [
+        {
+          id: 'my-sub',
+          name: 'MySub',
+          nodes: [],
+          connections: [],
+          passthrough: { in: [{ x: 0, y: 0, wires: [] }], out: [{ x: 0, y: 0, wires: [] }] },
+        },
+      ],
+    };
+    const { flows } = compile(spec);
+    const def = flows.find((n) => n.type === 'subflow');
+    const inst = flows.find((n) => typeof n.type === 'string' && n.type.startsWith('subflow:'));
+    expect(def?.id).toBeDefined();
+    expect((inst as { type: string }).type).toBe(`subflow:${def!.id}`);
+    const report = runValidators(flows, { labelCap: 24 });
+    const errors = report.diagnostics.filter((d) => d.severity === 'error');
+    expect(errors).toHaveLength(0);
+  });
+
+  it('surfaces compile diagnostics for unresolved wire targets', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [{ key: 'src', type: 'inject', position: { x: 0, y: 0 } }],
+          connections: [{ fromKey: 'src', outputPort: 0, toKey: 'does-not-exist' }],
+          groups: [],
+          comments: [],
+        },
+      ],
+    };
+    const result = compile(spec);
+    expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result.diagnostics[0]?.rule).toBe('compile/unresolved-wire-target');
+  });
+
+  it('surfaces compile diagnostics for unresolved group refs and members', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [
+            { key: 'a', type: 'inject', position: { x: 0, y: 0 }, groupKey: 'no-such-group' },
+          ],
+          connections: [],
+          groups: [
+            {
+              key: 'g1',
+              name: 'G1',
+              nodeKeys: ['missing-member'],
+              parentKey: 'no-such-parent',
+            },
+          ],
+          comments: [],
+        },
+      ],
+    };
+    const result = compile(spec);
+    const rules = result.diagnostics.map((d) => d.rule);
+    expect(rules).toContain('compile/unresolved-group-ref');
+    expect(rules).toContain('compile/unresolved-group-member');
+    expect(rules).toContain('compile/unresolved-group-parent');
   });
 
   it('falls back to single port when subflow def is missing or has no out array', () => {
