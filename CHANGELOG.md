@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — Dev-dep refresh: vitest 2 → 4, vite 5 → 8, esbuild 0.21 → 0.27
+
+Cleared the two open Dependabot advisories (esbuild dev-server CVE, vite `.map` path traversal) by bumping the test toolchain in lockstep. No production-dep changes; the published `dist/` tarball is unchanged. `npm audit` (with and without `--omit=dev`) now reports 0 vulnerabilities.
+
+### Test config changes
+
+- **`vitest.integration.config.ts`**: dropped `pool: 'forks'` + `poolOptions: { forks: { singleFork: true } }`. Vitest 4 removed `poolOptions` from `InlineConfig`. The existing `fileParallelism: false` (combined with vitest 4's default fork pool) preserves the "one shared Docker Node-RED runtime across all integration files" guarantee.
+- **`vi.fn()` typing**: vitest 4 narrowed the default `Mock<Procedure>` type so it no longer assigns to a typed function slot. Two test files were updated to `vi.fn<typeof fetch>()` with matching variable annotation.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
+- `npm run test:unit`: 579 tests (unchanged count, all pass under vitest 4).
+- `npm run test:property`: 17 tests (unchanged, pass under vitest 4 with `numRuns: 1000`).
+- `npm audit`: 0 vulnerabilities (was 2 moderate dev-only).
+
 ## 1.2.0 - 2026-05-16 — Security hardening + non-idempotent-retry guard + correctness audit
 
 Second-round-review pass: closes path-traversal exposure on `set_target`, fixes a subflow-instance authoring bug that left every staged subflow failing validation, eliminates an audit race against `set_target`, surfaces silently-dropped authoring refs as diagnostics, hardens HTTP retry semantics for non-idempotent operations, and wires sensible network timeouts.

@@ -23,7 +23,7 @@ const SAMPLE = [{ id: 'tab1', type: 'tab', label: 'Main' }];
 
 let ctx: ToolContext;
 let cleanup: () => Promise<void>;
-let lastFetch: ReturnType<typeof vi.fn> | undefined;
+let lastFetch: ReturnType<typeof vi.fn<typeof fetch>> | undefined;
 
 function jsonResponse(body: unknown, status = 200): Response {
   // HTTP 204/304 forbid a body — match real semantics.
@@ -53,7 +53,7 @@ async function buildCtx(): Promise<void> {
   });
   const logger = createLogger({ level: 'silent' });
 
-  lastFetch = vi.fn();
+  lastFetch = vi.fn<typeof fetch>();
   const client = new NodeRedClient({
     baseUrl: 'http://localhost:1880',
     auth: new NoAuth(),

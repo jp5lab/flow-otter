@@ -36,7 +36,7 @@ const SAMPLE = [
 
 let ctx: ToolContext;
 let cleanup: () => Promise<void>;
-let fetchMock: ReturnType<typeof vi.fn> | undefined;
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>> | undefined;
 
 function jsonResponse(body: unknown, status = 200): Response {
   if (status === 204) return new Response(null, { status });
@@ -65,7 +65,7 @@ async function buildCtx(): Promise<void> {
     READ_ONLY_MODE: 'false',
   });
   const logger = createLogger({ level: 'silent' });
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<typeof fetch>();
   const client = new NodeRedClient({
     baseUrl: 'http://localhost:1880',
     auth: new NoAuth(),
