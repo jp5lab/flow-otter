@@ -4,13 +4,34 @@ How an AI agent drives FlowOtter from a cold start to a verified change on a liv
 
 ## The author loop
 
+For flows of >10 nodes or operator dashboards, the v1.3.0 methodology layer expects the agent to follow a 4-phase pipeline:
+
+```
+PLAN: plan_flow (decompose the goal into stages, choose organization)
+ORGANIZE: decision tree — group vs subflow vs link node vs separate tab
+STRUCTURE → WIRE → LAYOUT: add nodes, then wire, then auto-layout
+REVIEW → VALIDATE → DEPLOY: render_flow_svg + validate_flow + preview_flow_diff + deploy_staged_change (elicits confirmation)
+```
+
+For small flows the short author loop still applies:
+
 ```
 set_target → stage author op → preview_flow_diff → deploy_staged_change
            → get_recent_debug_messages → rollback_last_change (if needed)
            → clear_target
 ```
 
-Every author tool returns a `staged_hash` and a `diff_summary`. Every deploy returns `deployed_hash` and snapshot ids. Rollback restores the prior snapshot. The thesis test `tests/integration/agent-journey.test.ts` exercises this whole sequence end-to-end.
+Every author tool returns a `staged_hash` and a `diff_summary`. Every deploy returns `deployed_hash` and snapshot ids. Rollback restores the prior snapshot.
+
+## Discovery (first thing to do in a session)
+
+Call `get_authoring_guide` once per session for the capability catalog (node types, Dashboard 2.0 widgets, templates, validators, ISA-101 design principles, methodology). The catalog tells you what's possible without trial-and-error against tool descriptions. Filter via `categories` to load only what you need.
+
+Call `list_available_toolsets` to see which toolsets are currently visible. The default surface includes the most common authoring tools; load `author_specialists` to access typed `add_<type>_node` conveniences:
+
+```jsonc
+{ "tool": "enable_toolset", "arguments": { "name": "author_specialists" } }
+```
 
 ## Minimal session
 
@@ -40,20 +61,60 @@ The server re-scopes snapshots / staging / audit to `~/.flow-otter/lab/`. By def
 
 Each entry from `list_flows` exposes both `id` (the Node-RED tab ID) and `authoring_key` (the `_authoringKey` extension property if FlowOtter created the tab, else identical to `id`). Author tools' `tab_id` parameter accepts either form — pass whichever you have.
 
-### 3. Stage a change
+### 3. Plan, then stage
+
+For substantial flows, plan first:
 
 ```jsonc
 {
-  "tool": "add_debug_node",
+  "tool": "plan_flow",
   "arguments": {
-    "tab_id": "abc...", // Node-RED tab ID OR _authoringKey — both work.
-    "source_node_id": "inj-123",
-    "opts": { "label": "Tick Out" },
+    "goal": "Pipe MQTT telemetry through a normalization function into a dashboard",
+    "stages": [
+      {
+        "name": "ingest",
+        "purpose": "Receive MQTT messages from the broker",
+        "estimated_nodes": 3,
+        "organization": "inline",
+        "organization_rationale": "Small ingest stage; no need for a group",
+      },
+      {
+        "name": "transform",
+        "purpose": "Normalize payloads via JSONata",
+        "estimated_nodes": 5,
+        "organization": "group",
+        "organization_rationale": "Multiple nodes share one logical purpose",
+      },
+      {
+        "name": "display",
+        "purpose": "Operator dashboard with gauge + alarm panel",
+        "estimated_nodes": 8,
+        "organization": "subflow",
+        "organization_rationale": "Pattern repeats for two different instruments",
+      },
+    ],
   },
 }
 ```
 
-Response includes `staged_hash`, `based_on_snapshot_hash`, `diff_summary`, and `diagnostics` (validator + lint output). The change lives in `~/.flow-otter/lab/staging/staged.json` and has NOT been deployed.
+Returns `plan_id`, `layout_strategy` (auto-selects `elk_layered` when groups/subflows declared or ≥30 nodes), and ordered `next_actions[]` referencing real tool calls. Writes `plan.json` to staging.
+
+Then stage individual nodes:
+
+```jsonc
+{
+  "tool": "add_node",
+  "arguments": {
+    "tab_id": "abc...", // Node-RED tab ID OR _authoringKey — both work.
+    "type": "debug",
+    "opts": { "source_node_id": "inj-123", "label": "Tick Out" },
+  },
+}
+```
+
+Prefer `add_node` (generic) for most authoring — it handles core types AND the long tail of `node-red-contrib-*` packages (Modbus, InfluxDB, OPC UA, etc.). Use `add_<type>_node` specialists from the `author_specialists` toolset only when type-specific schema validation matters.
+
+Response includes `staged_hash`, `based_on_snapshot_hash`, `diff_summary`, `diagnostics` (validator + lint output), and optionally `_guidance: string[]` from the soft-nudge system (e.g., reminds you to call `plan_flow` if you skipped it on a substantial flow). The change lives in `~/.flow-otter/lab/staging/staged.json` and has NOT been deployed.
 
 Preview before committing:
 
@@ -71,7 +132,7 @@ Preview before committing:
 }
 ```
 
-`deploy_mode` options: `nodes` (default, minimal restart), `flows`, `full`, `reload`. The server snapshots the runtime first, refuses on hash drift (unless `force:true`), retries on rev-mismatch, and recovers from partial-deploy via post-hoc hash verification.
+`deploy_mode` options: `nodes` (default, minimal restart), `flows`, `full`, `reload`. The server **elicits user confirmation** via MCP before deploying (Claude Code v2.1.76+; falls back to requiring explicit `force:true` when the client doesn't support elicitation). It snapshots the runtime first, refuses on hash drift (unless `force:true`), retries on rev-mismatch, and recovers from partial-deploy via post-hoc hash verification.
 
 ### 5. Observe (the v0.8.0 loop closer)
 

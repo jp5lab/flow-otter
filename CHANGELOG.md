@@ -1,5 +1,101 @@
 # Changelog
 
+## 1.3.0 — 2026-05-19 — Architectural redesign: methodology, catalog, layout, dashboards, ISA-101
+
+The 13-item plan in `docs/REDESIGN_PLAN.md` is complete. FlowOtter
+gains a methodology playbook surfaced in MCP instructions, a structured
+capability catalog, Node-RED version detection with feature gating, a
+plan_flow methodology spine, a response-side soft-nudge guidance
+system, named toolsets for progressive disclosure, MCP elicitation
+gating destructive operations, a dual dagre/ELK layout engine,
+authoring schemas for the full Dashboard 2.0 widget catalog, ISA-101 /
+operator-screen validators, and 5 user-facing slash-command
+MCP prompts.
+
+All 13 items shipped:
+
+### Item 1 — MCP server `instructions` field
+
+Adds `SERVER_INSTRUCTIONS` (≤2KB methodology playbook) to the MCP server initialization in `src/server/transport/stdio.ts`. Clients that surface server instructions (Claude Code) now read the FlowOtter 4-phase pipeline (PLAN → ORGANIZE → STRUCTURE/WIRE/LAYOUT → REVIEW/VALIDATE/DEPLOY), the organize decision tree, and references to the new `plan_flow` / `get_authoring_guide` / toolset discovery tools.
+
+### Item 2 — `get_authoring_guide` capability catalog tool
+
+New read-tier tool returning the structured capability catalog: Node-RED concepts (11), core node types (40+), Dashboard 2.0 widgets (24, with FlowOtter status flags), all built-in templates (sourced dynamically from `BUILTIN_TEMPLATES`), validators (18), ISA-101 design principles (8), and the authoring methodology. Two completeness tests lock the catalog against drift — every validator file on disk must have a catalog entry and vice versa.
+
+### Item 3 — Node-RED version detection + capability matrix
+
+`src/adapters/nodered/capabilities.ts` ships an inline SemVer parser/comparator tuned for Node-RED's `MAJOR.MINOR.PATCH[-prerelease]` format and a feature→version-range matrix covering `groupNesting`, `junctions`, `subflowPerInstanceConfig`, `functionLinkCall`, `adminCorsDefault`, etc. `NodeRedClient.getNoderedVersion()` probes `/settings`; `health_check` exposes the runtime block (`name, version, is_prerelease, node_js_version?, detected_at, capabilities`). Cache is lazy-built and invalidated on `set_target`. Published support matrix: 4.0 min, 4.1.x recommended, 5.0.0-beta best-effort.
+
+### Item 4 — `plan_flow` methodology spine tool
+
+New author-tier tool that takes a goal + ordered stages with explicit organization decisions (inline/group/subflow/separate_tab), validates the plan, picks a layout strategy (auto-selects ELK when groups/subflows are declared or total nodes ≥ 30), and persists to `~/.flow-otter/<env>/staging/plan.json`. Returns `plan_id`, `next_actions[]` referencing real tool calls, and `warnings[]` for off-shape plans (large stages, single-stage plans, inline organization with ≥5 nodes). The tool acts as a state-tracking scaffold whose schema teaches the methodology — it doesn't reason on its own, only records the plan for downstream consumers.
+
+### Item 5 — Soft-nudge / response-side guidance system
+
+Generalizable response-augmentation layer in `src/server/nudges/*` that wraps every tool invocation, builds a `NudgeContext` from the live staging directory + plan record, evaluates applicable nudges, and appends `_guidance: string[]` to the tool's return value. Two initial rules: `no-plan-for-large-flow` (fires on authoring tools when staged ≥ 10 nodes without a plan_flow record) and `deploy-without-preview` (fires on `deploy_staged_change` when `preview_flow_diff` wasn't called this session for the current `staged_hash`). Defensive — nudge failures are logged and ignored, never break the tool call.
+
+### Item 6 — Toolsets / progressive disclosure
+
+`src/server/tools/toolsets.ts` defines 9 named toolsets (core, discovery, analyze, snapshots, audit, author, author*specialists, deploy, dangerous). Default surface drops from ~62 to ~52 tools by hiding the 11 specialist `add*\*\_node`tools behind`author_specialists`. New tools `list_available_toolsets`and`enable_toolset`let agents discover and enable additional toolsets at runtime. Registry rewritten to track enabled state in-memory and filter`listTools()`/`find()`through it. Dangerous toolset auto-enables when`ENABLE_DANGEROUS_TOOLS=true` so the existing security gate remains the single signal.
+
+### Item 7 — MCP elicitation gates destructive operations
+
+`src/server/elicitation/client.ts` is a typed wrapper around the MCP SDK's `elicitInput`: takes a `{message, fields, required}` request, builds a JSON-Schema object form, checks client capabilities, returns a 4-state outcome (accept/decline/cancel/unsupported). `deploy_staged_change` now elicits a confirm before pushing to the live runtime unless `force:true` is passed. Clients without elicitation support get a `ToolBlockedError` pointing at force or a newer client. Transport failures degrade to cancel — never silent-deploy.
+
+### Item 8 — Layout engine: dagre v3 + elkjs opt-in
+
+Swaps the abandoned `dagre@0.8.5` for `@dagrejs/dagre@3` (TS-native rewrite, March 2026). Adds `elkjs@^0.11` and `src/toolkit/layout/elk.ts` for port-aware, group-aware layouts. `src/toolkit/layout/index.ts` dispatches: ELK when groups are present, any node has ≥4 outputs, or total nodes ≥30; dagre otherwise. Agents can override with `engine: 'dagre' | 'elk' | 'auto'`. ELK config pinned for byte-stable determinism (`randomSeed: 1`, `considerModelOrder.strategy: NODES_AND_EDGES`).
+
+### Item 9 — 10 missing Dashboard 2.0 widget schemas
+
+`add_dashboard_widget` now accepts ui-button, ui-button-group, ui-text, ui-notification, ui-template, ui-form, ui-table, ui-chart, ui-gauge, ui-control. Schemas pin the key fields per widget and stay `.passthrough` for evolving Dashboard 2.0 config surface. ISA-101 hooks land in the schemas themselves — ui-button/ui-button-group accept `confirm: boolean`, ui-chart accepts `xAxisLimit: number`. Catalog flips all 10 widgets from `missing` to `supported`.
+
+### Item 10 — Operator page templates
+
+FlowOtter ships 9 ISA-101-aligned page templates under `dashboard_2_*` names: alarm_panel, audit_log_tail, command_panel, confirmed_button, gauge_grid, live_value, mode_banner, table_log, telemetry_chart. They were already in the codebase but classified as generic 'dashboard'. The catalog now categorizes them as `operator` so agents querying `get_authoring_guide(['templates'])` find them by intent. No template duplication.
+
+### Item 11 — ISA-101 enforcement validators
+
+Four new validators in `src/toolkit/validate/rules/`:
+
+- **`unbounded-chart-append`** (warning): ui-chart with `action:'append'` must declare `xAxisLimit`. Prevents unbounded in-browser data growth.
+- **`screen-clutter`** (warning): flags ui-group with >12 widgets and ui-page with >6 groups. density thresholds derived from operator-UI guidance; tunable via options.
+- **`saturated-color-outside-alarm`** (warning): detects hex colors with HSL saturation >0.6 on widget color fields when the widget isn't in an alarm context. ISA-101 grayscale-90%.
+- **`button-group-color-decoration`** (info): ui-button-group with 3+ options each using a unique color — color-as-decoration anti-pattern.
+
+The existing `dashboard-2-destructive-needs-confirm` validator already covered the 5th planned rule (destructive-command-no-confirm).
+
+### Item 12 — User-facing slash-command prompts
+
+Declares the `prompts` MCP capability and registers 5 prompts that surface as `/mcp__flow-otter__<name>` slash commands:
+
+- `new_flow(goal, template?)` — full plan → wire → deploy walkthrough.
+- `build_operator_dashboard(dashboard_type, title)` — maps 7 dashboard_type values to operator templates from Item 10.
+- `refactor_to_subflow(tab_id, node_ids, subflow_name)` — fold selected nodes into a reusable subflow.
+- `explain_my_flow(tab_id?)` — structured walkthrough.
+- `review_my_flow(tab_id?)` — full review pass with ISA-101 explanations.
+
+Together with the server instructions (Item 1), capability catalog (Item 2), and methodology spine (Item 4), the discovery story for both agent and user is now complete.
+
+### Item 13 — Core vs contrib node-type discrimination
+
+`list_installed_node_types` now annotates each type with `is_core: bool` (from the catalog's `core_node_types`) alongside the existing `has_schema: bool`. Agents can classify any installed type at a glance:
+
+- core + schema → specialist tool available
+- core + no schema → generic add_node
+- contrib + schema → typed contrib (rare)
+- contrib + no schema → passthrough validation (the long tail: Modbus, InfluxDB, OPC UA, etc.)
+
+Per Decision 1 of REDESIGN_PLAN.md, generic add_node handles every case; specialists are a convenience layer. Junction nodes, function-node libs, per-instance subflow config, and tab markdown info work via generic add_node + passthrough — that's the correct architectural answer for the contrib-first stance.
+
+### Verification
+
+- `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
+- `npm run test:unit`: 738 tests pass (up from 603 at the start of v1.3.0).
+- `npm run test:property`: 17 tests pass.
+- `npm run build`: clean.
+- New deps: `@dagrejs/dagre@^3`, `elkjs@^0.11`. Removed: `dagre@0.8.5`, `@types/dagre`.
+
 ## Unreleased — Dev-dep refresh: vitest 2 → 4, vite 5 → 8, esbuild 0.21 → 0.27
 
 Cleared the two open Dependabot advisories (esbuild dev-server CVE, vite `.map` path traversal) by bumping the test toolchain in lockstep. No production-dep changes; the published `dist/` tarball is unchanged. `npm audit` (with and without `--omit=dev`) now reports 0 vulnerabilities.
@@ -312,7 +408,7 @@ The partial-deploy verify-by-hash and rev-mismatch retry paths from v0.6.0 use i
 - **`get_recent_debug_messages`** — Node-RED `nr-comms` WebSocket integration (non-trivial; needs reconnect logic and ring-buffer caching).
 - **`set_links`** topology tool — `update_node` passthrough editing covers the common case; ship if/when an agent trips on it.
 - **Partial-deploy / rev-race unit tests with injected fetch mocks** — strengthen the verify-by-hash path with red-team scenarios (mid-flight TCP drop, 502 from a flaky reverse proxy).
-- **OAuth/PKCE auth strategy** for FlowFuse-hosted Node-RED targets (reference impl in `~/Projects/reference/flowfuse/nr-assistant/lib/auth/index.js`).
+- **OAuth/PKCE auth strategy** for hosted Node-RED targets that require it.
 - **Per-flow CRUD tools** (`get_flow`/`create_flow`/`update_flow`/`delete_flow`) — Admin API endpoints stable since Node-RED 0.19; not yet exposed at the MCP layer.
 
 ## 0.6.0 - 2026-05-10
@@ -330,7 +426,7 @@ Closes most of v0.5.0's "Deferred to v0.6.0+" queue: Dashboard 2.0 widget breadt
 
 ### Line-based patches on `update_node`
 
-- `update_node` now accepts `patches: [{property, op:'replace'|'insert'|'delete', start, end?, content?}]` for **token-efficient edits to long-string passthrough fields** — function-node `func`, ui-template `format`, template-node `template`. Line numbers are 1-indexed on the ORIGINAL content; non-overlapping patches required (throws `PatchError` on overlap). Per-property batches: passthrough merge first, then patches. Mirrors FlowFuse Expert's design.
+- `update_node` now accepts `patches: [{property, op:'replace'|'insert'|'delete', start, end?, content?}]` for **token-efficient edits to long-string passthrough fields** — function-node `func`, ui-template `format`, template-node `template`. Line numbers are 1-indexed on the ORIGINAL content; non-overlapping patches required (throws `PatchError` on overlap). Per-property batches: passthrough merge first, then patches.
 - New helper `src/toolkit/authoring/operations/_patches.ts` with `applyPatches(original, patches)`.
 
 ### Destructive-action validator

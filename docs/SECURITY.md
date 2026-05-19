@@ -11,7 +11,11 @@ FlowOtter assumes an MCP client can ask powerful questions and request runtime c
 | Deploy    | Author requirements plus `ENABLE_DEPLOY_TOOLS=true` and `DRY_RUN_MODE=false`. |
 | Dangerous | Deploy requirements plus `ENABLE_DANGEROUS_TOOLS=true`.                       |
 
-The registry hides disabled tools from `tools/list`.
+The registry hides disabled tools from `tools/list`. v1.3.0 added a second hiding layer — **toolsets** — that progressively-discloses tools by intent (specialists hidden by default until `enable_toolset('author_specialists')`). Both gates must pass for a tool to appear.
+
+## MCP Elicitation Confirmation
+
+v1.3.0 wires MCP elicitation (`server.elicitInput`) into `deploy_staged_change` so destructive operations require explicit user confirmation. Clients that don't advertise the elicitation capability get a `ToolBlockedError` instructing them to pass `force:true` or use a newer client (Claude Code v2.1.76+). Transport failures during elicitation degrade to `cancel`, never silent-accept — so a network glitch can't accidentally deploy.
 
 ## Snapshots and Rollback
 
@@ -79,9 +83,9 @@ Both tools validate before staging:
 
 The compile pipeline still runs after the op, and lint rules (`link-resolution`, `wire-targets`, `id-uniqueness`, etc.) reject any compiled output with broken topology before the change reaches the staging directory.
 
-## Node 22 Engine Requirement
+## Node Engine Requirement
 
-`engines.node = ">=22.0.0"`. Node 20 LTS support ended 2026-04. The bump also gives unconditional access to features used in `comms.ts` (`queueMicrotask`) and the test suite (modern `Response` semantics, built-in WHATWG `WebSocket` global for the unused fallback path).
+`engines.node = ">=20.0.0"`. Node 20 LTS is the supported floor; Node 22+ also works and is the recommended target for new installs.
 
 ## Recommended Runtime Setup
 

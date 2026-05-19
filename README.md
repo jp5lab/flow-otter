@@ -8,18 +8,35 @@ If you cloned this repo via an agent (Claude Code, Cursor, etc.), the project-sc
 
 ## Status
 
-**v1.2.0 — security hardening + correctness audit.** 60 MCP tools, deterministic TypeScript authoring layer, snapshot/diff/deploy pipeline with drift detection, in-toolkit debug observation via Node-RED `/comms` WebSocket, multi-target state isolation, substring-level secret redaction. v1.2 closes path-traversal exposure on `set_target`, fixes a subflow-instance authoring bug, eliminates an audit race, surfaces silently-dropped authoring refs as diagnostics, drops retries on non-idempotent HTTP, and wires network timeouts. v1.1 fixed lossy roundtrip (junctions, tab `locked`/`env`, group geometry, comment size) and wired the previously dead config knobs. See [`CHANGELOG.md`](CHANGELOG.md) for details and [`docs/NON_GOALS.md`](docs/NON_GOALS.md) for what's explicitly out of scope.
+**v1.3.0 — architectural redesign: methodology, catalog, layout, dashboards, ISA-101.** Introduces a methodology playbook surfaced in the MCP `instructions` field, a structured capability catalog (`get_authoring_guide`), Node-RED version detection with feature gating, a `plan_flow` methodology spine, a response-side soft-nudge guidance system, named toolsets for progressive disclosure, MCP elicitation gating destructive operations, a dual dagre/elkjs layout engine with auto-selection, authoring schemas for the full Dashboard 2.0 widget catalog (24 widgets), 4 ISA-101 operator-screen validators, and 5 user-facing slash-command MCP prompts. See [`CHANGELOG.md`](CHANGELOG.md) for the per-item summary and [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) for the design rationale. Prior lines: v1.2 closed path-traversal exposure on `set_target`, fixed audit/subflow correctness bugs, hardened HTTP retry semantics. v1.1 fixed lossy roundtrip and wired the previously dead config knobs.
 
-### Tool surface
+### Tool surface (default visible: ~52 tools; ~65 with all toolsets loaded)
 
-- **26 read tools** — health, server config, target management (`set_target` / `clear_target`), flow inspection (`list_flows`, `get_flows_summary`, `get_flow`, `get_node`, `search_nodes`, `get_subflow`, `list_installed_node_types`, `get_runtime_state`), validation (`validate_flow`, `validate_all_flows`, `analyze_flow`, `analyze_all_flows`, `explain_flow`), rendering (`render_flow_svg`, `preview_flow_diff`), snapshot/staging/audit (`list_snapshots`, `get_snapshot`, `export_snapshot`, `get_staged_change`, `get_audit_log_recent`), template catalog (`list_templates`), and `get_recent_debug_messages` (the in-toolkit `/comms` debug observer).
-- **24 author tools** — staged TypeScript authoring over the entire Node-RED node taxonomy: `add_debug_node`, `add_inject_node`, `add_function_node`, `add_catch_node`, `add_status_node`, `add_complete_node`, `add_mqtt_in_node`, `add_mqtt_out_node`, `add_link_in_node`, `add_link_out_node`, `add_link_call_node`, `add_subflow_instance`, `add_group`, `add_comment`, `add_node` (generic for unknown types), `add_dashboard_widget` (14 Dashboard 2.0 widget types), `wire_nodes`, `set_links` (cross-tab link pairing), `set_wires` (bulk wire management), `remove_node`, `update_node` (full passthrough + line-based patches), `move_node`, `create_subflow_definition`, `instantiate_template` (28 built-in templates).
-- **3 deploy tools** — `deploy_staged_change` (with drift refusal + rev-mismatch retry + partial-deploy verify-by-hash recovery), `rollback_last_change`, `set_flows_state` (start/stop runtime).
-- **7 dangerous tools** — `prepare_dangerous_operation` (token issuance), `replace_flows`, `delete_tab`, `reset_runtime`, plus per-flow CRUD (`create_flow`, `update_flow`, `delete_flow`) for atomic single-tab surgery.
+Default visible tools are filtered by **toolsets** — named groups that progressive-disclose by intent. The specialist `add_<type>_node` tools are hidden by default behind the `author_specialists` toolset; the agent calls `enable_toolset('author_specialists')` to load them. Dangerous tools require both an env flag AND the `dangerous` toolset (auto-enabled when the env flag is set).
+
+- **Discovery + analysis** — `health_check`, `get_server_config_summary`, `set_target`, `clear_target`, `list_flows`, `get_flows_summary`, `get_flow`, `get_node`, `search_nodes`, `get_subflow`, `list_installed_node_types` (annotates each type with `is_core: bool` to surface contrib packages), `get_runtime_state`, `list_templates`, **`get_authoring_guide`** (capability catalog), `validate_flow`, `validate_all_flows`, `analyze_flow`, `analyze_all_flows`, `explain_flow`, `render_flow_svg`, `preview_flow_diff`, `export_snapshot`, `list_snapshots`, `get_snapshot`, `get_staged_change`, `get_audit_log_recent`, `get_recent_debug_messages` (`/comms` debug observer), **`list_available_toolsets`** / **`enable_toolset`**.
+
+- **Author** — `plan_flow` (methodology spine), `add_node` (generic — handles core types AND node-red-contrib-\* long tail), `add_dashboard_widget` (24 Dashboard 2.0 widgets including ui-chart, ui-gauge, ui-table, ui-button, ui-button-group, ui-form, ui-template, ui-notification, ui-control, ui-text), `add_subflow_instance`, `add_group`, `add_comment`, `wire_nodes`, `set_wires`, `set_links`, `remove_node`, `update_node`, `move_node`, `create_subflow_definition`, `instantiate_template`.
+
+- **Author specialists** (opt-in via `enable_toolset('author_specialists')`) — typed conveniences for high-value patterns: `add_inject_node`, `add_debug_node`, `add_function_node`, `add_catch_node`, `add_status_node`, `add_complete_node`, `add_mqtt_in_node`, `add_mqtt_out_node`, `add_link_in_node`, `add_link_out_node`, `add_link_call_node`. The generic `add_node` handles every case these do; specialists exist for per-node-type schema validation when that matters.
+
+- **Deploy** — `deploy_staged_change` (with MCP elicitation confirming deploy before push to live runtime), `rollback_last_change`, `set_flows_state`.
+
+- **Dangerous** (env-gated, `ENABLE_DANGEROUS_TOOLS=true`) — `prepare_dangerous_operation`, `replace_flows`, `delete_tab`, `reset_runtime`, `create_flow`, `update_flow`, `delete_flow`.
+
+### User-facing slash commands
+
+FlowOtter ships 5 MCP **prompts** that surface as `/mcp__flow-otter__<name>` in Claude Code (and equivalent menus in other MCP clients) — they're how the _user_ discovers FlowOtter workflows:
+
+- `/mcp__flow-otter__new_flow` — full plan → wire → deploy walkthrough.
+- `/mcp__flow-otter__build_operator_dashboard` — composes an ISA-101 operator dashboard from the built-in operator-grade templates.
+- `/mcp__flow-otter__refactor_to_subflow` — fold selected nodes into a reusable subflow.
+- `/mcp__flow-otter__explain_my_flow` — structured walkthrough.
+- `/mcp__flow-otter__review_my_flow` — full review with ISA-101 explanations.
 
 ### Verification
 
-`579 unit + 17 property + 82 integration tests`. Property tests run fast-check at `numRuns:1000` and exercise junctions, tab `locked`/`env`, group geometry, and comment size in the round-trip arbitraries. `node scripts/check-tool-coverage.mjs` reports 0 unit / 0 integration gaps across all 60 tools.
+`738 unit + 17 property + integration tests`. Property tests run fast-check at `numRuns:1000` and exercise junctions, tab `locked`/`env`, group geometry, comment size, and layout determinism in the round-trip arbitraries.
 
 ## Showcase
 
@@ -41,7 +58,7 @@ The three tabs below were authored end-to-end through MCP calls in a single agen
 
 ![Tab 2 — Template composition](docs/screenshots/tab-2-industrial-defaults-canvas.png)
 
-A handful of the bundled templates use opinionated defaults loosely inspired by industrial-HMI standards — `dashboard_2_alarm_panel` borrows the ISA-18.2 state-machine vocabulary (UNACK/ACK/RTN/SHELVED), `dashboard_2_mode_banner` and `dashboard_2_confirmed_button` lean on ISA-101 ideas (grayscale base, hold-to-confirm destructive actions). **Standards conformance was not a goal of this project**; these were one author's starting points for the templates and would need to be developed considerably further to be appropriate for actual industrial deployment.
+A handful of the bundled templates use opinionated defaults loosely inspired by industrial-HMI standards — `dashboard_2_alarm_panel` borrows the ISA-18.2 state-machine vocabulary (UNACK/ACK/RTN/SHELVED), `dashboard_2_mode_banner` and `dashboard_2_confirmed_button` lean on ISA-101 ideas (grayscale base, hold-to-confirm destructive actions). v1.3.0 adds four ISA-101 enforcement validators (`unbounded-chart-append`, `screen-clutter`, `saturated-color-outside-alarm`, `button-group-color-decoration`) that flag the most common operator-screen anti-patterns. **Standards conformance was not a goal of this project**; these were one author's starting points and would need to be developed considerably further to be appropriate for actual industrial deployment.
 
 **What FlowOtter took care of.** Six successive `instantiate_template` calls reused one ui-base + ui-page + ui-group via the `ensureSkeleton` helper — instead of stamping six separate dashboards, every widget points at the same `Operator Console` group. The `dashboard-2-hierarchy` validator confirms every widget reaches an existing ui-group, `dashboard-2-required-fields` flags widgets missing per-type required fields, and `dashboard-2-destructive-needs-confirm` would catch a `ui-button` with destructive labels not paired with a confirmation widget.
 

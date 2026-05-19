@@ -10,22 +10,27 @@ behavior comes from the configured flow source, not from hardcoded logic in the 
 
 - `authoring/compile.ts`: converts `AuthoringSpec` to deterministic `flows.json`.
 - `authoring/decompile.ts`: recovers an `AuthoringSpec` from existing flows, preserving `_authoringKey` identity.
-- `validate/**` and `lint/**`: structural checks for wire targets, groups, links, subflows, dashboard hierarchy, naming contracts, function syntax, and secret patterns.
+- `validate/**` and `lint/**`: structural checks for wire targets, groups, links, subflows, dashboard hierarchy, naming contracts, function syntax, secret patterns, and ISA-101 operator-screen rules (`unbounded-chart-append`, `screen-clutter`, `saturated-color-outside-alarm`, `button-group-color-decoration`, `dashboard-2-destructive-needs-confirm`).
 - `diff/**`: semantic flow diffs for staged previews and audit summaries.
-- `snapshot/**` and `staging/**`: filesystem-backed snapshots and one pending staged change.
-- `layout/**` and `render/**`: deterministic layout and SVG previews.
-- `templates/**`: built-in template catalog.
+- `snapshot/**` and `staging/**`: filesystem-backed snapshots, one pending staged change, plus the v1.3.0 `plan-record.ts` (records `plan_flow` output for soft-nudge consumption).
+- `layout/**` and `render/**`: deterministic layout and SVG previews. `layout/index.ts` is the engine dispatcher — picks `dagre` for small flows or `elkjs` when groups, multi-output nodes, or ≥30 nodes are present.
+- `templates/**`: built-in template catalog (27 templates across `generic`/`dashboard`/`operator`/`pipeline` categories).
+- `catalog/**` (v1.3.0): the structured capability catalog returned by `get_authoring_guide` — Node-RED concepts, core node types, Dashboard 2.0 widgets, validators, ISA-101 design principles, methodology.
 
-Idempotency is enforced by property tests. A given `AuthoringSpec` must compile to byte-identical JSON across runs.
+Idempotency is enforced by property tests. A given `AuthoringSpec` must compile to byte-identical JSON across runs. Layout is also deterministic — ELK uses a pinned `randomSeed: 1` and `considerModelOrder: NODES_AND_EDGES`.
 
 ## Layer 2: MCP Server
 
 `src/server/**` wraps the toolkit with IO, config, audit, and MCP transport:
 
-- `container.ts` wires config, flow source, snapshots, staging, audit, logging, clock, optional Node-RED REST client (`NodeRedClient`), and optional `/comms` WebSocket client (`NodeRedCommsClient`).
-- `tools/**` exposes explicit MCP tools. `ALL_TOOLS` in `src/server/index.ts` is intentionally a flat import list.
-- `config/tiers.ts` hides author, deploy, and dangerous tools unless the relevant environment flags are enabled.
-- `transport/stdio.ts` exposes the MCP stdio server used by desktop and CLI clients.
+- `container.ts` wires config, flow source, snapshots, staging, audit, logging, clock, optional Node-RED REST client (`NodeRedClient`), optional `/comms` WebSocket client (`NodeRedCommsClient`), the MCP Server instance (`mcpServer`), the tool registry (`toolRegistry`), and lazy-probed Node-RED runtime info (`runtimeInfo`).
+- `tools/**` exposes explicit MCP tools. `ALL_TOOLS` in `src/server/index.ts` is intentionally a flat import list; the **toolset registry** (`tools/toolsets.ts` + `tools/register.ts`) groups them into 9 named sets (`core`, `discovery`, `analyze`, `snapshots`, `audit`, `author`, `author_specialists`, `deploy`, `dangerous`) and filters `tools/list` output by which sets are enabled.
+- `config/tiers.ts` hides author, deploy, and dangerous tools unless the relevant environment flags are enabled. Tiers and toolsets are independent gates — both must pass for a tool to appear.
+- `transport/stdio.ts` exposes the MCP stdio server. Declares both `tools` and `prompts` capabilities; registers `ListPromptsRequestSchema` + `GetPromptRequestSchema` handlers backed by `prompts/registry.ts`. Sets the `instructions` field on the MCP Server with the methodology playbook (`SERVER_INSTRUCTIONS` in `index.ts`).
+- `nudges/**` (v1.3.0): the response-side guidance system. `_tool.ts:makeInvokable` wraps every tool invocation, builds a `NudgeContext` from staging + plan + flow state, evaluates applicable nudges, and appends `_guidance: string[]` to object outputs when relevant.
+- `elicitation/client.ts` (v1.3.0): typed wrapper around the MCP SDK's `elicitInput`. `deploy_staged_change` uses it to gate destructive operations behind explicit user confirmation; degrades to `unsupported` when the client doesn't advertise elicitation.
+- `runtime-info.ts` (v1.3.0): lazy-probes Node-RED `/settings` for the connected runtime's version and computes a capability matrix (`groupNesting`, `junctions`, `functionLinkCall`, `adminCorsDefault`, etc.) so version-gated features can be advertised on `health_check`.
+- `prompts/registry.ts` (v1.3.0): 5 user-facing MCP prompts surfaced as `/mcp__flow-otter__<name>` slash commands.
 
 Flow IO is abstracted by `FlowSource`:
 
@@ -54,9 +59,9 @@ Author tools follow the same explicit sequence:
 6. Diff prior vs next.
 7. Render before/after SVG.
 8. Write the staged change.
-9. Return staged hash, diagnostics, diff, and previews.
+9. Return staged hash, diagnostics, diff, and previews — plus `_guidance` from the nudge system when applicable.
 
-Deploy tools then snapshot current runtime, verify drift by hash, save via the Admin API, clear staging, and audit the operation.
+Deploy tools then **elicit user confirmation** (unless `force:true`), snapshot current runtime, verify drift by hash, save via the Admin API, clear staging, and audit the operation. The pre-deploy `preview_flow_diff` call is tracked per-session so `deploy_staged_change` can nudge agents who skipped it.
 
 ## Dangerous Pipeline
 

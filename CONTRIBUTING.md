@@ -4,27 +4,23 @@ Thanks for considering a contribution. A few things worth knowing up front.
 
 ## Project status
 
-FlowOtter v1 is **feature-frozen**. The roadmap deliberately stops at the v1 line so the safety/correctness properties stay verifiable. New features are out of scope for v1 — they would land in a future v2 line (no committed timeline).
+FlowOtter v1.3.0 is an active line. Pull requests are welcome — bug fixes, security fixes, documentation, tests, build/packaging, and small ergonomic tweaks to existing tools merge readily. Larger surface-area changes (new tools, new tiers, new validators, layout-engine swaps) should open an issue first so we can talk about the shape.
 
-What is in scope:
+The hard invariants below MUST hold across any change:
 
-- Bug fixes (incorrect behavior, broken edge cases)
-- Security fixes (see `SECURITY.md`)
-- Documentation improvements
-- Test additions that close gaps in existing behavior
-- Build / packaging / portability improvements
-- Small ergonomic tweaks to existing tools
+- Byte-identical idempotent compile.
+- ID preservation across re-runs.
+- Snapshot-before-mutate on every deploy + dangerous operation.
+- Drift-refusal on deploy unless explicit `force:true`.
+- Substring-level secret redaction at the audit boundary.
+- No non-determinism inside `src/toolkit/**`.
+- Layer boundary: `src/toolkit/**` must not import from `src/server/**`.
 
-What is out of scope for v1:
-
-- New MCP tools
-- New env-gated tiers
-- Behavioral changes that would break the idempotency / ID-preservation / drift-refusal contracts
-- The full out-of-scope list lives in `docs/NON_GOALS.md`
+The list of things FlowOtter explicitly chooses _not_ to do (Web UI, multi-language SDKs, cross-environment snapshot promotion, etc.) lives in [`docs/NON_GOALS.md`](docs/NON_GOALS.md).
 
 ## Hard rules
 
-The full architectural rules live in `CLAUDE.md`. Highlights:
+The full architectural rules live in `docs/ARCHITECTURE.md`. The lint config enforces:
 
 - **Idempotency.** The same `AuthoringSpec` must compile to byte-identical `flows.json` across runs. Verified by `tests/property/compile-idempotent.test.ts`.
 - **ID preservation.** Never regenerate IDs of nodes already present in `prior` flows.
@@ -35,7 +31,7 @@ The full architectural rules live in `CLAUDE.md`. Highlights:
 
 ## Setup
 
-Requires Node.js 22 or later.
+Requires Node.js 20 or later.
 
 ```bash
 npm install
@@ -58,9 +54,9 @@ npm run typecheck       # strict TS check, no emit
 npm run lint            # ESLint
 npm run format          # prettier --write .
 npm run format:check    # prettier --check .
-npm run test:unit       # ~500 tests, seconds
+npm run test:unit       # ~750 tests, seconds
 npm run test:property   # fast-check at numRuns:1000
-npm run test:integration  # ~80 tests, requires Docker
+npm run test:integration  # requires Docker
 npm run build           # emits dist/
 npm run dev             # tsx bin/flow-otter.ts
 ```

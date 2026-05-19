@@ -1,6 +1,6 @@
 # Non-Goals
 
-The FlowOtter v1.x line is feature-frozen — only bug fixes and security patches land. The items below are explicitly **out of scope** for v1.x and are not planned for any subsequent v1 release. They appear here so future work can prove "is this a v1 problem?" against a documented list.
+The items below are explicitly **out of scope** for the FlowOtter v1.x line. They appear here so contributors and integrators can quickly answer "is this a thing FlowOtter does?" against a documented list.
 
 ## Auth + connectivity
 
@@ -16,7 +16,6 @@ The FlowOtter v1.x line is feature-frozen — only bug fixes and security patche
 ## Validation / layout
 
 - **Function-node JS-IR.** Function bodies are stored as opaque strings. `acorn` validates syntax only; semantic analysis is out of scope.
-- **ELK layout algorithm.** `dagre` remains the only layout algorithm.
 - **Visual-regression CI on rendered SVG/PNG.** SVG snapshot tests cover deterministic rendering, but no pixel-diff CI step exists.
 
 ## Cross-environment
@@ -26,15 +25,15 @@ The FlowOtter v1.x line is feature-frozen — only bug fixes and security patche
 
 ## Distribution
 
-- **npm publish to public registry.** The package stays private. Distribution is git-clone-and-build.
 - **Public Docker registry push.** `docker build -f deploy/Dockerfile .` succeeds locally; no image is pushed to ghcr.io / Docker Hub.
-- **GitHub Actions / hosted CI.** v1 readiness is verified by `scripts/v1-readiness-check.sh` and a captured evidence file under `evidence/`. No continuous regression catching beyond what `npm test` provides.
-- **Real-runtime validation against lab VMs or FlowFuse Cloud.** The Docker test stack at `deploy/docker-compose.yml` is the only runtime substrate exercised in v1.
+- **GitHub Actions / hosted CI.** Local verification (`npm run typecheck && npm run lint && npm run format:check && npm run test:unit && npm run test:property && npm run build`) is the contract — no CI workflows ship in the repo.
+- **Real-runtime validation against lab VMs or FlowFuse Cloud.** The Docker test stack at `deploy/docker-compose.yml` is the only runtime substrate exercised in CI-style verification.
 
 ## Server-side surface
 
 - **Web UI for snapshots / audit log.** Both are filesystem-only artefacts inspected via `get_snapshot` / `get_audit_log_recent` MCP tools.
+- **Credential authoring.** FlowOtter does not author Node-RED credentials — flows deploy with empty credential fields and the user fills them in via the Node-RED editor. The `credential-leak` validator catches secrets stuffed into wrong fields. See decision rationale in `docs/REDESIGN_PLAN.md`.
 
 ---
 
-This list is final. If a need arises that intersects with one of these items, it will not reopen the v1 scope — it becomes the trigger for evaluating whether a v2 is warranted.
+If a contribution intersects with an item on this list, open an issue first to discuss the trade-off — the line isn't immutable, but each item here had a reason at the time it was drawn.
