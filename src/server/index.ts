@@ -18,6 +18,7 @@ import { addSubflowInstanceTool } from './tools/author/add-subflow-instance.js';
 import { createSubflowDefinitionTool } from './tools/author/create-subflow-definition.js';
 import { instantiateTemplateTool } from './tools/author/instantiate-template.js';
 import { moveNodeTool } from './tools/author/move-node.js';
+import { planFlowTool } from './tools/author/plan-flow.js';
 import { removeNodeTool } from './tools/author/remove-node.js';
 import { setLinksTool } from './tools/author/set-links.js';
 import { setWiresTool } from './tools/author/set-wires.js';
@@ -36,9 +37,11 @@ import { setFlowsStateTool } from './tools/deploy/set-flows-state.js';
 import { analyzeAllFlowsTool } from './tools/read/analyze-all-flows.js';
 import { analyzeFlowTool } from './tools/read/analyze-flow.js';
 import { clearTargetTool } from './tools/read/clear-target.js';
+import { enableToolsetTool } from './tools/read/enable-toolset.js';
 import { explainFlowTool } from './tools/read/explain-flow.js';
 import { exportSnapshotTool } from './tools/read/export-snapshot.js';
 import { getAuditLogRecentTool } from './tools/read/get-audit-log-recent.js';
+import { getAuthoringGuideTool } from './tools/read/get-authoring-guide.js';
 import { getFlowTool } from './tools/read/get-flow.js';
 import { getRecentDebugMessagesTool } from './tools/read/get-recent-debug-messages.js';
 import { getFlowsSummaryTool } from './tools/read/get-flows-summary.js';
@@ -49,6 +52,7 @@ import { getSnapshotTool } from './tools/read/get-snapshot.js';
 import { getStagedChangeTool } from './tools/read/get-staged-change.js';
 import { getSubflowTool } from './tools/read/get-subflow.js';
 import { healthCheckTool } from './tools/read/health-check.js';
+import { listAvailableToolsetsTool } from './tools/read/list-available-toolsets.js';
 import { listFlowsTool } from './tools/read/list-flows.js';
 import { listInstalledNodeTypesTool } from './tools/read/list-installed-node-types.js';
 import { listSnapshotsTool } from './tools/read/list-snapshots.js';
@@ -66,8 +70,39 @@ import { installShutdown } from './transport/shutdown.js';
 
 export const SERVER_INFO = {
   name: 'flow-otter',
-  version: '1.2.0',
+  version: '1.3.0',
 };
+
+/**
+ * Server-level methodology playbook injected into MCP clients that surface
+ * `instructions`. Claude Code truncates server instructions at ~2KB; keep
+ * under that ceiling. Update via tests/unit/server/instructions.test.ts.
+ */
+export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for an AI agent: staging, validation, snapshots, atomic deploys. Author in 4 phases.
+
+1. PLAN — for flows >10 nodes or operator dashboards, call plan_flow first. Restate as 3-7 stages; decide organization BEFORE adding nodes.
+
+2. ORGANIZE — decision tree:
+- Pattern repeats 2+ times → create_subflow_definition + add_subflow_instance
+- Nodes share one purpose → add_group (nestable)
+- Wire spans tabs/distance → add_link_out_node + add_link_in_node
+- Stage is independent → new tab
+
+3. STRUCTURE → WIRE → LAYOUT:
+- Add nodes (no wires), then wire_nodes/set_wires. Pass engine:'elk' to layout helpers when ≥30 nodes, groups present, or any node has ≥4 outputs.
+
+4. REVIEW → VALIDATE → DEPLOY:
+- render_flow_svg, show user, validate_flow must pass, preview_flow_diff before deploy_staged_change. Never deploy without explicit user confirmation.
+
+CAPABILITY DISCOVERY: get_authoring_guide returns the catalog (node types, Dashboard 2.0 widgets, templates, validators, ISA-101 principles). Use list_available_toolsets/enable_toolset for tools beyond the default surface.
+
+SPECIALISTS: prefer generic add_node({type, ...}) — handles contrib packages (Modbus, InfluxDB, OPC UA, etc.) and core types. Specialist tools (add_inject_node, etc.) live in author_specialists toolset; load only when type-specific schemas matter.
+
+DASHBOARDS: Dashboard 2.0 UIs follow ISA-101 — grayscale background, color reserved for severity, trends > instantaneous, destructive controls require confirm.
+
+VERSIONING: FlowOtter detects Node-RED version on set_target. Version-gated features (function-node node.linkcall, per-instance subflow config) exposed via health_check.capabilities.
+
+CREDENTIALS: FlowOtter does NOT author credentials. Deploy empty credential fields; user fills them in Node-RED editor. The credential-leak validator catches secrets stuffed into wrong fields.`;
 
 export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   healthCheckTool as unknown as Tool<unknown, unknown>,
@@ -96,6 +131,9 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   getStagedChangeTool as unknown as Tool<unknown, unknown>,
   getAuditLogRecentTool as unknown as Tool<unknown, unknown>,
   getRecentDebugMessagesTool as unknown as Tool<unknown, unknown>,
+  getAuthoringGuideTool as unknown as Tool<unknown, unknown>,
+  listAvailableToolsetsTool as unknown as Tool<unknown, unknown>,
+  enableToolsetTool as unknown as Tool<unknown, unknown>,
   addDebugNodeTool as unknown as Tool<unknown, unknown>,
   addInjectNodeTool as unknown as Tool<unknown, unknown>,
   addFunctionNodeTool as unknown as Tool<unknown, unknown>,
@@ -120,6 +158,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   moveNodeTool as unknown as Tool<unknown, unknown>,
   createSubflowDefinitionTool as unknown as Tool<unknown, unknown>,
   instantiateTemplateTool as unknown as Tool<unknown, unknown>,
+  planFlowTool as unknown as Tool<unknown, unknown>,
   deployStagedChangeTool as unknown as Tool<unknown, unknown>,
   rollbackLastChangeTool as unknown as Tool<unknown, unknown>,
   setFlowsStateTool as unknown as Tool<unknown, unknown>,
@@ -165,10 +204,14 @@ export async function startServer(): Promise<void> {
     'starting flow-otter',
   );
   const registry = buildRegistry(container, ALL_TOOLS);
+  // Attach the registry to the typed Container slot so toolset-management
+  // tools can mutate enabled state. See container.ts:Container.toolRegistry.
+  container.toolRegistry = registry;
   const { shutdown } = await startStdio({
     container,
     registry,
     serverInfo: SERVER_INFO,
+    instructions: SERVER_INSTRUCTIONS,
   });
 
   installShutdown(async () => {

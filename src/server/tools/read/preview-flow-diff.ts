@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { diffFlows, summarizeDiff } from '../../../toolkit/diff/semantic.js';
+import { recordPreviewed } from '../../nudges/rules/deploy-without-preview.js';
 import { ValidationFailedError, type Tool } from '../_tool.js';
 
 const InputSchema = z
@@ -72,6 +73,10 @@ export const previewFlowDiffTool: Tool<Input, Output> = {
       const staged = await ctx.staging.read();
       if (!staged) throw new ValidationFailedError('No staged change to compare against.', []);
       target = staged.flows;
+      // Record session-scoped "this hash has been previewed" so the
+      // deploy-without-preview nudge stays silent when the agent
+      // follows the canonical preview → deploy sequence.
+      recordPreviewed(ctx.container, staged.stagedHash);
     } else {
       if (input.snapshot_id === undefined) {
         throw new ValidationFailedError(

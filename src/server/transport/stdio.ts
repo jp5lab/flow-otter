@@ -1,14 +1,25 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 
 import type { Container } from '../container.js';
+import { findPrompt, PROMPTS } from '../prompts/registry.js';
 import type { ToolRegistry } from '../tools/register.js';
 
 export interface StartStdioOptions {
   container: Container;
   registry: ToolRegistry;
   serverInfo: { name: string; version: string };
+  /**
+   * Optional server-level instructions (≤2KB by Claude Code convention).
+   * Injected system-prompt style by clients that support it.
+   */
+  instructions?: string;
 }
 
 export async function startStdio(opts: StartStdioOptions): Promise<{
@@ -16,7 +27,10 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
 }> {
   const server = new Server(
     { name: opts.serverInfo.name, version: opts.serverInfo.version },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: { tools: {}, prompts: {} },
+      ...(opts.instructions !== undefined ? { instructions: opts.instructions } : {}),
+    },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, () => {
@@ -27,6 +41,43 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
       annotations: t.annotations,
     }));
     return { tools };
+  });
+
+  // Prompts surface as /mcp__flow-otter__<name> slash commands in Claude Code.
+  // Each prompt is a structured workflow walking the agent through a common
+  // task (new_flow, build_operator_dashboard, refactor_to_subflow, etc.).
+  // See src/server/prompts/registry.ts.
+  server.setRequestHandler(ListPromptsRequestSchema, () => {
+    return {
+      prompts: PROMPTS.map((p) => ({
+        name: p.name,
+        description: p.description,
+        arguments: p.arguments.map((a) => ({
+          name: a.name,
+          description: a.description,
+          ...(a.required !== undefined ? { required: a.required } : {}),
+        })),
+      })),
+    };
+  });
+
+  server.setRequestHandler(GetPromptRequestSchema, (req) => {
+    const name = req.params.name;
+    const prompt = findPrompt(name);
+    if (prompt === undefined) {
+      throw new Error(`Unknown prompt: ${name}`);
+    }
+    const args = req.params.arguments ?? {};
+    const text = prompt.build(args);
+    return {
+      description: prompt.description,
+      messages: [
+        {
+          role: 'user',
+          content: { type: 'text', text },
+        },
+      ],
+    };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -53,6 +104,12 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
       };
     }
   });
+
+  // Attach the MCP Server to the typed Container slot so tool handlers can
+  // call elicitInput / send notifications. Tools should still consume it
+  // through the typed helpers (src/server/elicitation/client.ts) rather than
+  // reaching for it directly.
+  opts.container.mcpServer = server;
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

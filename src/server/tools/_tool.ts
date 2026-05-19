@@ -4,6 +4,8 @@ import { canonicalHash } from '../../shared/hash.js';
 import type { AuditEvent, AuditResult } from '../audit/schema.js';
 import type { Container } from '../container.js';
 import type { ToolTier } from '../config/tiers.js';
+import { buildNudgeContext } from '../nudges/context.js';
+import { buildNudgeRegistry, evaluateNudges } from '../nudges/registry.js';
 
 export interface ToolContext extends Container {
   enrichAudit: (patch: Partial<AuditEvent>) => void;
@@ -193,6 +195,41 @@ export function makeInvokable<TIn, TOut>(tool: Tool<TIn, TOut>): InvokableTool {
       try {
         const validated = tool.inputZod.parse(rawInput);
         output = await tool.handler(validated, ctx);
+
+        // Soft-nudge: append _guidance to object outputs when applicable
+        // nudges fire. Defensive — nudge evaluation must not break the
+        // tool call, so all failures are caught and logged.
+        if (typeof output === 'object' && output !== null && !Array.isArray(output)) {
+          try {
+            const nudges = buildNudgeRegistry(container);
+            const hasApplicable = nudges.some((n) => {
+              try {
+                return n.applies(tool.name, tool.tier);
+              } catch {
+                return false;
+              }
+            });
+            if (hasApplicable) {
+              const nudgeCtx = await buildNudgeContext(container, tool.name, tool.tier);
+              const guidance = evaluateNudges(
+                nudges,
+                nudgeCtx,
+                validated,
+                output,
+                container.logger,
+              );
+              if (guidance.length > 0) {
+                output = { ...output, _guidance: guidance };
+              }
+            }
+          } catch (nudgeErr) {
+            container.logger.warn(
+              { err: nudgeErr instanceof Error ? nudgeErr.message : String(nudgeErr) },
+              'nudge evaluation failed; tool result returned without guidance',
+            );
+          }
+        }
+
         return output;
       } catch (err) {
         thrown = err;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { getOrProbeRuntimeInfo } from '../../runtime-info.js';
 import { persistedTargetAgeSeconds, persistedTargetPath } from '../../state/persisted-target.js';
 import type { Tool } from '../_tool.js';
 
@@ -12,6 +13,15 @@ const WarningSchema = z.object({
   hint: z.string().optional(),
 });
 
+const RuntimeInfoSchema = z.object({
+  name: z.literal('node-red'),
+  version: z.string(),
+  is_prerelease: z.boolean(),
+  node_js_version: z.string().optional(),
+  detected_at: z.string(),
+  capabilities: z.record(z.boolean()),
+});
+
 const OutputSchema = z.object({
   ok: z.boolean(),
   server_version: z.string(),
@@ -22,6 +32,13 @@ const OutputSchema = z.object({
   env_name: z.string(),
   persisted_target_path: z.string(),
   persisted_target_age_seconds: z.number().nullable(),
+  /**
+   * Detected info about the connected Node-RED runtime. Present when the
+   * target is admin-api AND the /settings probe succeeded. Absent for
+   * file-source targets or when the probe failed (a warning is added in
+   * that case).
+   */
+  runtime: RuntimeInfoSchema.optional(),
   warnings: z.array(WarningSchema),
 });
 type Output = z.infer<typeof OutputSchema>;
@@ -61,6 +78,24 @@ export const healthCheckTool: Tool<Input, Output> = {
     } catch {
       // Stat failure is advisory; report null.
     }
+
+    // Probe Node-RED for its version + capabilities. Only meaningful when
+    // the target is admin-api AND reachable; for file sources and
+    // unreachable runtimes, runtimeInfo will be undefined.
+    const allWarnings = warnings.map((w) => ({
+      code: w.code,
+      message: w.message,
+      ...(w.hint !== undefined ? { hint: w.hint } : {}),
+    }));
+    let runtime: Output['runtime'];
+    if (reachable && ctx.container.noderedClient !== undefined) {
+      const probe = await getOrProbeRuntimeInfo(ctx.container, ctx.clock);
+      if (probe.info !== undefined) runtime = probe.info;
+      if (probe.warning !== undefined) {
+        allWarnings.push({ code: probe.warning.code, message: probe.warning.message });
+      }
+    }
+
     return {
       ok: reachable,
       server_version: ctx.serverVersion,
@@ -71,11 +106,8 @@ export const healthCheckTool: Tool<Input, Output> = {
       env_name: envName,
       persisted_target_path: persistedTargetPath(envName),
       persisted_target_age_seconds: ageSeconds,
-      warnings: warnings.map((w) => ({
-        code: w.code,
-        message: w.message,
-        ...(w.hint !== undefined ? { hint: w.hint } : {}),
-      })),
+      ...(runtime !== undefined ? { runtime } : {}),
+      warnings: allWarnings,
     };
   },
 };

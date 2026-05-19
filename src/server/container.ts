@@ -1,6 +1,8 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import type { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
+
 import type {
   FlowSource,
   FlowSourceDescriptor,
@@ -20,6 +22,7 @@ import {
   PasswordGrantAuth,
   type NodeRedAuth,
 } from '../adapters/nodered/auth.js';
+import type { RuntimeInfo } from '../adapters/nodered/capabilities.js';
 import { NodeRedClient } from '../adapters/nodered/client.js';
 import { NodeRedCommsClient } from '../adapters/nodered/comms.js';
 import { loadNamingContract, NamingContractError } from '../toolkit/naming/load.js';
@@ -28,6 +31,7 @@ import { FilesystemSnapshotStore } from '../toolkit/snapshot/filesystem.js';
 import type { SnapshotStore } from '../toolkit/snapshot/store.js';
 import { StagedStore } from '../toolkit/staging/staged-store.js';
 
+import type { ToolRegistry } from './tools/register.js';
 import type { AuditLogger } from './audit/jsonl.js';
 import { JsonlAuditLogger } from './audit/jsonl.js';
 import { loadConfig } from './config/load.js';
@@ -101,6 +105,27 @@ export interface Container {
    * Default: `FLOWOTTER_SESSION_ID` env var if set, else `pid-${process.pid}`.
    */
   agentId: string;
+  /**
+   * Lazily-probed Node-RED runtime info (version + capabilities). Populated
+   * by getOrProbeRuntimeInfo() and cleared on target rebind. Mutable on the
+   * container instance; downstream readers should call the helper, not
+   * read this field directly, so cache misses fall through to a probe.
+   */
+  runtimeInfo?: RuntimeInfo;
+  /**
+   * The live MCP SDK Server instance. Populated by startStdio after the
+   * server is constructed; tools that need to call elicitInput,
+   * sendNotification, etc. should consume it through the typed helpers in
+   * `src/server/elicitation/client.ts` rather than reaching for it directly.
+   */
+  mcpServer?: McpServer;
+  /**
+   * Tool registry attached after construction (by startServer in index.ts).
+   * Tools like list_available_toolsets / enable_toolset read and mutate
+   * enabled-toolset state through this reference. Import is type-only to
+   * avoid a runtime circular dep with tools/register.ts.
+   */
+  toolRegistry?: ToolRegistry;
 }
 
 export interface BuildContainerOptions {
@@ -282,6 +307,9 @@ export function applyTarget(container: Container, opts: ApplyTargetOptions): App
   if (opts.audit_log_path !== undefined) {
     validateUserSuppliedStatePath('audit_log_path', opts.audit_log_path);
   }
+  // Invalidate any cached runtime info from the prior target so the next
+  // health_check (or capability-gated tool) re-probes the new runtime.
+  delete container.runtimeInfo;
   if (opts.kind === 'admin-api') {
     return applyAdminApiTarget(container, opts);
   }
@@ -368,7 +396,16 @@ function applyAdminApiTarget(
   container.staging = bound.staging;
   container.audit = bound.audit;
   // Best-effort revoke the prior auth so we don't accumulate dead sessions.
-  void container.auth.revoke().catch(() => undefined);
+  // Failures are surfaced at debug level — a stale OAuth refresh token on the
+  // old target is annoying but not load-bearing; we don't want to fail
+  // applyTarget if revoke times out.
+  const priorAuth = container.auth;
+  void priorAuth.revoke().catch((err: unknown) => {
+    container.logger.debug(
+      { err: err instanceof Error ? err.message : String(err) },
+      'auth.revoke() during target rebind failed (best-effort)',
+    );
+  });
   container.auth = bound.auth;
 
   return {
@@ -419,7 +456,15 @@ function applyFileTarget(
   container.snapshots = bound.snapshots;
   container.staging = bound.staging;
   container.audit = bound.audit;
-  void container.auth.revoke().catch(() => undefined);
+  // Best-effort revoke on file-target rebind too — see applyAdminApiTarget
+  // for rationale.
+  const priorAuth = container.auth;
+  void priorAuth.revoke().catch((err: unknown) => {
+    container.logger.debug(
+      { err: err instanceof Error ? err.message : String(err) },
+      'auth.revoke() during file-target rebind failed (best-effort)',
+    );
+  });
   container.auth = bound.auth;
 
   return {

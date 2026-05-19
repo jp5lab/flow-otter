@@ -145,6 +145,37 @@ export class NodeRedClient {
     return (await res.json()) as Record<string, unknown>;
   }
 
+  /**
+   * Probe the connected Node-RED for its version (and Node.js host version
+   * if surfaced). Reads `/settings.version` as the primary source; falls back
+   * to `/diagnostics.runtime.version` if /settings doesn't include it.
+   *
+   * Callers should cache the result (e.g. via server/runtime-info.ts) rather
+   * than calling on every tool invocation.
+   */
+  async getNoderedVersion(): Promise<{ version: string; nodeJsVersion?: string }> {
+    const settings = await this.getSettings();
+    const direct = typeof settings['version'] === 'string' ? settings['version'] : null;
+    if (direct !== null) {
+      // /settings does not expose nodejs.version; we'd need /diagnostics
+      // for that. Skip the second roundtrip unless the caller really wants
+      // node-js info — they can call getDiagnostics() directly.
+      return { version: direct };
+    }
+    // Fallback: /diagnostics has runtime.version + nodejs.version.
+    const diag = await this.getDiagnostics();
+    const runtime = diag['runtime'] as Record<string, unknown> | undefined;
+    const nodejs = diag['nodejs'] as Record<string, unknown> | undefined;
+    const v =
+      runtime !== undefined && typeof runtime['version'] === 'string' ? runtime['version'] : null;
+    if (v === null) {
+      throw new Error('Node-RED /settings and /diagnostics did not expose a version field.');
+    }
+    const nj =
+      nodejs !== undefined && typeof nodejs['version'] === 'string' ? nodejs['version'] : undefined;
+    return { version: v, ...(nj !== undefined ? { nodeJsVersion: nj } : {}) };
+  }
+
   async getNodeTypes(): Promise<unknown> {
     const res = await this.request('GET', '/nodes', undefined, {
       Accept: 'application/json',
