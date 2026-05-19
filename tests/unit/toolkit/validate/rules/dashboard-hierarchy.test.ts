@@ -48,7 +48,7 @@ describe('dashboard-hierarchy', () => {
     ).toEqual([]);
   });
 
-  it('passes when FlowFuse Dashboard 2 hierarchy chain resolves', () => {
+  it('passes when Dashboard 2.0 hierarchy chain resolves', () => {
     expect(
       check([
         { id: 'tab1', type: 'tab', label: 'T' },
@@ -77,7 +77,7 @@ describe('dashboard-hierarchy', () => {
     expect(out[0]?.context?.parent).toBe('ui_widget');
   });
 
-  it('flags FlowFuse Dashboard 2 widget that references missing ui-group', () => {
+  it('flags Dashboard 2.0 widget that references missing ui-group', () => {
     const out = check([
       { id: 'tab1', type: 'tab', label: 'T' },
       { id: 'base1', type: 'ui-base', name: 'Base' },

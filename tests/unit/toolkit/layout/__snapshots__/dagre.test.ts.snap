@@ -10,22 +10,22 @@ exports[`layoutFlows > matches a frozen snapshot for the 5-node fixture 1`] = `
   {
     "key": "log",
     "x": 440,
-    "y": 40,
+    "y": 120,
   },
   {
     "key": "sink",
     "x": 440,
-    "y": 120,
+    "y": 40,
   },
   {
     "key": "src1",
     "x": 40,
-    "y": 40,
+    "y": 120,
   },
   {
     "key": "src2",
     "x": 40,
-    "y": 120,
+    "y": 40,
   },
 ]
 `;

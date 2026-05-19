@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { layoutFlows } from '../../../../src/toolkit/layout/dagre.js';
+import { layoutFlowsWithDagre as layoutFlows } from '../../../../src/toolkit/layout/dagre.js';
 import type { AuthoringSpec } from '../../../../src/toolkit/authoring/types.js';
 import { isOnGrid } from '../../../../src/toolkit/layout/grid.js';
 import { inBounds } from '../../../../src/toolkit/layout/bounds.js';

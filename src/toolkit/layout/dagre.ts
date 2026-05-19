@@ -1,4 +1,4 @@
-import dagre from 'dagre';
+import dagre from '@dagrejs/dagre';
 
 import type { AuthoringSpec, NodeSpec, TabSpec } from '../authoring/types.js';
 
@@ -68,7 +68,10 @@ function layoutTab(tab: TabSpec, opts: ResolvedOpts): TabSpec {
   }
 
   if (sortedNodes.length > 0) {
-    dagre.layout(g);
+    // @dagrejs/dagre@3 types are stricter than the old `dagre` types; the
+    // graph we built above is correctly shaped at runtime even if TS can't
+    // verify the parameterized Graph<G,N,E> equivalence.
+    dagre.layout(g as Parameters<typeof dagre.layout>[0]);
   }
 
   const positionByKey = new Map<string, { x: number; y: number }>();
@@ -96,7 +99,7 @@ function layoutTab(tab: TabSpec, opts: ResolvedOpts): TabSpec {
   return { ...tab, nodes };
 }
 
-export function layoutFlows(spec: AuthoringSpec, opts: LayoutOpts = {}): AuthoringSpec {
+export function layoutFlowsWithDagre(spec: AuthoringSpec, opts: LayoutOpts = {}): AuthoringSpec {
   const resolved: ResolvedOpts = {
     rankdir: opts.rankdir ?? LAYOUT_DEFAULTS.rankdir,
     nodesep: opts.nodesep ?? LAYOUT_DEFAULTS.nodesep,

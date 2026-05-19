@@ -3,8 +3,7 @@
  * (function-node `func`, ui-template `format`, template-node `template`, etc.)
  * without round-tripping the full content through the wire each call.
  *
- * Patch semantics mirror FlowFuse Expert's `automation/update-node` patches
- * design:
+ * Patch semantics:
  * - Line numbers are 1-indexed.
  * - `start` and `end` refer to the ORIGINAL content (not running edits).
  * - `op: 'replace'` replaces lines [start..end] (inclusive); end optional.

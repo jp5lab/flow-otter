@@ -119,7 +119,7 @@ interface SkeletonChain {
  * Theme presets aligned with ISA-101 high-performance HMI guidance. Default
  * is `industrial` — muted grayscale base so saturated color reads as
  * "abnormal" instead of decoration. `flowfuse_default` preserves the
- * out-of-box FlowFuse cyan look for consumer-IoT use cases. `ops_dark` is
+ * Dashboard 2.0 default cyan look for consumer-IoT use cases. `ops_dark` is
  * a dark variant for control-room environments.
  */
 export type ThemePreset = 'industrial' | 'ops_dark' | 'flowfuse_default';

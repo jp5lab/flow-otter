@@ -20,6 +20,11 @@ import * as onGrid from './rules/on-grid.js';
 import * as subflowPorts from './rules/subflow-ports.js';
 import * as tabDivergence from './rules/tab-divergence.js';
 import * as wireTargets from './rules/wire-targets.js';
+// ISA-101 enforcement rules added in v1.3.0 (Item 11 of REDESIGN_PLAN.md):
+import * as buttonGroupColorDecoration from './rules/button-group-color-decoration.js';
+import * as saturatedColorOutsideAlarm from './rules/saturated-color-outside-alarm.js';
+import * as screenClutter from './rules/screen-clutter.js';
+import * as unboundedChartAppend from './rules/unbounded-chart-append.js';
 
 export interface ValidateOptions {
   labelCap?: number;
@@ -50,6 +55,11 @@ export function runValidators(flows: FlowsJson, opts: ValidateOptions = {}): Val
     ),
     ...credentialLeak.check(flows),
     ...functionSideEffects.check(flows),
+    // ISA-101 enforcement (Item 11):
+    ...unboundedChartAppend.check(flows),
+    ...screenClutter.check(flows),
+    ...saturatedColorOutsideAlarm.check(flows),
+    ...buttonGroupColorDecoration.check(flows),
   ];
   return buildReport(diagnostics);
 }

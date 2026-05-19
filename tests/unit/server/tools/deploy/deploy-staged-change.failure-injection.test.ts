@@ -21,6 +21,7 @@ import { NoAuth } from '../../../../../src/adapters/nodered/auth.js';
 import { RevMismatchError } from '../../../../../src/adapters/nodered/errors.js';
 import { JsonlAuditLogger } from '../../../../../src/server/audit/jsonl.js';
 import { loadConfig } from '../../../../../src/server/config/load.js';
+import type { Container } from '../../../../../src/server/container.js';
 import type { ToolContext } from '../../../../../src/server/tools/_tool.js';
 import { deployStagedChangeTool } from '../../../../../src/server/tools/deploy/deploy-staged-change.js';
 import type {
@@ -93,6 +94,18 @@ function buildCtx(opts: {
     ...(opts.envOverrides ?? {}),
   });
   const logger = createLogger({ level: 'silent' });
+  // Mock MCP server that auto-accepts elicit requests with confirm:true.
+  // Existing failure-injection tests exercise deploy machinery without
+  // going through real elicitation — keep their semantics by accepting on
+  // their behalf. Standalone tests of elicit live in
+  // tests/unit/server/elicitation/.
+  // Cast through unknown — implementing the full MCP SDK Server interface
+  // in a test fixture is impractical; we only need the methods elicit()
+  // actually calls.
+  const mcpServer = {
+    getClientCapabilities: () => ({ elicitation: {} }),
+    elicitInput: () => Promise.resolve({ action: 'accept', content: { confirm: true } }),
+  } as unknown as NonNullable<Container['mcpServer']>;
   const containerFields = {
     config,
     flowSource: opts.flowSource,
@@ -104,6 +117,7 @@ function buildCtx(opts: {
     clock: (): Date => new Date('2026-05-01T00:00:00.000Z'),
     serverVersion: '0.0.0-test',
     agentId: opts.agentIdOverride ?? 'agent-A',
+    mcpServer,
   };
   return {
     ...containerFields,

@@ -37,7 +37,7 @@ export function check(flows: FlowsJson): Diagnostic[] {
     diagnostics.push({
       severity: 'warning',
       rule: RULE,
-      message: `Dashboard 1.0 node '${node.id}' (${node.type}) coexists with Dashboard 2.0 nodes. Consider migrating with @flowfuse/node-red-dashboard-2-migration.`,
+      message: `Dashboard 1.0 node '${node.id}' (${node.type}) coexists with Dashboard 2.0 nodes. Use the @flowfuse/node-red-dashboard-2-migration npm package to migrate, or remove one set.`,
       nodeId: node.id,
       ...(z !== undefined ? { tabId: z } : {}),
       context: { version: 'v1', v1Types, v2Types },

@@ -53,7 +53,7 @@ describe('dashboard-2-mixed-versions', () => {
     ] as never);
     expect(out).toHaveLength(1);
     expect(out[0]?.severity).toBe('warning');
-    expect(out[0]?.message).toContain('migrating');
+    expect(out[0]?.message).toMatch(/migrat(e|ing|ion)/);
   });
 
   it('records the v1 and v2 type sets in context', () => {

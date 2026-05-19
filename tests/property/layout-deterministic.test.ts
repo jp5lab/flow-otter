@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { canonicalJson } from '../../src/shared/canonical-json.js';
-import { layoutFlows } from '../../src/toolkit/layout/dagre.js';
+import { layoutFlowsWithDagre as layoutFlows } from '../../src/toolkit/layout/dagre.js';
 
 import { arbitraryAuthoringSpec } from './arbitraries.js';
 

@@ -6,7 +6,7 @@ import { z } from 'zod';
  * `page`, `ui`) are NOT part of these schemas — they're set by the
  * `widgetAnchor` mechanism on the NodeSpec and resolved by the compiler.
  *
- * Sourced from FlowFuse Dashboard 2.0 ≥ 1.30.2 widget HTML registrations.
+ * Aligned with Dashboard 2.0 ≥ 1.30.2 widget HTML registrations.
  */
 
 const COMMON_LAYOUT = {
@@ -209,6 +209,240 @@ const GroupDialogPassthrough = z
   })
   .passthrough();
 
+// --- Widgets added in v1.3.0 (Item 9 of REDESIGN_PLAN.md) ---
+//
+// Schemas are intentionally permissive (.passthrough): Dashboard 2.0 widget
+// config surface is broad and version-evolving; we lock in the
+// most-commonly-set fields and let users layer arbitrary additional
+// passthrough keys for niche configs.
+
+const ButtonPassthrough = z
+  .object({
+    label: z.string().optional(),
+    icon: z.string().optional(),
+    iconPosition: z.enum(['left', 'right']).optional(),
+    buttonColor: z.string().optional(),
+    textColor: z.string().optional(),
+    iconColor: z.string().optional(),
+    payload: z.unknown().optional(),
+    payloadType: z.string().optional(),
+    topic: z.string().optional(),
+    topicType: z.string().optional(),
+    // ISA-101 hooks (Item 11 validator enforces these on destructive payloads):
+    confirm: z.boolean().optional(),
+    confirmMessage: z.string().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const ButtonGroupOption = z.object({
+  label: z.string(),
+  value: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+});
+
+const ButtonGroupPassthrough = z
+  .object({
+    label: z.string().optional(),
+    options: z.array(ButtonGroupOption.passthrough()).optional(),
+    passThru: z.boolean().optional(),
+    topic: z.string().optional(),
+    // Destructive operations on multi-state selectors should require confirm
+    // per ISA-101 — surfaced for the soft-nudge rule in Item 5/11.
+    confirm: z.boolean().optional(),
+    confirmMessage: z.string().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const TextPassthrough = z
+  .object({
+    label: z.string().optional(),
+    layout: z.enum(['row-left', 'row-right', 'row-center', 'row-spaced', 'col-center']).optional(),
+    color: z.string().optional(),
+    fontSize: z.number().positive().optional(),
+    icon: z.string().optional(),
+    // Display options
+    format: z.string().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const NotificationPassthrough = z
+  .object({
+    displayTime: z.number().nonnegative().optional(),
+    showCountdown: z.boolean().optional(),
+    allowDismiss: z.boolean().optional(),
+    color: z.string().optional(),
+    position: z
+      .enum(['top right', 'top left', 'bottom right', 'bottom left', 'top center', 'bottom center'])
+      .optional(),
+    rawHTML: z.boolean().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const TemplatePassthrough = z
+  .object({
+    name: z.string().optional(),
+    code: z.string().optional(),
+    scope: z.enum(['local', 'global', 'css-page', 'css-all', 'css-base']).optional(),
+    classList: z.string().optional(),
+    passthru: z.boolean().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const FormFieldType = z.enum([
+  'text',
+  'multiline',
+  'password',
+  'email',
+  'number',
+  'checkbox',
+  'switch',
+  'date',
+  'time',
+]);
+
+const FormField = z
+  .object({
+    label: z.string(),
+    key: z.string(),
+    type: FormFieldType,
+    required: z.boolean().optional(),
+    rows: z.number().int().positive().optional(),
+    value: z.unknown().optional(),
+  })
+  .passthrough();
+
+const FormPassthrough = z
+  .object({
+    label: z.string().optional(),
+    options: z.array(FormField).optional(),
+    formValue: z.record(z.unknown()).optional(),
+    splitLayout: z.boolean().optional(),
+    submitLabel: z.string().optional(),
+    cancelLabel: z.string().optional(),
+    resetOnSubmit: z.boolean().optional(),
+    topic: z.string().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const TableColumn = z
+  .object({
+    key: z.string(),
+    label: z.string().optional(),
+    type: z
+      .enum([
+        'text',
+        'html',
+        'link',
+        'color',
+        'progress',
+        'sparkline',
+        'button',
+        'image',
+        'icon',
+        'rating',
+        'switch',
+      ])
+      .optional(),
+    sortable: z.boolean().optional(),
+    filter: z.boolean().optional(),
+    align: z.enum(['left', 'right', 'center']).optional(),
+  })
+  .passthrough();
+
+const TablePassthrough = z
+  .object({
+    label: z.string().optional(),
+    maxrows: z.number().int().positive(),
+    action: z.enum(['append', 'replace']).optional(),
+    columns: z.array(TableColumn).optional(),
+    rowSelection: z.enum(['none', 'click', 'checkbox']).optional(),
+    searchable: z.boolean().optional(),
+    showSearch: z.boolean().optional(),
+    paginationType: z.enum(['none', 'paginated', 'infinite']).optional(),
+    fixedHeader: z.boolean().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const ChartPassthrough = z
+  .object({
+    label: z.string().optional(),
+    chartType: z.enum(['line', 'bar', 'scatter', 'pie', 'doughnut', 'histogram', 'area']),
+    xAxisType: z.enum(['time', 'linear', 'category']).optional(),
+    xAxisLabel: z.string().optional(),
+    xAxisLimit: z.number().int().positive().optional(),
+    xAxisLimitType: z.enum(['count', 'time']).optional(),
+    yAxisLabel: z.string().optional(),
+    yMin: z.number().optional(),
+    yMax: z.number().optional(),
+    action: z.enum(['append', 'replace']).optional(),
+    showLegend: z.boolean().optional(),
+    pointShape: z.string().optional(),
+    pointRadius: z.number().nonnegative().optional(),
+    animationDuration: z.number().nonnegative().optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const GaugeSegment = z.object({
+  from: z.number(),
+  color: z.string(),
+});
+
+const GaugePassthrough = z
+  .object({
+    label: z.string().optional(),
+    units: z.string().optional(),
+    prefix: z.string().optional(),
+    suffix: z.string().optional(),
+    icon: z.string().optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    style: z.enum(['needle', 'rounded', 'half', 'three-quarter', 'tile', 'battery', 'tank']),
+    sizeThickness: z.number().int().positive().optional(),
+    sizeGap: z.number().int().nonnegative().optional(),
+    segments: z.array(GaugeSegment).optional(),
+    ...COMMON_LAYOUT,
+  })
+  .passthrough();
+
+const ControlAction = z.enum([
+  'navigate',
+  'show',
+  'hide',
+  'enable',
+  'disable',
+  'open',
+  'close',
+  'reload',
+]);
+
+const ControlPassthrough = z
+  .object({
+    events: z
+      .array(
+        z
+          .object({
+            type: ControlAction,
+            target: z.string().optional(),
+            payload: z.unknown().optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    // Backwards compat with single-event shape used by older flows
+    action: ControlAction.optional(),
+    target: z.string().optional(),
+  })
+  .passthrough();
+
 export const WIDGET_SCHEMAS: Readonly<Record<string, z.ZodTypeAny>> = Object.freeze({
   'ui-dropdown': DropdownPassthrough,
   'ui-radio-group': RadioGroupPassthrough,
@@ -224,6 +458,17 @@ export const WIDGET_SCHEMAS: Readonly<Record<string, z.ZodTypeAny>> = Object.fre
   'ui-event': EventPassthrough,
   'ui-link': LinkPassthrough,
   'ui-group-dialog': GroupDialogPassthrough,
+  // Added v1.3.0:
+  'ui-button': ButtonPassthrough,
+  'ui-button-group': ButtonGroupPassthrough,
+  'ui-text': TextPassthrough,
+  'ui-notification': NotificationPassthrough,
+  'ui-template': TemplatePassthrough,
+  'ui-form': FormPassthrough,
+  'ui-table': TablePassthrough,
+  'ui-chart': ChartPassthrough,
+  'ui-gauge': GaugePassthrough,
+  'ui-control': ControlPassthrough,
 });
 
 /**
@@ -251,6 +496,17 @@ export const WIDGET_ANCHOR_REQUIREMENT: Readonly<Record<string, WidgetAnchorRequ
     'ui-event': 'none',
     'ui-link': 'ui',
     'ui-group-dialog': 'config',
+    // Added v1.3.0:
+    'ui-button': 'group',
+    'ui-button-group': 'group',
+    'ui-text': 'group',
+    'ui-notification': 'ui',
+    'ui-template': 'group',
+    'ui-form': 'group',
+    'ui-table': 'group',
+    'ui-chart': 'group',
+    'ui-gauge': 'group',
+    'ui-control': 'ui',
   });
 
 export function getWidgetSchema(widgetType: string): z.ZodTypeAny | undefined {

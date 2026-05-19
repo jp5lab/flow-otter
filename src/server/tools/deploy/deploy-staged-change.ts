@@ -8,7 +8,8 @@ import {
   isDeployMode,
 } from '../../../adapters/nodered/deploy.js';
 import type { DeployMode } from '../../../shared/flow-source.js';
-import { type Tool, ValidationFailedError } from '../_tool.js';
+import { elicit } from '../../elicitation/client.js';
+import { ToolBlockedError, type Tool, ValidationFailedError } from '../_tool.js';
 
 const InputSchema = z
   .object({
@@ -85,6 +86,38 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
         `Staged hash mismatch: requested '${input.staged_hash}', staged '${staged.stagedHash}'.`,
         [],
       );
+    }
+
+    // Elicit user confirmation before pushing to live runtime — but only
+    // when force isn't already set (force is the in-band "I know what I'm
+    // doing" signal). When the client doesn't support elicitation, we fall
+    // through and require the caller to pass force=true explicitly so the
+    // intent is captured.
+    if (input.force !== true) {
+      const outcome = await elicit(ctx.container.mcpServer, {
+        message: `Deploy staged change ${staged.stagedHash.slice(0, 12)} to the ${ctx.flowSource.describe().target} runtime? This will modify live flows.`,
+        fields: {
+          confirm: {
+            type: 'boolean',
+            description: 'true = proceed with deploy, false = abort.',
+            default: false,
+          },
+        },
+        required: ['confirm'],
+      });
+      if (outcome.action === 'unsupported') {
+        throw new ToolBlockedError(
+          'deploy_staged_change requires confirmation. Either pass force:true (explicit acknowledgement) or use an MCP client that supports elicitation (Claude Code v2.1.76+).',
+        );
+      }
+      if (outcome.action === 'decline' || outcome.action === 'cancel') {
+        throw new ToolBlockedError(`Deploy ${outcome.action}ed by user.`);
+      }
+      if (outcome.content['confirm'] !== true) {
+        throw new ToolBlockedError(
+          'Deploy was elicited but confirm was false. Set confirm:true or set force:true to bypass.',
+        );
+      }
     }
 
     // Per-session staging guard: refuse if a different agent process staged
