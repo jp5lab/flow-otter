@@ -1,0 +1,39 @@
+# privacy-scan allowlist — literal substrings that suppress a match.
+# Only SANCTIONED generic placeholders belong here (the convention is
+# recorded in CHANGELOG: docs use generic examples throughout).
+# Never allowlist a real address to silence a finding — remove the data instead.
+
+# Generic documentation example hosts (established convention)
+192.168.1.10
+192.168.1.20
+192.168.1.30
+
+# Intentional public identity
+users.noreply.github.com
+
+# Generic placeholder domains/addresses for new docs (RFC 2606 / RFC 5737)
+example.com
+example.org
+192.0.2.
+198.51.100.
+203.0.113.
+
+# settings.local.json is a Claude Code convention, not an mDNS hostname
+settings.local
+.env.local
+
+# Historical residual: the initial-release commit's AGENT_QUICKSTART example
+# used 10.0.0.5 (verified exemplary, not a real host). Normalized to the
+# 192.168.1.10 convention at HEAD; the old blob is immutable in history.
+10.0.0.5
+
+# Deliberate FAKE credentials in redaction/validator tests — exact values only.
+# {"sub":"user"} fake JWT payload used by redact fixtures:
+eyJzdWIiOiJ1c2VyIn0
+# header-only and obviously-fake bearer strings in redact tests:
+eyJhbGciOiJIUzI1NiJ9' })
+payload.sig
+# decompile test plant:
+should-not-leak
+# AWS's canonical documentation example key:
+AKIAIOSFODNN7EXAMPLE

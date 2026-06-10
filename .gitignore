@@ -20,3 +20,9 @@ audit.jsonl
 .obsidian/
 *.swp
 *.swo
+
+# Local evaluation campaign outputs (may contain real target URLs) — never commit
+eval-results/
+
+# A real flows.json materialized at the repo root (file mode per .env.example) may contain real broker hosts/topics — never commit it. Root-anchored so tests/fixtures stay trackable.
+/flows.json
