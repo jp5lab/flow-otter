@@ -17,7 +17,7 @@ import {
   SUBFLOW_INSTANCE_PREFIX,
 } from '../../shared/flows-json.js';
 
-import { AUTHORING_KEY_FIELD } from './compile.js';
+import { AUTHORING_KEY_FIELD, DEFAULT_GROUP_STYLE } from './compile.js';
 import type {
   AuthoringSpec,
   CommentSpec,
@@ -326,6 +326,14 @@ function buildGroupSpec(node: GroupNode, idToKey: Map<string, string>): GroupSpe
   const size =
     typeof node.w === 'number' && typeof node.h === 'number' ? { w: node.w, h: node.h } : undefined;
   const parentKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
+  // Carry `style` only when it is a non-null object that differs from the
+  // default FlowOtter emits. `null` (Node-RED's normalization of an absent
+  // style) and the canonical default both decompile to "no explicit style"
+  // so compile re-emits the default and the round trip stays idempotent.
+  const style =
+    node.style !== undefined && node.style !== null && !isDefaultGroupStyle(node.style)
+      ? node.style
+      : undefined;
   return {
     key: authoringKey(node),
     name: node.name ?? '',
@@ -334,9 +342,17 @@ function buildGroupSpec(node: GroupNode, idToKey: Map<string, string>): GroupSpe
     ...(size !== undefined ? { size } : {}),
     ...(parentKey !== undefined ? { parentKey } : {}),
     ...(typeof node.info === 'string' ? { info: node.info } : {}),
-    ...(node.style !== undefined ? { style: node.style } : {}),
+    ...(style !== undefined ? { style } : {}),
     ...(Object.keys(passthrough).length > 0 ? { passthrough } : {}),
   };
+}
+
+function isDefaultGroupStyle(style: unknown): boolean {
+  if (typeof style !== 'object' || style === null) return false;
+  const s = style as Record<string, unknown>;
+  const keys = Object.keys(DEFAULT_GROUP_STYLE);
+  if (Object.keys(s).length !== keys.length) return false;
+  return keys.every((k) => s[k] === (DEFAULT_GROUP_STYLE as Record<string, unknown>)[k]);
 }
 
 function buildCommentSpec(node: CommentNode, idToKey: Map<string, string>): CommentSpec {

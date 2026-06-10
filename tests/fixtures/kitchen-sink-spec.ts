@@ -113,6 +113,11 @@ export const KITCHEN_SINK_SPEC: AuthoringSpec = {
           key: 'main-group',
           name: 'Main Group',
           nodeKeys: ['inject', 'function', 'debug', 'overview-comment'],
+          // Explicit geometry: the canonical example exercises the
+          // preserved-verbatim path; geometry-less groups (compile auto-fit)
+          // are covered by tests/unit/toolkit/authoring/group-autofit.test.ts.
+          position: { x: 40, y: 0 },
+          size: { w: 660, h: 180 },
           style: { fill: '#f6f6f6', label: true },
         },
       ],

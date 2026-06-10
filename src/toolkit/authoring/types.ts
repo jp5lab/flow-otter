@@ -68,7 +68,10 @@ export interface GroupSpec {
   readonly key: string;
   readonly name: string;
   readonly nodeKeys: readonly string[];
-  /** Top-left corner. Node-RED auto-fits when missing; preserved verbatim when present. */
+  /** Top-left corner. Preserved verbatim when present. When BOTH position
+   *  and size are missing, compile auto-fits a grid-snapped bounding box from
+   *  the members' positions — Node-RED does NOT auto-fit dimension-less
+   *  groups on import (it stores null geometry and renders nothing). */
   readonly position?: Position;
   /** Width/height in pixels. */
   readonly size?: { readonly w: number; readonly h: number };

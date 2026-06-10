@@ -10,6 +10,7 @@ import {
 } from '../../shared/flows-json.js';
 import { canonicalHash } from '../../shared/hash.js';
 import { generateNodeId } from '../../shared/ids.js';
+import { nodeWidthFor } from '../render/metrics.js';
 
 import { byCanonicalOrder } from './ordering.js';
 import {
@@ -26,6 +27,25 @@ import {
 } from './types.js';
 
 export const AUTHORING_KEY_FIELD = '_authoringKey';
+
+/**
+ * Default group style matching the Node-RED editor's own new-group default.
+ * A group with no `style` (or `style: null`) renders an INVISIBLE box in the
+ * editor — verified live against Node-RED 4.1/5.0: only a style with a real
+ * `stroke` draws a border (eval campaign 2026-06-10). FlowOtter therefore
+ * emits this default when the agent supplies none, so authored groups are
+ * actually visible. decompile() strips it back to `undefined` so the
+ * round-trip stays idempotent.
+ */
+export const DEFAULT_GROUP_STYLE: Readonly<Record<string, unknown>> = Object.freeze({
+  stroke: '#a4a4a4',
+  'stroke-opacity': '1',
+  fill: 'none',
+  'fill-opacity': '1',
+  label: true,
+  'label-position': 'nw',
+  color: '#a4a4a4',
+});
 
 export interface CompileOptions {
   /** Existing flows to merge against — preserves IDs of unchanged nodes byte-for-byte. */
@@ -229,7 +249,17 @@ function emitGroup(
   tabId: string,
   containedIds: string[],
   parentId: string | undefined,
+  autoFit: { x: number; y: number; w: number; h: number } | undefined,
 ): GroupNode {
+  const geometry =
+    spec.position !== undefined || spec.size !== undefined
+      ? {
+          ...(spec.position !== undefined ? { x: spec.position.x, y: spec.position.y } : {}),
+          ...(spec.size !== undefined ? { w: spec.size.w, h: spec.size.h } : {}),
+        }
+      : autoFit !== undefined
+        ? { x: autoFit.x, y: autoFit.y, w: autoFit.w, h: autoFit.h }
+        : {};
   return {
     ...(spec.passthrough ?? {}),
     id,
@@ -237,13 +267,76 @@ function emitGroup(
     z: tabId,
     name: spec.name,
     nodes: containedIds,
-    ...(spec.position !== undefined ? { x: spec.position.x, y: spec.position.y } : {}),
-    ...(spec.size !== undefined ? { w: spec.size.w, h: spec.size.h } : {}),
+    ...geometry,
     ...(parentId !== undefined ? { g: parentId } : {}),
     ...(spec.info !== undefined ? { info: spec.info } : {}),
-    ...(spec.style !== undefined ? { style: spec.style } : {}),
+    style: spec.style ?? DEFAULT_GROUP_STYLE,
     [AUTHORING_KEY_FIELD]: spec.key,
   };
+}
+
+const GROUP_FIT_PAD_X = 20;
+const GROUP_FIT_PAD_TOP = 40; // headroom for the group name bar
+const GROUP_FIT_PAD_BOTTOM = 20;
+const NODE_BODY_HEIGHT = 30;
+const JUNCTION_SIZE = 10;
+const COMMENT_DEFAULT_W = 160;
+const COMMENT_DEFAULT_H = 30;
+const GRID = 20;
+
+/**
+ * Compute a bounding box for a group from its direct members' positions.
+ * Node-RED does NOT auto-fit a dimension-less group on import — the runtime
+ * stores x/y/w/h as null and the editor renders nothing (verified live
+ * against 4.1.11; eval campaign 2026-06-10). So groups authored without
+ * explicit geometry get a deterministic, grid-snapped fit here instead.
+ *
+ * Members are matched by groupKey/nodeKeys over nodes, junctions, and
+ * comments. Child groups (nested via parentKey) are not folded into the
+ * fit — a parent group containing only child groups keeps legacy omit
+ * behavior. Returns undefined when no member has a usable position.
+ */
+function autoFitGroupGeometry(
+  tabSpec: TabSpec,
+  groupSpec: GroupSpec,
+): { x: number; y: number; w: number; h: number } | undefined {
+  const member = new Set(groupSpec.nodeKeys);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let found = false;
+  const include = (cx: number, cy: number, w: number, h: number): void => {
+    minX = Math.min(minX, cx - w / 2);
+    maxX = Math.max(maxX, cx + w / 2);
+    minY = Math.min(minY, cy - h / 2);
+    maxY = Math.max(maxY, cy + h / 2);
+    found = true;
+  };
+  for (const n of tabSpec.nodes) {
+    if (!member.has(n.key)) continue;
+    const w = nodeWidthFor(n.label ?? n.type, false, 1);
+    include(n.position.x, n.position.y, w, NODE_BODY_HEIGHT);
+  }
+  for (const j of tabSpec.junctions ?? []) {
+    if (!member.has(j.key)) continue;
+    include(j.position.x, j.position.y, JUNCTION_SIZE, JUNCTION_SIZE);
+  }
+  for (const c of tabSpec.comments) {
+    if (!member.has(c.key)) continue;
+    include(
+      c.position.x,
+      c.position.y,
+      c.size?.w ?? COMMENT_DEFAULT_W,
+      c.size?.h ?? COMMENT_DEFAULT_H,
+    );
+  }
+  if (!found) return undefined;
+  const x = Math.floor((minX - GROUP_FIT_PAD_X) / GRID) * GRID;
+  const y = Math.floor((minY - GROUP_FIT_PAD_TOP) / GRID) * GRID;
+  const w = Math.ceil((maxX + GROUP_FIT_PAD_X - x) / GRID) * GRID;
+  const h = Math.ceil((maxY + GROUP_FIT_PAD_BOTTOM - y) / GRID) * GRID;
+  return { x, y, w, h };
 }
 
 function emitSubflowDef(spec: SubflowDefSpec, id: string): FlowsJsonNode {
@@ -521,7 +614,11 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
           });
         }
       }
-      flows.push(emitGroup(groupSpec, id, tabId, containedIds, parentId));
+      const autoFit =
+        groupSpec.position === undefined && groupSpec.size === undefined
+          ? autoFitGroupGeometry(tabSpec, groupSpec)
+          : undefined;
+      flows.push(emitGroup(groupSpec, id, tabId, containedIds, parentId, autoFit));
     }
 
     for (const commentSpec of tabSpec.comments) {
