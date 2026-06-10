@@ -15,6 +15,17 @@ const InputSchema = z
   .object({
     staged_hash: z.string().min(1),
     deploy_mode: z.enum(ALL_DEPLOY_MODES as unknown as [string, ...string[]]).optional(),
+    /**
+     * Explicit user-consent acknowledgement for clients without elicitation
+     * support. Consent ONLY — drift protection stays fully active. This is
+     * the flag scripted/SDK clients should pass on every approved deploy.
+     */
+    confirm: z.boolean().optional(),
+    /**
+     * Drift override: deploy even if the runtime changed since the stage was
+     * created (skips the drift check AND optimistic rev locking). Implies
+     * consent. Dangerous — overwrites concurrent edits; prefer `confirm`.
+     */
     force: z.boolean().optional(),
     /**
      * When true, deploy even if the staged change was authored by a
@@ -57,7 +68,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const deployStagedChangeTool: Tool<Input, Output> = {
   name: 'deploy_staged_change',
   description:
-    'Deploys the currently-staged change to the runtime. Snapshots the prior runtime state first, runs a drift check (refuses on hash mismatch unless force=true), and posts via Admin API with the requested deployment mode (default: nodes). Records a redacted audit event.',
+    'Deploys the currently-staged change to the runtime. Snapshots the prior runtime state first, runs a drift check, and posts via Admin API with the requested deployment mode (default: nodes). Consent: elicits the user, or accepts confirm:true from clients without elicitation (drift protection stays active). force:true additionally OVERRIDES the drift check — dangerous, prefer confirm. Records a redacted audit event.',
   tier: 'deploy',
   inputZod: InputSchema,
   inputJsonSchema: {
@@ -65,7 +76,16 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
     properties: {
       staged_hash: { type: 'string', minLength: 1 },
       deploy_mode: { type: 'string', enum: ALL_DEPLOY_MODES as unknown as string[] },
-      force: { type: 'boolean' },
+      confirm: {
+        type: 'boolean',
+        description:
+          'Explicit user-consent acknowledgement (for clients without elicitation). Consent only — the drift check stays active.',
+      },
+      force: {
+        type: 'boolean',
+        description:
+          'Drift override: deploy even if the runtime changed since staging. Implies consent. Overwrites concurrent edits — prefer confirm.',
+      },
       force_takeover: {
         type: 'boolean',
         description:
@@ -88,12 +108,13 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
       );
     }
 
-    // Elicit user confirmation before pushing to live runtime — but only
-    // when force isn't already set (force is the in-band "I know what I'm
-    // doing" signal). When the client doesn't support elicitation, we fall
-    // through and require the caller to pass force=true explicitly so the
-    // intent is captured.
-    if (input.force !== true) {
+    // Elicit user confirmation before pushing to live runtime. Consent is
+    // satisfied by: an elicitation accept, confirm:true (the scripted-client
+    // path — consent ONLY, drift protection stays active below), or
+    // force:true (which additionally overrides drift; kept for back-compat
+    // and genuine takeover cases). Consent and drift-override are distinct
+    // decisions and MUST NOT share a flag — see eval campaign 2026-06-10.
+    if (input.force !== true && input.confirm !== true) {
       const outcome = await elicit(ctx.container.mcpServer, {
         message: `Deploy staged change ${staged.stagedHash.slice(0, 12)} to the ${ctx.flowSource.describe().target} runtime? This will modify live flows.`,
         fields: {
@@ -107,7 +128,7 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
       });
       if (outcome.action === 'unsupported') {
         throw new ToolBlockedError(
-          'deploy_staged_change requires confirmation. Either pass force:true (explicit acknowledgement) or use an MCP client that supports elicitation (Claude Code v2.1.76+).',
+          'deploy_staged_change requires confirmation. Pass confirm:true after the user approves (drift protection stays active), or use an MCP client that supports elicitation (Claude Code v2.1.76+). Do NOT use force:true for routine consent — it also overrides the drift check.',
         );
       }
       if (outcome.action === 'decline' || outcome.action === 'cancel') {
@@ -115,7 +136,7 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
       }
       if (outcome.content['confirm'] !== true) {
         throw new ToolBlockedError(
-          'Deploy was elicited but confirm was false. Set confirm:true or set force:true to bypass.',
+          'Deploy was elicited but confirm was false. Re-run with confirm:true once the user approves.',
         );
       }
     }
@@ -157,7 +178,7 @@ export const deployStagedChangeTool: Tool<Input, Output> = {
       throw new DriftError(
         staged.basedOnSnapshotHash,
         runtimeHash,
-        `Runtime flows.json has drifted (hash ${runtimeHash} vs staged base ${staged.basedOnSnapshotHash}). Pass force=true to override.`,
+        `Runtime flows.json has drifted (hash ${runtimeHash} vs staged base ${staged.basedOnSnapshotHash}). Someone or something changed the runtime since this stage was created. Discard and re-stage on the current runtime (discard_staged_change), or pass force=true to overwrite the concurrent changes.`,
       );
     }
 

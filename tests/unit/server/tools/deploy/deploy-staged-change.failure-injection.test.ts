@@ -77,6 +77,8 @@ function buildCtx(opts: {
   flowSource: FlowSource;
   agentIdOverride?: string;
   envOverrides?: Record<string, string>;
+  /** Simulate an MCP client WITHOUT elicitation support (scripted/SDK client). */
+  elicitationUnsupported?: boolean;
 }): ToolContext {
   const config = loadConfig({
     FLOW_SOURCE: 'admin-api',
@@ -103,7 +105,7 @@ function buildCtx(opts: {
   // in a test fixture is impractical; we only need the methods elicit()
   // actually calls.
   const mcpServer = {
-    getClientCapabilities: () => ({ elicitation: {} }),
+    getClientCapabilities: () => (opts.elicitationUnsupported === true ? {} : { elicitation: {} }),
     elicitInput: () => Promise.resolve({ action: 'accept', content: { confirm: true } }),
   } as unknown as NonNullable<Container['mcpServer']>;
   const containerFields = {
@@ -253,6 +255,81 @@ describe('deploy_staged_change failure injection', () => {
     )) as { ok: boolean; forced: boolean };
     expect(out.ok).toBe(true);
     expect(out.forced).toBe(true);
+  });
+
+  it('(g) elicitation unsupported + no confirm → ToolBlockedError pointing at confirm:true', async () => {
+    await stageChange('agent-A');
+    const saveImpl = vi.fn().mockResolvedValue({ rev: 'rev-1' });
+    const ctx = buildCtx({
+      flowSource: mkMockFlowSource({
+        loadFlows: () => Promise.resolve({ flows: BASE_FLOWS, rev: 'rev-0' }),
+        saveImpl,
+      }),
+      elicitationUnsupported: true,
+    });
+    await expect(deployStagedChangeTool.handler({ staged_hash: STAGED_HASH }, ctx)).rejects.toThrow(
+      /confirm:true/,
+    );
+    expect(saveImpl).not.toHaveBeenCalled();
+  });
+
+  it('(h) confirm:true satisfies consent for non-elicitation clients (clean baseline deploys, forced=false)', async () => {
+    await stageChange('agent-A');
+    const saveImpl = vi.fn().mockResolvedValue({ rev: 'rev-1' });
+    const ctx = buildCtx({
+      flowSource: mkMockFlowSource({
+        loadFlows: () => Promise.resolve({ flows: BASE_FLOWS, rev: 'rev-0' }),
+        saveImpl,
+      }),
+      elicitationUnsupported: true,
+    });
+    const out = (await deployStagedChangeTool.handler(
+      { staged_hash: STAGED_HASH, confirm: true },
+      ctx,
+    )) as { ok: boolean; forced: boolean };
+    expect(out.ok).toBe(true);
+    expect(out.forced).toBe(false);
+    // Consent path keeps optimistic rev locking active (expectedRev passed).
+    expect(saveImpl).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ expectedRev: 'rev-0' }),
+    );
+  });
+
+  it('(i) confirm:true does NOT bypass the drift check — DriftError still thrown (consent ≠ drift override)', async () => {
+    await stageChange('agent-A');
+    const saveImpl = vi.fn().mockResolvedValue({ rev: 'rev-after' });
+    const ctx = buildCtx({
+      flowSource: mkMockFlowSource({
+        loadFlows: () => Promise.resolve({ flows: DRIFTED_FLOWS, rev: 'rev-DRIFT' }),
+        saveImpl,
+      }),
+      elicitationUnsupported: true,
+    });
+    await expect(
+      deployStagedChangeTool.handler({ staged_hash: STAGED_HASH, confirm: true }, ctx),
+    ).rejects.toThrow(/drifted/i);
+    expect(saveImpl).not.toHaveBeenCalled();
+  });
+
+  it('(j) force:true still bypasses drift for elicitation-capable clients (backward compat)', async () => {
+    // Pre-split behavior: force overrides drift. Verify it still does, via the
+    // elicitation-capable rig (no confirm needed), so the legacy contract holds.
+    await stageChange('agent-A');
+    const loadImpl = (): Promise<{ flows: FlowsJson; rev: string | null }> =>
+      Promise.resolve({ flows: DRIFTED_FLOWS, rev: 'rev-DRIFT' });
+    const saveImpl = vi.fn().mockResolvedValue({ rev: 'rev-forced' });
+    const ctx = buildCtx({ flowSource: mkMockFlowSource({ loadFlows: loadImpl, saveImpl }) });
+    const out = (await deployStagedChangeTool.handler(
+      { staged_hash: STAGED_HASH, force: true },
+      ctx,
+    )) as { ok: boolean; forced: boolean };
+    expect(out.ok).toBe(true);
+    expect(out.forced).toBe(true);
+    expect(saveImpl).toHaveBeenCalledTimes(1);
+    // force path must NOT send expectedRev (it deliberately skips optimistic locking).
+    const saveOpts = saveImpl.mock.calls[0]?.[1] as Record<string, unknown> | undefined;
+    expect(saveOpts?.['expectedRev']).toBeUndefined();
   });
 
   it('(f) REQUIRE_DIFF_BEFORE_DEPLOY=true refuses no-op deploy (staged equals runtime)', async () => {
