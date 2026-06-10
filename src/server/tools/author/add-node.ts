@@ -111,7 +111,13 @@ export const addNodeTool: Tool<Input, Output> = {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
 
-        // Validate passthrough against per-type schema if registered.
+        // Validate passthrough against per-type schema if registered. When
+        // the caller omits passthrough entirely, ATTEMPT parse({}) so the
+        // schema's runtime-required defaults (inject.repeat, complete.scope,
+        // link links arrays, …) materialize — agents shouldn't need to know
+        // them. Schemas with required fields and no defaults (e.g. change's
+        // rules) simply skip materialization; omitting passthrough is never
+        // an error.
         const schema = getNodeSchema(input.type);
         const typeHadSchema = schema !== undefined;
         let validatedPassthrough: Record<string, unknown> | undefined = input.opts?.passthrough;
@@ -127,6 +133,9 @@ export const addNodeTool: Tool<Input, Output> = {
             );
           }
           validatedPassthrough = parseResult.data as Record<string, unknown>;
+        } else if (schema !== undefined) {
+          const empty = schema.safeParse({});
+          if (empty.success) validatedPassthrough = empty.data as Record<string, unknown>;
         }
 
         let sourceKey: string | undefined;

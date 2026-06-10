@@ -92,8 +92,12 @@ const TemplatePassthrough = z
 
 const DelayPassthrough = z
   .object({
+    // 'burst' added in Node-RED 5.0.0-beta.2 (PR #5391): burst size = `rate`,
+    // window = `nbRateUnits` × `rateUnits`, excess dropped (or 2nd output with
+    // drop-select "emit"); `allowrate` is ignored in burst mode. Gated by the
+    // `delayBurstMode` capability at runtime.
     pauseType: z
-      .enum(['delay', 'random', 'rate', 'queue', 'timed', 'delayv', 'randomFirst'])
+      .enum(['delay', 'random', 'rate', 'queue', 'timed', 'delayv', 'randomFirst', 'burst'])
       .default('delay'),
     timeout: z.number().nonnegative().optional(),
     timeoutUnits: z.enum(['milliseconds', 'seconds', 'minutes', 'hours', 'days']).optional(),
@@ -241,6 +245,124 @@ const CommentPassthrough = z
   })
   .passthrough();
 
+// === Common-node schemas (eval campaign 2026-06-10, finding #11) ===
+// These types previously had NO passthrough validation anywhere — the
+// specialist tools accept z.record(z.unknown()) verbatim. The defaults below
+// encode runtime requirements the showcase documented the hard way (inject
+// needs `repeat` present even when empty; `complete` needs a scope array;
+// link nodes need `links`). All fields are optional-with-defaults and the
+// schemas are .passthrough(), so any valid existing config still parses.
+
+const InjectPassthrough = z
+  .object({
+    props: z
+      .array(
+        z
+          .object({ p: z.string(), v: z.string().optional(), vt: z.string().optional() })
+          .passthrough(),
+      )
+      .default([]),
+    repeat: z.string().default(''),
+    crontab: z.string().default(''),
+    once: z.boolean().default(false),
+    onceDelay: z.union([z.number(), z.string()]).default(0.1),
+    topic: z.string().default(''),
+    payload: z.string().default(''),
+    payloadType: z.string().default('date'),
+  })
+  .passthrough();
+
+const DebugPassthrough = z
+  .object({
+    active: z.boolean().default(true),
+    tosidebar: z.boolean().default(true),
+    console: z.boolean().default(false),
+    tostatus: z.boolean().default(false),
+    complete: z.union([z.string(), z.boolean()]).default('payload'),
+    targetType: z.enum(['msg', 'full', 'jsonata']).default('msg'),
+    statusVal: z.string().default(''),
+    statusType: z.string().default('auto'),
+  })
+  .passthrough();
+
+const FunctionPassthrough = z
+  .object({
+    func: z.string().default('\nreturn msg;'),
+    outputs: z.number().int().nonnegative().default(1),
+    timeout: z.union([z.number(), z.string()]).optional(),
+    noerr: z.number().default(0),
+    initialize: z.string().default(''),
+    finalize: z.string().default(''),
+    libs: z.array(z.object({ var: z.string(), module: z.string() }).passthrough()).default([]),
+  })
+  .passthrough();
+
+const MqttInPassthrough = z
+  .object({
+    topic: z.string().default(''),
+    qos: z.enum(['0', '1', '2']).default('2'),
+    datatype: z.string().default('auto-detect'),
+    /** mqtt-broker config-node id. NOT auto-created by add_node — the agent
+     *  must add the broker config node and reference it here. */
+    broker: z.string().optional(),
+  })
+  .passthrough();
+
+const MqttOutPassthrough = z
+  .object({
+    topic: z.string().default(''),
+    qos: z.enum(['', '0', '1', '2']).default(''),
+    retain: z.union([z.boolean(), z.string()]).default(''),
+    /** mqtt-broker config-node id — see MqttInPassthrough.broker. */
+    broker: z.string().optional(),
+  })
+  .passthrough();
+
+const LinkInPassthrough = z
+  .object({
+    links: z.array(z.string()).default([]),
+  })
+  .passthrough();
+
+const LinkOutPassthrough = z
+  .object({
+    links: z.array(z.string()).default([]),
+    mode: z.enum(['link', 'return']).default('link'),
+  })
+  .passthrough();
+
+const LinkCallPassthrough = z
+  .object({
+    links: z.array(z.string()).default([]),
+    /** 'dynamic' requires links: [] (target supplied via msg.target);
+     *  'static' targets are paired via set_links. */
+    linkType: z.enum(['static', 'dynamic']).default('static'),
+    timeout: z.union([z.number(), z.string()]).default('30'),
+  })
+  .passthrough();
+
+const CatchPassthrough = z
+  .object({
+    scope: z.union([z.null(), z.array(z.string())]).default(null),
+    uncaught: z.boolean().default(false),
+  })
+  .passthrough();
+
+const StatusPassthrough = z
+  .object({
+    scope: z.union([z.null(), z.array(z.string())]).default(null),
+  })
+  .passthrough();
+
+const CompletePassthrough = z
+  .object({
+    /** The runtime requires a scope array of real node ids; an empty array
+     *  parses but the node monitors nothing until ids are added. */
+    scope: z.array(z.string()).default([]),
+    uncaught: z.boolean().default(false),
+  })
+  .passthrough();
+
 // === Registry ===
 
 export const NODE_SCHEMAS: Readonly<Record<string, z.ZodTypeAny>> = Object.freeze({
@@ -259,6 +381,17 @@ export const NODE_SCHEMAS: Readonly<Record<string, z.ZodTypeAny>> = Object.freez
   file: FilePassthrough,
   exec: ExecPassthrough,
   comment: CommentPassthrough,
+  inject: InjectPassthrough,
+  debug: DebugPassthrough,
+  function: FunctionPassthrough,
+  'mqtt in': MqttInPassthrough,
+  'mqtt out': MqttOutPassthrough,
+  'link in': LinkInPassthrough,
+  'link out': LinkOutPassthrough,
+  'link call': LinkCallPassthrough,
+  catch: CatchPassthrough,
+  status: StatusPassthrough,
+  complete: CompletePassthrough,
 });
 
 export function getNodeSchema(type: string): z.ZodTypeAny | undefined {

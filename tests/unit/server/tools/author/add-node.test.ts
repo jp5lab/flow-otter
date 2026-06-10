@@ -170,6 +170,60 @@ describe('add_node tool', () => {
     expect(result.added_wire).toBeUndefined();
   });
 
+  it('materializes runtime-required defaults when passthrough is omitted (inject)', async () => {
+    const result = (await addNodeTool.handler(
+      { tab_id: TAB_ID, type: 'inject', opts: { label: 'tick' } },
+      ctx,
+    )) as { ok: boolean; type_had_schema: boolean; added_node_id?: string };
+    expect(result.ok).toBe(true);
+    expect(result.type_had_schema).toBe(true);
+    const staged = await ctx.staging.read();
+    const node = staged?.flows.find((n) => n.id === result.added_node_id) as
+      | Record<string, unknown>
+      | undefined;
+    // inject is non-functional without `repeat`; the default must materialize it.
+    expect(node?.['repeat']).toBe('');
+    expect(node?.['payloadType']).toBe('date');
+  });
+
+  it('does NOT throw when passthrough is omitted for a schema with required fields (change)', async () => {
+    // change.rules is required with no default → safeParse({}) fails, so no
+    // defaults materialize, but omitting passthrough must NEVER error.
+    const result = (await addNodeTool.handler(
+      { tab_id: TAB_ID, type: 'change', opts: { label: 'shape' } },
+      ctx,
+    )) as { ok: boolean; type_had_schema: boolean; added_node_id?: string };
+    expect(result.ok).toBe(true);
+    expect(result.type_had_schema).toBe(true);
+    const staged = await ctx.staging.read();
+    const node = staged?.flows.find((n) => n.id === result.added_node_id) as
+      | Record<string, unknown>
+      | undefined;
+    // No bogus `rules` invented.
+    expect(node?.['rules']).toBeUndefined();
+  });
+
+  it('stages a delay node with Node-RED 5.0 burst mode', async () => {
+    const result = (await addNodeTool.handler(
+      {
+        tab_id: TAB_ID,
+        type: 'delay',
+        opts: {
+          label: 'burst',
+          passthrough: { pauseType: 'burst', rate: 10, nbRateUnits: 1, rateUnits: 'second' },
+        },
+      },
+      ctx,
+    )) as { ok: boolean; type_had_schema: boolean; added_node_id?: string };
+    expect(result.ok).toBe(true);
+    expect(result.type_had_schema).toBe(true);
+    const staged = await ctx.staging.read();
+    const node = staged?.flows.find((n) => n.id === result.added_node_id) as
+      | Record<string, unknown>
+      | undefined;
+    expect(node?.['pauseType']).toBe('burst');
+  });
+
   it('is registered as an author-tier tool', () => {
     expect(addNodeTool.tier).toBe('author');
   });
