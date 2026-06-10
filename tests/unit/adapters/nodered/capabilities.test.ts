@@ -84,7 +84,47 @@ describe('resolveCapabilities', () => {
     const c = resolveCapabilities('5.0.0-beta.6');
     expect(c.functionLinkCall).toBe(true);
     expect(c.subflowPerInstanceConfig).toBe(true);
-    expect(c.adminCorsDefault).toBe(false); // removed in 5.0
+    expect(c.adminCorsDefault).toBe(false); // removed in beta.6 (#5652)
+    expect(c.oauthCodeExchange).toBe(true); // #5657 shipped in beta.6
+    expect(c.httpRequestSni).toBe(true); // #5667 shipped in beta.6
+    expect(c.esmNodeModules).toBe(false); // GA only (#4355 merged post-beta.6)
+  });
+
+  it('classifies Node-RED 5.0.0-beta.5 correctly (pre-beta.6 boundary)', () => {
+    const c = resolveCapabilities('5.0.0-beta.5');
+    expect(c.functionLinkCall).toBe(false); // #5494 first shipped in beta.6
+    expect(c.adminCorsDefault).toBe(true); // default CORS still applied through beta.5
+    expect(c.oauthCodeExchange).toBe(false);
+    expect(c.delayBurstMode).toBe(true); // beta.2+
+    expect(c.tlsEnvVars).toBe(true); // beta.2+
+    expect(c.credsAlongsideFlows).toBe(true); // beta.3+
+  });
+
+  it('classifies the beta.1/beta.2 boundary correctly', () => {
+    const b1 = resolveCapabilities('5.0.0-beta.1');
+    expect(b1.tlsPfx).toBe(true); // #4907 in from the first beta
+    expect(b1.delayBurstMode).toBe(false); // #5391 first in beta.2
+    expect(b1.tlsEnvVars).toBe(false); // #5376 first in beta.2
+    expect(b1.credsAlongsideFlows).toBe(false); // #4951 first in beta.3
+    const b2 = resolveCapabilities('5.0.0-beta.2');
+    expect(b2.delayBurstMode).toBe(true);
+    expect(b2.tlsEnvVars).toBe(true);
+  });
+
+  it('classifies Node-RED 5.0.0 GA correctly', () => {
+    const c = resolveCapabilities('5.0.0');
+    expect(c.functionLinkCall).toBe(true);
+    expect(c.adminCorsDefault).toBe(false);
+    expect(c.delayBurstMode).toBe(true);
+    expect(c.esmNodeModules).toBe(true); // GA gets ESM node modules
+    expect(c.markdownGhAlerts).toBe(true);
+    expect(c.nodeDefaultsOverride).toBe(true);
+  });
+
+  it('classifies the 4.1.9 nodeDefaults boundary correctly', () => {
+    expect(resolveCapabilities('4.1.9').nodeDefaultsOverride).toBe(true); // #5591 shipped in 4.1.9
+    expect(resolveCapabilities('4.1.8').nodeDefaultsOverride).toBe(false);
+    expect(resolveCapabilities('4.1.8').esmNodeModules).toBe(false);
   });
 
   it('classifies Node-RED 4.0.0 correctly', () => {
@@ -134,6 +174,15 @@ describe('matrix coverage', () => {
     'functionNodePrefixModules',
     'globalFunctionTimeout',
     'adminCorsDefault',
+    'delayBurstMode',
+    'tlsPfx',
+    'tlsEnvVars',
+    'credsAlongsideFlows',
+    'oauthCodeExchange',
+    'httpRequestSni',
+    'esmNodeModules',
+    'nodeDefaultsOverride',
+    'markdownGhAlerts',
   ];
 
   it('all capabilities have a requirement string', () => {

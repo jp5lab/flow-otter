@@ -22,7 +22,7 @@ export type Capability =
   /** Link Call node + return-mode link out. Added in 3.1. */
   | 'linkCallNode'
   /** Function node `node.linkcall(target, msg, opts)` runtime API.
-   *  Added in 5.0 (PR #5494). */
+   *  Added in 5.0 (PR #5494, first shipped in 5.0.0-beta.6). */
   | 'functionLinkCall'
   /** Per-instance config-node selection inside subflow instances.
    *  Added in 4.0 — major Node-RED 4.0 feature. */
@@ -37,9 +37,36 @@ export type Capability =
   /** `functionGlobalContext.functionTimeout` / `globalFunctionTimeout`.
    *  Added in 4.1. */
   | 'globalFunctionTimeout'
-  /** Default `httpAdminCors` rules are present. REMOVED in 5.0 (PR #5652) —
-   *  cross-origin admin clients must configure CORS explicitly thereafter. */
-  | 'adminCorsDefault';
+  /** Default `httpAdminCors` rules are present. REMOVED in 5.0 (PR #5652,
+   *  first shipped in 5.0.0-beta.6) — cross-origin admin clients must
+   *  configure CORS explicitly thereafter. */
+  | 'adminCorsDefault'
+  /** Delay node `pauseType: "burst"` mode (PR #5391, 5.0.0-beta.2). */
+  | 'delayBurstMode'
+  /** tls-config PKCS#12 bundles: `certType:"pfx"`, `p12`/`p12name` fields +
+   *  `p12data` credential (PR #4907, in from the first 5.0 beta). */
+  | 'tlsPfx'
+  /** tls-config cert/key/CA from env vars: `certType:"env"`,
+   *  `certEnv`/`keyEnv`/`caEnv` (PR #5376, 5.0.0-beta.2). */
+  | 'tlsEnvVars'
+  /** Credentials file created alongside an out-of-userDir flows file
+   *  (PR #4951, 5.0.0-beta.3). Affects file-mode credential lookup. */
+  | 'credsAlongsideFlows'
+  /** OAuth/strategy logins use exchange codes: `POST /auth/token {code}`
+   *  endpoint exists (PR #5657, 5.0.0-beta.6). Password grant unchanged. */
+  | 'oauthCodeExchange'
+  /** http-request honors tls-config `servername` for SNI (got 14,
+   *  PR #5667, 5.0.0-beta.6). */
+  | 'httpRequestSni'
+  /** ESM node modules installable/loadable (PR #4355, 5.0.0 GA only —
+   *  merged after beta.6). */
+  | 'esmNodeModules'
+  /** settings.js `nodeDefaults` per-type editor-default overrides, echoed
+   *  in GET /settings (PR #5591, shipped in 4.1.9 — NOT a 5.0 feature). */
+  | 'nodeDefaultsOverride'
+  /** GitHub-style markdown alerts ([!NOTE] etc.) render in node/flow info
+   *  (PR #5733; gate at GA to be safe). */
+  | 'markdownGhAlerts';
 
 interface SemVer {
   readonly major: number;
@@ -58,16 +85,29 @@ const REQUIREMENTS: Record<Capability, string> = {
   junctions: '>=3.0.0',
   runtimeStateApi: '>=2.0.0',
   linkCallNode: '>=3.1.0',
-  functionLinkCall: '>=5.0.0-0',
+  // PR #5494 merged 2026-04-30 and first shipped in 5.0.0-beta.6;
+  // betas 0-5 do NOT have node.linkcall.
+  functionLinkCall: '>=5.0.0-beta.6',
   subflowPerInstanceConfig: '>=4.0.0',
   isoTimestampInject: '>=4.0.0',
   jsonata2: '>=4.0.0',
   functionNodePrefixModules: '>=4.1.0',
   globalFunctionTimeout: '>=4.1.0',
-  // Pre-5.x line, including any 5.x prerelease (the CORS-default removal
-  // landed early in the 5.0 beta cycle). Use `<5.0.0-0` so 5.0.0-beta.N is
-  // classified as "no default CORS rules" alongside the stable 5.0.0.
-  adminCorsDefault: '<5.0.0-0',
+  // The CORS-default removal (PR #5652) first shipped in 5.0.0-beta.6 —
+  // betas 0-5 still applied the default rules.
+  adminCorsDefault: '<5.0.0-beta.6',
+  delayBurstMode: '>=5.0.0-beta.2',
+  tlsPfx: '>=5.0.0-0',
+  tlsEnvVars: '>=5.0.0-beta.2',
+  credsAlongsideFlows: '>=5.0.0-beta.3',
+  oauthCodeExchange: '>=5.0.0-beta.6',
+  httpRequestSni: '>=5.0.0-beta.6',
+  // Merged after beta.6 — GA only. The comparator's prerelease precedence
+  // makes 5.0.0-beta.N NOT satisfy >=5.0.0, which is exactly right here.
+  esmNodeModules: '>=5.0.0',
+  // Shipped in 4.1.9 (PR #5591), not 5.0.
+  nodeDefaultsOverride: '>=4.1.9',
+  markdownGhAlerts: '>=5.0.0',
 };
 
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
