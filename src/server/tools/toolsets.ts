@@ -113,6 +113,7 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
       'set_links',
       'remove_node',
       'update_node',
+      'discard_staged_change',
       'move_node',
       'create_subflow_definition',
       'instantiate_template',

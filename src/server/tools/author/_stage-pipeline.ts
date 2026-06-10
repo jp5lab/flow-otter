@@ -7,7 +7,7 @@ import { diffFlows, summarizeDiff } from '../../../toolkit/diff/semantic.js';
 import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
 import { runValidators } from '../../../toolkit/validate/index.js';
 import { enforceMaxFlowSize, enforceNodeTypePolicy } from '../../policy/flow-policy.js';
-import { ValidationFailedError, type ToolContext } from '../_tool.js';
+import { ToolBlockedError, ValidationFailedError, type ToolContext } from '../_tool.js';
 
 export interface AuthorOpInput {
   /** Tool name — used in the audit `reason` and error messages. */
@@ -66,6 +66,21 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   op: (priorSpec: AuthoringSpec, priorFlows: FlowsJson) => AuthorOpResult<TExtras>,
   buildOutput: (base: StageBase, extras: TExtras) => TOutput,
 ): Promise<TOutput> {
+  // Each op stages against the RUNTIME, so staging over an undeployed change
+  // would silently discard it (verified live in the 2026-06-10 eval campaign).
+  // Refuse instead — the agent must deploy or discard the pending stage first.
+  const pending = await ctx.staging.read();
+  if (pending !== null) {
+    const otherAgent =
+      pending.agent_id !== undefined && pending.agent_id !== ctx.agentId
+        ? ` by a DIFFERENT agent process ('${pending.agent_id}')`
+        : '';
+    throw new ToolBlockedError(
+      `A staged change is already pending deploy (reason '${pending.reason}', staged_hash ${pending.stagedHash.slice(0, 12)}…, staged at ${pending.stagedAt}${otherAgent}). ` +
+        `Staging '${input.toolName}' now would silently discard it. Deploy it first (deploy_staged_change) or discard it (discard_staged_change).`,
+    );
+  }
+
   const { flows: priorFlows, rev: priorRev } = await ctx.flowSource.load();
   const priorHash = canonicalHash(priorFlows);
 
@@ -100,6 +115,9 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   // Surface compile-time authoring losses (unresolved wires / group refs /
   // group members / widget anchors) so agents see them in the stage output
   // and can fix the spec instead of discovering missing wires post-deploy.
+  // The validator and lint rule sets overlap (e.g. on-grid) — dedup identical
+  // diagnostics so the agent doesn't see the same finding twice.
+  const seenDiagnostics = new Set<string>();
   const diagnostics = [
     ...compiled.diagnostics.map((d) => ({
       severity: d.severity,
@@ -111,7 +129,12 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
     })),
     ...validateReport.diagnostics,
     ...lintReport.diagnostics,
-  ];
+  ].filter((d) => {
+    const key = `${d.severity}|${d.rule}|${d.nodeId ?? ''}|${d.tabId ?? ''}|${d.message}`;
+    if (seenDiagnostics.has(key)) return false;
+    seenDiagnostics.add(key);
+    return true;
+  });
 
   const diff = diffFlows(priorFlows, compiled.flows);
   const diffSummary = summarizeDiff(diff);

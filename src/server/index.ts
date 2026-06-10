@@ -16,6 +16,7 @@ import { addNodeTool } from './tools/author/add-node.js';
 import { addStatusNodeTool } from './tools/author/add-status-node.js';
 import { addSubflowInstanceTool } from './tools/author/add-subflow-instance.js';
 import { createSubflowDefinitionTool } from './tools/author/create-subflow-definition.js';
+import { discardStagedChangeTool } from './tools/author/discard-staged-change.js';
 import { instantiateTemplateTool } from './tools/author/instantiate-template.js';
 import { moveNodeTool } from './tools/author/move-node.js';
 import { planFlowTool } from './tools/author/plan-flow.js';
@@ -89,7 +90,7 @@ export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for 
 - Stage is independent → new tab
 
 3. STRUCTURE → WIRE → LAYOUT:
-- Add nodes (no wires), then wire_nodes/set_wires. Pass engine:'elk' to layout helpers when ≥30 nodes, groups present, or any node has ≥4 outputs.
+- Add nodes (no wires), then wire_nodes/set_wires. Layout is explicit: set positions, group geometry, and move_node as needed; render_flow_svg for review.
 
 4. REVIEW → VALIDATE → DEPLOY:
 - render_flow_svg, show user, validate_flow must pass, preview_flow_diff before deploy_staged_change. Never deploy without explicit user confirmation.
@@ -157,6 +158,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   updateNodeTool as unknown as Tool<unknown, unknown>,
   moveNodeTool as unknown as Tool<unknown, unknown>,
   createSubflowDefinitionTool as unknown as Tool<unknown, unknown>,
+  discardStagedChangeTool as unknown as Tool<unknown, unknown>,
   instantiateTemplateTool as unknown as Tool<unknown, unknown>,
   planFlowTool as unknown as Tool<unknown, unknown>,
   deployStagedChangeTool as unknown as Tool<unknown, unknown>,
