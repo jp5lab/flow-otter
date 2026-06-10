@@ -82,7 +82,7 @@ FlowOtter is an MCP server for authoring Node-RED flows (4.0+). It produces flow
 - Stage is independent → new tab
 
 3. STRUCTURE → WIRE → LAYOUT:
-- Add nodes first (no wires), then `wire_nodes`/`set_wires`. Pass `engine:'elk'` to layout helpers when ≥30 nodes, groups present, or any node has ≥4 outputs.
+- Add nodes first (no wires), then `wire_nodes`/`set_wires`. Layout is currently explicit: set node positions, group geometry, and use `move_node`; render SVG before deploying. No MCP `layout_flow` tool is exposed yet.
 
 4. REVIEW → VALIDATE → DEPLOY:
 - `render_flow_svg` and show the user before deploy.
@@ -287,7 +287,7 @@ export const getAuthoringGuideTool: Tool<...> = {
 
 ### Catalog content (initial seed — verifiable against research)
 
-The catalog data ships as TypeScript literals so it's typed, source-controllable, and lints. The seed values are derived from the research agents' inventories (Node-RED docs, Dashboard 2.0 docs, FlowOtter codebase inventory, ISA-101 reference memory).
+The catalog data ships as TypeScript literals so it's typed, source-controllable, and lints. The seed values are derived from the research agents' inventories (Node-RED docs, Dashboard 2.0 docs, FlowOtter codebase inventory, ISA-101 reference notes).
 
 **`node_red_concepts`** (10 entries):
 
@@ -541,7 +541,7 @@ The handler:
 
 1. Validates input.
 2. Computes `total_estimated_nodes` (sum of stage estimates).
-3. Picks `layout_strategy` by heuristic — if `total_estimated_nodes >= 30` OR any stage uses subflow/group → `elk_layered`; else `dagre_auto`.
+3. Picks `layout_strategy`. Implementation correction: this returns `manual` until a real MCP `layout_flow` tool exists. The toolkit-level dagre/ELK helpers remain internal.
 4. Generates `next_actions` from the stages: e.g., `["create_subflow_definition for stage 'data_validation'", "add_node ... for stage 'ingestion'", ...]`.
 5. Writes the plan to `~/.flow-otter/<env>/staging/plan.json` (alongside `staged.json`).
 6. Returns the structured plan.
@@ -941,7 +941,7 @@ For each call site, the elicitation request and the fallback behavior are item-s
 
 ### Rationale
 
-FlowOtter uses `dagre` 0.8.5 (abandoned 2019). The maintained replacement is `@dagrejs/dagre@3` (TS-native, March 2026 v3 ship). For 30+ node flows or any with groups/multi-output nodes, dagre struggles — port-aware and group-aware ELK (`elkjs`) is the answer, but as opt-in with auto-selection, not as default replacement.
+FlowOtter uses `dagre` 0.8.5 (abandoned 2019). The maintained replacement is `@dagrejs/dagre@3` (TS-native, March 2026 v3 ship). For 30+ node flows or any with groups/multi-output nodes, dagre struggles. ELK (`elkjs`) is the likely path once groups and ports are modeled explicitly, but the current MCP workflow stays manual/agent-guided.
 
 ### Scope
 
@@ -950,10 +950,10 @@ In:
 - Bump `dagre` (`0.8.5`) → `@dagrejs/dagre` (`^3`). Drop `@types/dagre` (now native).
 - Add `elkjs` dep with FakeWorker shim for Node 22+/Bun env-detection issue.
 - New `src/toolkit/layout/elk.ts` mirroring `dagre.ts` shape.
-- Auto-engine selection: ELK when `nodes >= 30` OR groups present OR any node has `outputs >= 4`. Otherwise dagre.
-- Engine override via `engine: 'auto' | 'dagre' | 'elk'` parameter to `layoutFlows`.
-- ELK config: pinned to ensure determinism (algorithm=layered, randomSeed=1, considerModelOrder, hierarchyHandling=INCLUDE_CHILDREN for groups, portConstraints=FIXED_SIDE).
-- ELK + post-processing: grid snap, bounds clamp, group containment QA (push-children-into-bounds if ELK violates).
+- Auto-engine selection inside the toolkit: ELK when `nodes >= 30` OR groups present OR any node has `outputs >= 4`. Otherwise dagre.
+- Engine override via `engine: 'auto' | 'dagre' | 'elk'` parameter to internal `layoutFlows`.
+- ELK config: pinned to ensure determinism (algorithm=layered, randomSeed=1, considerModelOrder). Implementation correction: groups are not yet modeled as ELK compound nodes.
+- ELK + post-processing: grid snap and bounds clamp. Group containment and port-aware layout remain future work.
 
 Out: full ELK feature parity (we use a focused subset); migration of existing snapshots' coordinates (rely on Node-RED to re-render on import).
 
@@ -1032,7 +1032,7 @@ Post-process: grid-snap (20px), clamp to bounds, group QA (if a group's children
 
 ### Tests
 
-- `tests/unit/toolkit/layout/elk.test.ts`: small flow → ELK output; grouped flow → group containment QA verified.
+- `tests/unit/toolkit/layout/elk.test.ts`: small flow → ELK output; deterministic coordinates. Group-aware containment remains future work until groups are modeled as compound ELK nodes.
 - `tests/unit/toolkit/layout/auto-engine.test.ts`: heuristic triggers ELK for the right shapes.
 - `tests/unit/toolkit/layout/determinism.test.ts`: ELK with `randomSeed=1` is byte-stable across runs.
 - Snapshot tests for representative golden layouts.
@@ -1269,9 +1269,9 @@ MCP prompts surface to users as `/mcp__<server>__<prompt>` slash commands. They'
 
 In: 5 MCP prompts that wrap common authoring workflows:
 
-1. **`new_flow`** — params: `goal`, `template?`. Body cues the agent through `plan_flow` → instantiate (if template) or scaffold from scratch → wire → layout → preview → user-confirm via elicitation.
+1. **`new_flow`** — params: `goal`, `template?`. Body cues the agent through `plan_flow` → instantiate (if template) or scaffold from scratch → wire → explicit layout/refinement → preview → user-confirm via elicitation.
 2. **`build_operator_dashboard`** — params: `dashboard_type` (`overview|detail|trend|command|alarms`), `title`. Body chains: `instantiate_template` → `add_dashboard_widget` calls per spec → preview → confirm.
-3. **`refactor_to_subflow`** — params: `tab_id`, `node_ids[]`. Body cues: `create_subflow_definition` from the selected nodes → replace with `add_subflow_instance` → re-layout → preview.
+3. **`refactor_to_subflow`** — params: `tab_id`, `node_ids[]`. Body cues: `create_subflow_definition` from the selected nodes → replace with `add_subflow_instance` → refine positions → preview.
 4. **`explain_my_flow`** — params: `tab_id?`. Body cues: `explain_flow` + `render_flow_svg` + summary.
 5. **`review_my_flow`** — params: `tab_id?`. Body cues: `analyze_flow` + `validate_flow` + `render_flow_svg` + structured assessment.
 
@@ -1315,7 +1315,7 @@ Follow the FlowOtter methodology:
 2. ${template ? `Call instantiate_template('${template}') for a starting scaffold.` : 'Begin with an empty flow.'}
 3. For each stage, add nodes (use add_node with type:'inject' etc., or specialists from author_specialists toolset if needed).
 4. Wire stages together with wire_nodes or set_wires.
-5. The layout helper picks dagre or ELK automatically based on flow size.
+5. Refine layout explicitly with node positions, move_node, and add_group geometry.
 6. Render with render_flow_svg and show me the result.
 7. If I confirm, call preview_flow_diff, then deploy_staged_change (which will elicit final confirmation).
 ```
@@ -1422,4 +1422,4 @@ After every item is `DONE`:
 - **Soft-nudge** — Response-side advisory message attached to tool outputs when the agent appears to be skipping methodology. Not enforcement.
 - **Capability matrix** — Mapping of Node-RED features → version requirements, used to gate version-specific tool behavior.
 - **ISA-101** — Industrial Society of Automation standard for operator HMIs; informs the design-principle validators.
-- **Anchor decisions** — The four high-level architecture decisions logged in `~/.claude/projects/.../memory/project_flowotter_redesign_decisions.md`.
+- **Anchor decisions** — The four high-level architecture decisions recorded in the maintainer's local design notes.

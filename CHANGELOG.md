@@ -96,6 +96,49 @@ Per Decision 1 of REDESIGN_PLAN.md, generic add_node handles every case; special
 - `npm run build`: clean.
 - New deps: `@dagrejs/dagre@^3`, `elkjs@^0.11`. Removed: `dagre@0.8.5`, `@types/dagre`.
 
+## Unreleased — Eval-driven hardening + Node-RED 5.0 GA support
+
+Driven by the first full evaluation campaign (real MCP stdio sessions against live Node-RED 4.1.11 and 5.0.0 stacks; see docs/EVALUATION.md). Every item below traces to an empirically observed failure.
+
+### Safety
+
+- **`deploy_staged_change` consent split** — new `confirm:true` flag records explicit user consent for clients without elicitation support, with the drift check FULLY ACTIVE. Previously those clients had to pass `force:true`, which also waived drift protection — the eval demonstrated a forced deploy silently overwriting a concurrent out-of-band edit. `force:true` remains the explicit drift override (implies consent). Drift refusals now name the remediation (`discard_staged_change` + re-stage, or `force`).
+- **Stage-overwrite refusal** — author tools refuse to stage over an undeployed staged change instead of silently discarding it (the eval lost a staged node to this footgun with zero warning). New `discard_staged_change` tool (author tier) is the explicit escape hatch, with the same cross-agent `force_takeover` guard as deploy.
+
+### Authoring correctness
+
+- **Group geometry auto-fit** — groups authored without explicit `position`/`size` now compile to a deterministic, grid-snapped bounding box computed from their members. Authored groups also receive the Node-RED editor's default visible style (`stroke:#a4a4a4`) when none is supplied — a group with no style (or the `style:null` Node-RED normalizes it to) renders an INVISIBLE box, so the group was structurally present but unseeable by reviewers; the renderer fix was confirmed live in the editor. `decompile` strips the default so re-staging stays idempotent. Node-RED does NOT auto-fit dimension-less groups on import (verified live: the runtime stores null geometry and the editor renders nothing — the eval's group was invisible in both the editor and `render_flow_svg`). Explicit geometry is preserved verbatim; groups with no positioned members keep the legacy omit behavior.
+- **11 new per-type passthrough schemas** — inject, debug, function, mqtt in/out, link in/out/call, catch, status, complete. These common types previously had NO validation on any path (the specialist tools accept passthrough verbatim — contrary to what the docs claimed). Registered in the generic `add_node` registry; when `passthrough` is omitted and defaults satisfy the schema, runtime-required defaults (inject `repeat`, complete `scope`, link `links`) materialize automatically.
+- **Diagnostics dedup** — staged-op responses no longer repeat identical validator/lint findings.
+
+### Node-RED 5.0 GA (released 2026-06-09)
+
+- **Capability matrix corrections** — `functionLinkCall` and `adminCorsDefault` both gate on `5.0.0-beta.6` (the betas where PR #5494 / #5652 actually shipped; previous ranges misclassified beta.1–beta.5).
+- **9 new capabilities** — `delayBurstMode` (≥5.0.0-beta.2), `tlsPfx`, `tlsEnvVars`, `credsAlongsideFlows`, `oauthCodeExchange`, `httpRequestSni`, `esmNodeModules` (GA-only), `nodeDefaultsOverride` (≥4.1.9 — a 4.1 feature commonly misattributed to 5.0), `markdownGhAlerts`.
+- **Delay `pauseType: 'burst'`** accepted by the delay schema — previously a valid 5.0 burst-mode flow failed FlowOtter validation (the only hard 5.0 break found).
+- **Support statement** — Node-RED 4.0 minimum / 4.1.x recommended / 5.0 GA supported. Verified empirically: the full author→deploy→validate loop and the integration suite run unchanged against 5.0.0. Password-grant/Bearer auth confirmed unaffected by 5.0's exchange-code change.
+- **Test stack bumped** `nodered/node-red:3.1` → `4.1` (3.1 was below the project's own documented minimum).
+
+### Test suite repairs (pre-existing breaks; 82/82 integration tests now pass on a clean checkout)
+
+- Integration rig now enables the `author_specialists` toolset (tests were never migrated when v1.3.0 moved specialists out of the default surface — 19 tests failed `Tool not in registry`).
+- Integration deploys pass `confirm:true` (the suite predated v1.3.0 elicitation; every deploy was blocked in a rig without an MCP client).
+- `agent-journey` / `multi-target-swap` state dirs moved from `os.tmpdir()` (outside `$HOME`, rejected by the v1.2 path policy on macOS) to `~/.flow-otter/integration-tmp/`.
+- `read-tools` re-seeds its fixture instead of trusting the global-setup seed to survive earlier test files' deploys.
+
+### Review & test hardening
+
+A 33-agent adversarial review (5 lenses → verify → synthesize) over this session's diff found 0 critical / 0 high; 15 confirmed (all medium/low/nit), 12 refuted. All confirmed findings fixed:
+
+- Docs: AGENT_QUICKSTART deploy-flag guidance corrected (confirm vs force), stage-pending + DriftError + group auto-fit/style notes added; README/TOOL_REFERENCE tool counts (~47 default-visible / 66 total) and test counts refreshed; `discard_staged_change` listed in README.
+- Tests: diagnostics-dedup; group auto-fit with junction/comment members and nested-group omit; `force:true` still bypasses drift (backward-compat); `add_node` default-materialization for a schema WITH defaults (inject) and one with required fields/no default (change must not throw); delay burst mode; plus a live integration round-trip proving the inject `repeat` default survives a real deploy.
+
+### Tooling
+
+- `npm run privacy:scan` (+ `:staged`, `:history`) — repo hygiene scanner for the public repo; generic patterns ship in-repo, personal patterns stay in `~/.flow-otter/privacy-patterns.txt` (never committed). See docs/EVALUATION.md.
+- `docs/EVALUATION.md` — scenario-driven evaluation playbook with phase gates; `eval-results/` is gitignored.
+- npm `files` no longer ships `docs/` (npm pack publishes the live worktree — untracked drafts under docs/ would publish silently).
+
 ## Unreleased — Dev-dep refresh: vitest 2 → 4, vite 5 → 8, esbuild 0.21 → 0.27
 
 Cleared the two open Dependabot advisories (esbuild dev-server CVE, vite `.map` path traversal) by bumping the test toolchain in lockstep. No production-dep changes; the published `dist/` tarball is unchanged. `npm audit` (with and without `--omit=dev`) now reports 0 vulnerabilities.

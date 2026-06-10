@@ -13,11 +13,11 @@ behavior comes from the configured flow source, not from hardcoded logic in the 
 - `validate/**` and `lint/**`: structural checks for wire targets, groups, links, subflows, dashboard hierarchy, naming contracts, function syntax, secret patterns, and ISA-101 operator-screen rules (`unbounded-chart-append`, `screen-clutter`, `saturated-color-outside-alarm`, `button-group-color-decoration`, `dashboard-2-destructive-needs-confirm`).
 - `diff/**`: semantic flow diffs for staged previews and audit summaries.
 - `snapshot/**` and `staging/**`: filesystem-backed snapshots, one pending staged change, plus the v1.3.0 `plan-record.ts` (records `plan_flow` output for soft-nudge consumption).
-- `layout/**` and `render/**`: deterministic layout and SVG previews. `layout/index.ts` is the engine dispatcher — picks `dagre` for small flows or `elkjs` when groups, multi-output nodes, or ≥30 nodes are present.
+- `layout/**` and `render/**`: deterministic internal layout helpers and SVG previews. `layout/index.ts` can dispatch to dagre/elkjs, but no MCP `layout_flow` tool is exposed yet; the supported agent workflow is explicit node/group positioning followed by `render_flow_svg` review.
 - `templates/**`: built-in template catalog (27 templates across `generic`/`dashboard`/`operator`/`pipeline` categories).
 - `catalog/**` (v1.3.0): the structured capability catalog returned by `get_authoring_guide` — Node-RED concepts, core node types, Dashboard 2.0 widgets, validators, ISA-101 design principles, methodology.
 
-Idempotency is enforced by property tests. A given `AuthoringSpec` must compile to byte-identical JSON across runs. Layout is also deterministic — ELK uses a pinned `randomSeed: 1` and `considerModelOrder: NODES_AND_EDGES`.
+Idempotency is enforced by property tests. A given `AuthoringSpec` must compile to byte-identical JSON across runs. Internal layout helpers are deterministic — ELK uses a pinned `randomSeed: 1` and `considerModelOrder: NODES_AND_EDGES` — but layout quality still requires visual review.
 
 ## Layer 2: MCP Server
 

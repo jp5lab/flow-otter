@@ -103,7 +103,7 @@ sizes = {
 };
 ```
 
-For light/dark mode, the lab pattern is two `ui-theme` nodes (one light, one dark) and a runtime switch via `ui-control`. Custom CSS goes through a `ui-template` with `templateScope = "site:style"` or `"page:style"`.
+For light/dark mode, a common pattern is two `ui-theme` nodes (one light, one dark) and a runtime switch via `ui-control`. Custom CSS goes through a `ui-template` with `templateScope = "site:style"` or `"page:style"`.
 
 ## 3. Widget Catalogue (1.30.2)
 
@@ -246,7 +246,7 @@ The existing template scheme (`BUILTIN_TEMPLATES` in `src/toolkit/templates/buil
 | ------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `dashboard_2_skeleton`                      | One `ui-base` + one `ui-page` + one `ui-theme` + one `ui-group`, no widgets                 | The "every project starts here" foundation.                                           |
 | `dashboard_2_status_panel` (rename current) | Skeleton + one `ui-text` reading `{{msg.payload}}`                                          | The existing template, fixed for 2.0 type strings.                                    |
-| `dashboard_2_telemetry_chart`               | Skeleton + one `ui-chart` (line, timescale x-axis)                                          | Most common visualization in lab dashboards.                                          |
+| `dashboard_2_telemetry_chart`               | Skeleton + one `ui-chart` (line, timescale x-axis)                                          | Most common visualization in telemetry dashboards.                                    |
 | `dashboard_2_command_panel`                 | Skeleton + `ui-button-group` + `ui-text` + `ui-notification`                                | Operator action surface (start/stop/abort). Common pattern for any control dashboard. |
 | `dashboard_2_form_input`                    | Skeleton + `ui-form` with 2-3 typed fields, wired into a `function` and `debug`             | Data-entry use case, e.g., session metadata.                                          |
 | `dashboard_2_gauge_grid`                    | Skeleton + 4x `ui-gauge` (V/I/P/E) in a 12-col group                                        | Standard EV-charging dashboard tile bank.                                             |

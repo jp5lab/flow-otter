@@ -1,6 +1,6 @@
 # Tool Reference
 
-Tool visibility depends on (a) tier flags and (b) **toolsets** (v1.3.0+). The default visible surface is ~52 tools; calling `enable_toolset('author_specialists')` reveals the 11 type-specific `add_*_node` conveniences (~63 total). Dangerous tools require both `ENABLE_DANGEROUS_TOOLS=true` AND the `dangerous` toolset (auto-enabled when the env flag is set, +7 tools).
+Tool visibility depends on (a) tier flags and (b) **toolsets** (v1.3.0+). The default visible surface is ~47 tools; calling `enable_toolset('author_specialists')` reveals the 11 type-specific `add_*_node` conveniences (66 tools total). Dangerous tools require both `ENABLE_DANGEROUS_TOOLS=true` AND the `dangerous` toolset (auto-enabled when the env flag is set, +7 tools).
 
 Each tool surfaces MCP-spec annotation hints (`readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`) on `tools/list` for client UIs (Claude Desktop, Cursor) to communicate intent.
 
@@ -58,11 +58,11 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 
 Author tools stage a change. They do not deploy.
 
-- `plan_flow` (v1.3.0+) — **methodology spine**. Takes `{goal, stages[]}` where each stage declares `{name, purpose, estimated_nodes, organization, organization_rationale}`. Returns `plan_id`, recommended layout strategy (auto-selects ELK when groups/subflows declared or total nodes ≥ 30), and ordered `next_actions[]` referencing real tool calls. Writes `~/.flow-otter/<env>/staging/plan.json` so soft-nudge guidance can detect "agent started authoring without planning."
-- `add_node` — **generic node-add**. Takes `{tab_id, type, opts:{passthrough?, source_node_id?, ...}}`. Validates passthrough against per-type Zod when registered; accepts arbitrary passthrough for unknown types with `type_had_schema:false` hint. **Preferred default** — handles every Node-RED core type AND the long tail of `node-red-contrib-*` packages (Modbus, InfluxDB, OPC UA, BACnet, S7, etc.) first-class. Use specialist tools from `author_specialists` only when type-specific schema validation matters.
+- `plan_flow` (v1.3.0+) — **methodology spine**. Takes `{goal, stages[]}` where each stage declares `{name, purpose, estimated_nodes, organization, organization_rationale}`. Returns `plan_id`, explicit visual-layout guidance (`layout_strategy: "manual"` until a real `layout_flow` tool exists), and ordered `next_actions[]` referencing real tool calls. Writes `~/.flow-otter/<env>/staging/plan.json` so soft-nudge guidance can detect "agent started authoring without planning."
+- `add_node` — **generic node-add**. Takes `{tab_id, type, opts:{passthrough?, source_node_id?, ...}}`. Validates passthrough against per-type Zod when registered (26 core types incl. inject/debug/function/mqtt/link/catch/status/complete); when `passthrough` is omitted and the schema's defaults satisfy it, runtime-required defaults (e.g. inject `repeat`, complete `scope`) are materialized automatically. Accepts arbitrary passthrough for unknown types with `type_had_schema:false` hint. **Preferred default** — handles every Node-RED core type AND the long tail of `node-red-contrib-*` packages (Modbus, InfluxDB, OPC UA, BACnet, S7, etc.) first-class. Use specialist tools from `author_specialists` only when type-specific schema validation matters.
 - `add_dashboard_widget` — **typed Dashboard 2.0 widget creation** for 24 widget types: inputs (`ui-dropdown`, `ui-radio-group`, `ui-slider`, `ui-switch`, `ui-text-input`, `ui-number-input`, `ui-file-input`, `ui-form`), displays (`ui-text`, `ui-markdown`, `ui-progress`, `ui-audio`), chart/table (`ui-chart`, `ui-table`, `ui-gauge`), interaction (`ui-button`, `ui-button-group`, `ui-template`, `ui-event`, `ui-link`), container/config (`ui-spacer`, `ui-control`, `ui-notification`, `ui-group-dialog`). Per-widget Zod validation; ISA-101 hooks (`confirm`, `confirmMessage`, `xAxisLimit`) are accepted and enforced by the ISA-101 validators. Anchor resolution per widget: most need `opts.group_key`; `ui-link`/`ui-control`/`ui-notification` use `opts.ui_key`; `ui-event` has no anchor; `ui-group-dialog` uses `opts.page_key`.
 - `add_subflow_instance`
-- `add_group`
+- `add_group` — creates a visual group on a tab. Supports `node_keys`, `position`, `size`, `parent_key`, `info`, and `style` so agents can sketch readable Node-RED sections before programming node internals.
 - `add_comment`
 - `wire_nodes`
 - `set_links` — cross-tab pairing for `link out` / `link call` nodes. Input: `{source_node_id, target_node_ids:[]}`. Writes `passthrough.links` on the source to peer `link in` Node-RED ids. Pass `target_node_ids:[]` to clear. Targets may live on any tab (that's the whole point). Validates source type (`link out` or `link call`), target types (`link in`), and that each target exists in the prior compiled flows.
@@ -72,6 +72,9 @@ Author tools stage a change. They do not deploy.
 - `move_node`
 - `create_subflow_definition`
 - `instantiate_template`
+- `discard_staged_change` — clears the pending staged change WITHOUT deploying. Author tools refuse to stage over an undeployed change (staging is single-slot; a second op would silently discard the first), so the loop is: stage → deploy (or discard) → stage. Optional `staged_hash` asserts which stage you're discarding; `force_takeover:true` discards a stage authored by a different agent process.
+
+**Single-slot staging contract:** every author tool stages exactly one change computed against the live runtime. If a stage is already pending, author tools refuse with a pointer to `deploy_staged_change` / `discard_staged_change` — nothing is ever silently overwritten.
 
 ### Author specialists (opt-in via `enable_toolset('author_specialists')`)
 
@@ -81,7 +84,7 @@ Typed conveniences for high-value core Node-RED patterns. Hidden by default — 
 
 ## Deploy Tools
 
-- `deploy_staged_change` — **elicits user confirmation via MCP before deploying** (v1.3.0+). When `force` is not true and the MCP client supports elicitation (Claude Code v2.1.76+), the tool sends a JSON-Schema confirm form naming the staged hash and target. Clients without elicitation support require explicit `force:true` to proceed — making "deploy without explicit confirmation" structurally impossible in production. Snapshots the runtime first, refuses drift unless `force:true`, retries on rev-mismatch, recovers from partial-deploy via post-hoc hash verification.
+- `deploy_staged_change` — **elicits user confirmation via MCP before deploying** (v1.3.0+). When the MCP client supports elicitation (Claude Code v2.1.76+), the tool sends a JSON-Schema confirm form naming the staged hash and target. Clients without elicitation support pass `confirm:true` after the user approves — **consent only; the drift check stays fully active**. `force:true` is the separate drift OVERRIDE (deploy even though the runtime changed since staging — overwrites concurrent edits; implies consent; prefer `confirm`). Consent and drift-override are deliberately distinct flags: an earlier design used `force` for both, which silently disabled drift protection for every scripted/SDK client (found by live evaluation 2026-06-10). Snapshots the runtime first, retries on rev-mismatch, recovers from partial-deploy via post-hoc hash verification.
 - `rollback_last_change`
 - `set_flows_state` — start/stop the Node-RED flow runtime via `POST /flows/state`. Requires `runtimeState.enabled = true` in Node-RED settings.js. Use stop → deploy → start for safe rollouts against hardware-controlling flows.
 

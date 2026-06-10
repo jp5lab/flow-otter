@@ -9,7 +9,7 @@ For flows of >10 nodes or operator dashboards, the v1.3.0 methodology layer expe
 ```
 PLAN: plan_flow (decompose the goal into stages, choose organization)
 ORGANIZE: decision tree — group vs subflow vs link node vs separate tab
-STRUCTURE → WIRE → LAYOUT: add nodes, then wire, then auto-layout
+STRUCTURE → WIRE → LAYOUT: add nodes, wire, then refine explicit positions/groups
 REVIEW → VALIDATE → DEPLOY: render_flow_svg + validate_flow + preview_flow_diff + deploy_staged_change (elicits confirmation)
 ```
 
@@ -40,7 +40,7 @@ Call `list_available_toolsets` to see which toolsets are currently visible. The 
 ```jsonc
 // tools/call set_target
 {
-  "base_url": "http://10.0.0.5:1880",
+  "base_url": "http://192.168.1.10:1880",
   "env_name": "lab",
   // "auth_token": "...",                  // optional Bearer
   // "username": "...", "password": "..."  // optional password grant
@@ -56,7 +56,7 @@ The server re-scopes snapshots / staging / audit to `~/.flow-otter/lab/`. By def
 { "tool": "list_flows" }                                       // tabs + authoring_key + node counts
 { "tool": "get_flow", "arguments": { "flow_id": "abc..." } }   // one tab's full content
 { "tool": "search_nodes", "arguments": { "query": "inject" } } // grep
-{ "tool": "render_flow_svg", "arguments": { "flow_id": "abc..." } }
+{ "tool": "render_flow_svg", "arguments": { "tab_id": "abc..." } }
 ```
 
 Each entry from `list_flows` exposes both `id` (the Node-RED tab ID) and `authoring_key` (the `_authoringKey` extension property if FlowOtter created the tab, else identical to `id`). Author tools' `tab_id` parameter accepts either form — pass whichever you have.
@@ -97,7 +97,7 @@ For substantial flows, plan first:
 }
 ```
 
-Returns `plan_id`, `layout_strategy` (auto-selects `elk_layered` when groups/subflows declared or ≥30 nodes), and ordered `next_actions[]` referencing real tool calls. Writes `plan.json` to staging.
+Returns `plan_id`, `layout_strategy` (currently `manual`), and ordered `next_actions[]` referencing real tool calls. Writes `plan.json` to staging. There is not yet an MCP `layout_flow` tool; set positions/group geometry explicitly and review with `render_flow_svg`.
 
 Then stage individual nodes:
 
@@ -132,7 +132,7 @@ Preview before committing:
 }
 ```
 
-`deploy_mode` options: `nodes` (default, minimal restart), `flows`, `full`, `reload`. The server **elicits user confirmation** via MCP before deploying (Claude Code v2.1.76+; falls back to requiring explicit `force:true` when the client doesn't support elicitation). It snapshots the runtime first, refuses on hash drift (unless `force:true`), retries on rev-mismatch, and recovers from partial-deploy via post-hoc hash verification.
+`deploy_mode` options: `nodes` (default, minimal restart), `flows`, `full`, `reload`. The server **elicits user confirmation** via MCP before deploying (Claude Code v2.1.76+). Clients without elicitation support pass `confirm: true` to record consent — **this keeps drift protection fully active**. `force: true` is a separate, stronger flag: it overrides the hash-drift check (deploying on top of concurrent changes) and implies consent — use it only when you intend to overwrite a drifted runtime, never as a routine consent shortcut. The server snapshots the runtime first, retries on rev-mismatch, and recovers from partial-deploy via post-hoc hash verification.
 
 ### 5. Observe (the v0.8.0 loop closer)
 
@@ -250,7 +250,8 @@ Empirical finding from real use:
 
 ## Common failure modes
 
-- **`DriftError` on deploy**: runtime changed since you staged. Re-stage against the new baseline, or pass `force:true`.
+- **`DriftError` on deploy**: runtime changed since you staged. Preferred: discard the stage (`discard_staged_change`) and re-stage against the new baseline. `confirm:true` does NOT bypass this (consent ≠ drift override); pass `force:true` only to deliberately overwrite the concurrent changes.
+- **"A staged change is already pending deploy"**: author tools refuse to stage over an undeployed change (single-slot staging). Deploy it (`deploy_staged_change`) or drop it (`discard_staged_change`), then re-stage.
 - **`Invalid confirmation_token`**: token scope mismatch. Re-request via `prepare_dangerous_operation` with the EXACT same target/hash.
 - **`No Node-RED target configured`**: server booted without a target. Call `set_target` first.
 - **`connected: false` in `get_recent_debug_messages`**: target is file-source (no admin-api), or initial connect failed. Buffer may still have frames from a prior session.
@@ -267,5 +268,7 @@ The toolkit's validators model flow topology, not per-node-module runtime semant
 - **`link call` node with no static targets.** Set `linkType: "dynamic"` to allow `links: []`; otherwise the validator requires ≥1 valid `link in` peer.
 - **`subflow` definitions need `in: []`, `env: []`, `meta: {}`.** Optional in flows.json, but the editor's import loop iterates them and throws `Cannot read properties of undefined (reading 'forEach')` if absent. The `reusable_subflow` template covers this; `create_subflow_definition` calls must populate them explicitly.
 - **`mqtt in` / `mqtt out` need a `mqtt-broker` config node.** The typed author tools don't auto-create one. Either use the `inject_to_mqtt` / `mqtt_to_debug` templates (which do), or stage the broker as a config node first and set the `broker` field on each MQTT node.
+
+**FlowOtter group behavior (helpful, not a gotcha):** a group authored without explicit `position`/`size` is auto-sized to a grid-snapped box fitting its member nodes, and receives the Node-RED editor's default visible style — a styleless group renders as an _invisible_ box, so this is applied for you. Supply explicit `position`/`size`/`style` to override.
 
 A worked end-to-end run of all of these (and the prompts that produced them) lives in the [Showcase](../README.md#showcase) section of the top-level README.

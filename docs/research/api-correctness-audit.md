@@ -345,13 +345,13 @@
 
 - **File:** `client.ts:145-159`, `auth.ts:67-72`.
 - **What we do today:** Default fetch UA (varies by Node version).
-- **Recommendation:** Set `User-Agent: flow-otter/${SERVER_INFO.version} (mcp-client)` on every request. Helps in audit-log diagnosis on the Node-RED side, helps WAFs that block unknown UAs, and identifies our requests in `httpAdminMiddleware` hooks the lab might add.
+- **Recommendation:** Set `User-Agent: flow-otter/${SERVER_INFO.version} (mcp-client)` on every request. Helps in audit-log diagnosis on the Node-RED side, helps WAFs that block unknown UAs, and identifies our requests in `httpAdminMiddleware` hooks an operator might add.
 - **Versions affected:** N/A.
 
 ### F-036 — MEDIUM — No `gzip`/`deflate` Accept-Encoding; large /flows responses are uncompressed
 
 - **File:** `client.ts:request`.
-- **What's at risk:** Large lab flows.json (10k+ nodes) takes seconds to transfer uncompressed.
+- **What's at risk:** A large flows.json (10k+ nodes) takes seconds to transfer uncompressed.
 - **Recommendation:** Set `Accept-Encoding: gzip` (Node 18+ undici fetch handles decompression automatically). Express in Node-RED won't compress unless `compression` middleware is enabled, but if it is (common in production setups), we benefit.
 - **Versions affected:** N/A — pure perf.
 
@@ -359,7 +359,7 @@
 
 - **File:** `auth.ts:58` and `container.ts:195-197`.
 - **What we do today:** `applyTarget` rejects non-http(s) protocols but doesn't refuse to send credentials over plain http.
-- **Recommendation:** When `PasswordGrantAuth` is used and `baseUrl.protocol === 'http:'`, log a `WARN` once: "sending credentials over plaintext HTTP." Don't block — the lab uses plain HTTP — but make it visible.
+- **Recommendation:** When `PasswordGrantAuth` is used and `baseUrl.protocol === 'http:'`, log a `WARN` once: "sending credentials over plaintext HTTP." Don't block — some trusted-network deployments use plain HTTP — but make it visible.
 - **Versions affected:** N/A.
 
 ### F-038 — LOW — `Connection: keep-alive` not explicitly set; Node 18+ fetch handles this well, but high-frequency tool runs might benefit from explicit pooling
