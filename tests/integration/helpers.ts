@@ -34,6 +34,11 @@ export async function buildIntegrationRig(extraEnv: Record<string, string> = {})
 
   const container = buildContainer({ env, serverVersion: '0.1.0-test' });
   const registry = buildRegistry(container, ALL_TOOLS);
+  // The integration suite exercises the FULL tool surface, including the
+  // specialist add_*_node tools that v1.3.0 moved into the non-default
+  // `author_specialists` toolset. Enable it the same way an agent would
+  // (via the toolset mechanism), so registry.find() resolves them.
+  registry.enableToolset('author_specialists');
 
   return {
     container,

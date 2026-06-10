@@ -86,6 +86,7 @@ describe('set_wires integration', () => {
     expect(staged.wires_added_count).toBe(1);
 
     await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
     });
 
@@ -103,6 +104,7 @@ describe('set_wires integration', () => {
     expect(staged.wires_added_count).toBe(0);
 
     await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
     });
 

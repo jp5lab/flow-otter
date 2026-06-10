@@ -99,6 +99,7 @@ describe('template tools end-to-end', () => {
     expect(staged.staged_hash).not.toBe(initialHash);
 
     const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
     })) as DeployResult;
     expect(deployed.ok).toBe(true);

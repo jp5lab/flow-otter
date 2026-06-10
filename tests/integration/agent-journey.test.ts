@@ -9,8 +9,8 @@
  * from clean → modified → observed → restored entirely in-toolkit, without
  * any out-of-band intervention. This is the central claim of v1.0.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -117,7 +117,12 @@ async function pollFor(predicate: () => Promise<boolean>, timeoutMs = 5_000): Pr
 }
 
 beforeAll(async () => {
-  tmpRoot = await mkdtemp(path.join(tmpdir(), 'aj-'));
+  // set_target's path policy only accepts state dirs under $HOME (v1.2
+  // path-traversal hardening) — os.tmpdir() lives outside it on macOS, so
+  // the journey's snapshot/staging dirs go under ~/.flow-otter instead.
+  const base = path.join(homedir(), '.flow-otter', 'integration-tmp');
+  await mkdir(base, { recursive: true });
+  tmpRoot = await mkdtemp(path.join(base, 'aj-'));
   rig = await buildIntegrationRig();
 });
 
@@ -161,6 +166,7 @@ describe('v1 agent-journey: set_target → stage → deploy → observe → roll
 
     // 3. deploy
     const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
     })) as DeployResult;
     expect(deployed.ok).toBe(true);

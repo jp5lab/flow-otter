@@ -64,6 +64,7 @@ describe('coverage smoke', () => {
       params: { tab_id: FIXTURE_TAB_ID },
     });
     const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: (await rig.container.staging.read())?.stagedHash,
     })) as { ok: boolean };
     expect(deployed.ok).toBe(true);

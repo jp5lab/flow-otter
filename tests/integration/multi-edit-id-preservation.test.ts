@@ -190,6 +190,7 @@ async function stageAndDeploy(tool: string, input: unknown): Promise<DeployResul
   expect(staged.ok).toBe(true);
 
   const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+    confirm: true,
     staged_hash: staged.staged_hash,
   })) as DeployResult;
   expect(deployed.ok).toBe(true);

@@ -97,6 +97,7 @@ describe('add_debug_node end-to-end', () => {
 
     // 2. Deploy
     const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
     })) as DeployResult;
 

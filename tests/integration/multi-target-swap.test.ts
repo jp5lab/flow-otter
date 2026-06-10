@@ -7,8 +7,8 @@
  * Uses two ephemeral *file-source* targets so this test doesn't require a
  * second Node-RED runtime.
  */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -62,8 +62,11 @@ const FIXTURE = [
 beforeAll(async () => {
   // Use a rig that starts on file-source so we can swap targets without
   // hitting Docker for this test.
-  envARoot = await mkdtemp(path.join(tmpdir(), 'mts-envA-'));
-  envBRoot = await mkdtemp(path.join(tmpdir(), 'mts-envB-'));
+  // set_target's path policy only accepts state dirs under $HOME.
+  const base = path.join(homedir(), '.flow-otter', 'integration-tmp');
+  await mkdir(base, { recursive: true });
+  envARoot = await mkdtemp(path.join(base, 'mts-envA-'));
+  envBRoot = await mkdtemp(path.join(base, 'mts-envB-'));
   flowsAPath = path.join(envARoot, 'flows.json');
   flowsBPath = path.join(envBRoot, 'flows.json');
   await writeFile(flowsAPath, JSON.stringify(FIXTURE), 'utf8');

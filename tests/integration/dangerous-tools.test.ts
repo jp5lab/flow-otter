@@ -177,7 +177,7 @@ describe('dangerous tools end-to-end', () => {
       dangerousRig.registry,
       dangerousRig.container,
       'deploy_staged_change',
-      { staged_hash: stagedHash },
+      { staged_hash: stagedHash, confirm: true },
     )) as DeployResult;
     expect(deployed.ok).toBe(true);
     expect(deployed.deployed_hash).toBe(stagedHash);

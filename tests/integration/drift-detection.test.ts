@@ -86,12 +86,14 @@ describe('drift detection', () => {
 
     await expect(
       callTool(rig.registry, rig.container, 'deploy_staged_change', {
+        confirm: true,
         staged_hash: staged.staged_hash,
       }),
     ).rejects.toMatchObject({ name: 'DriftError' });
 
     // With force=true, deploy succeeds.
     const forced = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
       force: true,
     })) as DeployResult;

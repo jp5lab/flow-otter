@@ -1,3 +1,7 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { FIXTURE_INJECT_ID, FIXTURE_TAB_ID } from './global-setup.js';
@@ -5,8 +9,22 @@ import { buildIntegrationRig, callTool, type TestRig } from './helpers.js';
 
 let rig: TestRig;
 
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const FIXTURE_PATH = path.resolve(HERE, '../fixtures/inject-to-debug.flows.json');
+
 beforeAll(async () => {
   rig = await buildIntegrationRig();
+  // Re-seed the global fixture: earlier test files legitimately deploy other
+  // flows to the shared runtime, so this file cannot rely on the global-setup
+  // seed still being present by the time it runs.
+  const baseUrl = rig.container.config.NODE_RED_BASE_URL!;
+  const raw = await readFile(FIXTURE_PATH, 'utf8');
+  const res = await fetch(`${baseUrl}/flows`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'Node-RED-Deployment-Type': 'full' },
+    body: raw,
+  });
+  if (!res.ok) throw new Error(`re-seed failed: HTTP ${res.status}`);
 });
 
 afterAll(async () => {

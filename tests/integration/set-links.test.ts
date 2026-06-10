@@ -98,6 +98,7 @@ describe('set_links integration', () => {
     expect(staged.paired_count).toBe(1);
 
     const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: staged.staged_hash,
     })) as DeployResult;
     expect(deployed.ok).toBe(true);
@@ -114,6 +115,7 @@ describe('set_links integration', () => {
       target_node_ids: [LIN_ID],
     })) as StageResult;
     await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: paired.staged_hash,
     });
     // Now clear.
@@ -123,6 +125,7 @@ describe('set_links integration', () => {
     })) as StageResult;
     expect(cleared.paired_count).toBe(0);
     await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: cleared.staged_hash,
     });
 

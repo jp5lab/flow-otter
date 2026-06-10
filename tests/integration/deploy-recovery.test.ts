@@ -69,6 +69,7 @@ describe('v0.6.0 deploy: staging guard + recovery output fields', () => {
     expect(stage.staged_hash).toBeTruthy();
 
     const deploy = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: stage.staged_hash,
       deploy_mode: 'nodes',
     })) as DeployResult;
@@ -101,6 +102,7 @@ describe('v0.6.0 deploy: staging guard + recovery output fields', () => {
     const staged = await rig.container.staging.read();
     await expect(
       callTool(rig.registry, rig.container, 'deploy_staged_change', {
+        confirm: true,
         staged_hash: staged!.stagedHash,
         deploy_mode: 'nodes',
       }),
@@ -122,6 +124,7 @@ describe('v0.6.0 deploy: staging guard + recovery output fields', () => {
     const stagedNow = await rig.container.staging.read();
 
     const deploy = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
       staged_hash: stagedNow!.stagedHash,
       deploy_mode: 'nodes',
       force_takeover: true,
