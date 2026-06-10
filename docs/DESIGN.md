@@ -1,12 +1,151 @@
-# FlowOtter Redesign Plan — v1.3.0
+# FlowOtter — Design & Roadmap
+
+This document consolidates two design records: the **proposed v2 strategy** (forward-looking) and the **completed v1.3.0 redesign plan** (historical). For shipped changes, see [`CHANGELOG.md`](../CHANGELOG.md).
+
+---
+
+# Part I — v2 Strategy (proposed)
+
+## FlowOtter Strategy Rethink — June 2026
+
+> **Status:** PROPOSED — research complete, awaiting maintainer ratification.
+> **Supersedes:** the implicit v1.x surface strategy (fine-grained tools as the only authoring path; layout as agent-supplied coordinates). Engages and partially supersedes REDESIGN_PLAN.md Anchor Decisions 1–2 (see Decisions below). Per-item supersession is recorded explicitly — the v1.0.0 "seal" was abandoned silently and that must not happen again.
+> **Research provenance:** multi-agent research run, 2026-06-09 — codebase ground-truth audit, prior-research staleness review, Node-RED ecosystem survey, MCP spec/client survey, n8n + competitive survey, layout/visual-feedback literature survey; three independent strategy proposals; two adversarial critiques. Key sources cited inline.
+
+### Purpose
+
+FlowOtter was founded on two priorities:
+
+- **(A) Compile-safe authoring** — the agent authors flows through a typed layer that compiles and validates before anything touches the runtime (inspired by a technique attributed to n8n's MCP).
+- **(B) Layout-first authoring** — the agent gets the visual graph right first, because a flow that humans can read in the editor is co-equal with a flow that works.
+
+v1.3.0 shipped neither as an agent-facing surface. This document records what the June-2026 research found, the verdict on both priorities, and the v2 strategy.
+
+### What the research established
+
+#### Ground truth about the codebase
+
+1. **Priority A is 90% built, 0% exposed.** The typed `AuthoringSpec` → `compile()` layer (ID-preserving `_authoringKey`, idempotent byte-identical output, compile diagnostics) is load-bearing under every author tool via `_stage-pipeline.ts`. But no MCP tool accepts a spec; `examples/ts-specs/inject-to-debug.spec.ts` is an orphaned Milestone-A relic, the builders DSL is the npm main entry used by nothing, and `bin/flows-lint.ts` is wired in package.json but referenced in no doc. Priority A's retreat was never decided — it atrophied.
+2. **Priority B is fully manual.** Every x/y is agent-supplied (fallback: naive `placeRightOf`/lane-stack). The dagre/ELK `layoutFlows()` dispatcher has **zero production call sites** — only property tests use it — and does not yet model groups as compound nodes, port order, or measured node widths (`elk.ts` hardcodes 120px wide; the renderer's own `nodeWidthFor()` computes 80–240px).
+3. **Sessions are extremely chatty, and staged changes do not compose.** Each author tool stages exactly one op computed from the _runtime_ flows; the staging store holds one pending change, so a second author call before deploy **silently discards the first**. The real protocol is stage→deploy per op: a 15-node flow costs ~50–70 tool calls and dozens of deploy confirmations. The SERVER_INSTRUCTIONS methodology ("add nodes, then wire, then layout") is unimplementable as a batch. This is the single largest divergence between what FlowOtter preaches and what it implements, and it blocks both founding priorities.
+4. **The agent is blind.** `render_flow_svg` returns SVG XML as text. Claude Code never displays base64 image blocks from tool results inline, and cannot view SVG as an image — the visual half of priority B does not exist in practice. (Claude Code _can_ read PNG files from disk via its Read tool.)
+5. **The safety spine is solid and must not move:** compile → validate → lint → diff → stage → snapshot → hash-drift refusal → env-gated tiers → elicitation on deploy. Every strategy option preserves it unchanged.
+
+#### The market (June 2026)
+
+6. **The founding belief about n8n is half-right, and now vindicated.** The famous community server (czlonkowski/n8n-mcp, 21.6k★) does **not** compile TypeScript — it validates JSON against a prebuilt schema database (1,851 nodes) with tiered validation profiles, an autofix tool, and token-efficient diff updates. But the **official n8n MCP** (April 2026, n8n v2.12+) shipped exactly the founding technique: the agent writes TypeScript SDK code, `validate_workflow(code)` must parse/type-check before `create_workflow_from_code`, and edits go through an **atomic batch of partial ops** (v2.20+). The state-of-the-art split is: **code/spec creates, partial ops edit**. Notably, the SDK code carries _no coordinates_ — layout is derived. (blog.n8n.io/n8n-mcp-server, n8n MCP tools reference)
+7. **Node-RED 5.0 went GA today (2026-06-09).** flows.json schema and Admin API are unchanged; Node 22.9+ floor; biggest editor-UX release ever — and **still no core auto-layout** (only align/distribute; auto-arrange request #2200 unshipped; core PR #2267 stayed draft). Community auto-layout plugins (dagre/ELK wrappers) are dormant. nrlint is dormant. The layout gap is real, durable, and unoccupied. (nodered.org/blog/2026/06/09/version-5-0-released)
+8. **FlowFuse Expert went agentic in May 2026** — natural-language flow assembly directly on canvas — but it is cloud/tier-gated, documents nothing about layout quality, and is not an MCP server. No official Node-RED MCP exists; the OSS field is tiny and stale (top alternative: 38★, abandoned). FlowOtter is already the deepest entry. One nascent competitor (ylt/nodered-mcp) independently converged on patch-ops + auto-run layout linting — convergent validation of this strategy.
+9. **MCP protocol movement that matters:** 2025-11-25 spec is current stable; MCP Apps became the first official extension (Jan 2026: interactive HTML in sandboxed iframes — Claude web/desktop, VS Code, ChatGPT; **not Claude Code CLI**); structured tool output (`outputSchema`/`structuredContent`) is stable and broadly supported; elicitation fully supported in Claude Code; Tool Search (deferred tool loading, on by default) removes the _startup-context_ cost of 52 tools but **not** the tool-selection-failure cost (GitHub Copilot's 40→13 consolidation improved benchmarks; 50+ tools is a recognized anti-pattern). Anthropic's code-execution-with-MCP guidance pushes toward fewer, intent-shaped surfaces. Skills are the 2026 consensus vehicle for methodology (n8n-skills: 5.4k★ standalone).
+10. **The layout science is settled:** LLMs cannot reliably hand-place 2D coordinates at scale (Di Bartolomeo et al.; FloorplanQA; the entire content-aware-layout literature exists because direct coordinate emission fails). Every working system has the LLM declare _structure_ (order, adjacency, grouping, constraints) and a deterministic engine compute geometry, with an evaluator loop. Vision feedback measurably improves layout-class output (+17.8% over 3 cycles in Amazon's frontend study) — and readable drawings also improve VLM comprehension, so good layout compounds. Aesthetic criteria are quantified in the literature (Purchase; Dunne & Shneiderman: crossings, occlusion, tunneling as [0,1] metrics) — ready to become scored lint rules. ELK layered has the exact features Node-RED's idiom needs: compound nodes (`INCLUDE_CHILDREN`), `FIXED_ORDER` WEST/EAST ports (switch affirmative-on-top), measured node sizes, `BRANDES_KOEPF` straight-edge placement, model-order stability.
+11. **Node-RED's readability conventions are codifiable:** left-to-right processing lines, sections progressing top-to-bottom, vertical fan-out alignment, compact named groups joined by link nodes (direct wires only _within_ groups), no wire crossings, switch-as-question with affirmative on top, error lanes below the happy path, junctions for wire routing. (nodered.org/docs/developing-flows, FlowFuse flow-formatting guide)
+
+#### Staleness corrections to prior docs
+
+- `research/*` (pinned 2026-05-08) remain valid Node-RED reference but: 5.0 is now **GA** (capability matrix + README support matrix need bumping from "best-effort 5.0-beta"); dashboard-2.md is ~5 months stale against a weekly-release project.
+- **Contradiction to resolve:** admin-api.md documents `GET/DELETE /context/*` endpoints (source-cited, 0.19+); advanced-features.md §8 and ARCHITECTURE.md claim no context API exists. admin-api.md is almost certainly right — a context-inspection tool is feasible.
+- upstream-issues-to-file.md: the four Node-RED docs issues were apparently never filed; the "don't link the private repo" caveat is obsolete (open-source since 2026-05-16). File them, linked.
+- ARCHITECTURE.md's claim that staging returns before/after render artifacts is currently false (doc drift) — made true by this plan.
+
+### Verdict on the founding priorities
+
+**Priority A was right, and the market proved it — but the surface was wrong.** The typed compile layer should become _agent-facing_ as a **declarative whole-spec authoring path** (JSON `AuthoringSpec`, works in every MCP client), not stay buried under 52 fine-grained tools. The official n8n MCP validated the exact split to adopt: **spec creates, atomic partial-op batches edit**. A literal agent-writes-TS code-mode is deferred: the `flow-otter check spec.ts` CLI does not exist today (net-new work, not dormant machinery), and the JSON spec captures the value portably. If code-mode ever ships, the server **never executes agent-written TS** — client-side tsc/lint only. That rule goes in NON_GOALS permanently.
+
+**Priority B was right, but inverted.** "Claude graphs all the nodes first" must not mean Claude places coordinates — the evidence is unambiguous that this fails at scale and is the worst of both worlds (token-expensive _and_ error-prone). Layout-first means **structure-first**: the agent declares topology, branch order, grouping, lanes, and naming; a deterministic engine computes geometry; scored aesthetic lints + PNG vision close the agent's loop; and the human's hand-dragged positions are **data the engine respects** (pinned constraints), never clobbered. Readability remains co-equal with function — what changes is who computes the pixels.
+
+### The v2 strategy: "Declare, compile, see"
+
+One sentence: _the agent declares a typed flow spec (structure + intent, zero coordinates); FlowOtter compiles, validates, lays out, lints, renders, and stages it as one reviewable change; the agent sees a PNG plus scores; the human confirms one deploy and owns final positions._
+
+The pitch this earns: **the only flow-authoring MCP where what ships is safe (staging/snapshots/drift-refusal) and what humans see is legible (computed layout + scored readability lint + visual review)** — neither the official n8n MCP (writes directly to the instance) nor FlowFuse Expert (closed, tier-gated, layout-silent) can claim either half.
+
+#### Decisions
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Supersedes                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| D1  | **`stage_spec` + `validate_spec`** become the primary authoring surface: whole-tab/whole-flow `AuthoringSpec` JSON → `compile(prior)` with `_authoringKey` ID preservation → existing validate/lint/diff/stage pipeline → ONE staged change. `validate_spec` is diagnostics-only (no staging).                                                                                                                                                                                                                                        | The implicit "fine-grained tools are the only path" v1 stance. Anchor Decision 1's _generic-tool_ spirit survives: specs accept any node type with per-type schemas where known, loose passthrough elsewhere (honest contrib degradation, never block on missing schemas). |
+| D2  | **`stage_changes`**: one atomic ordered batch of partial ops (add/update/wire/move/remove/group…) compiled into a single staged change — the edit-side complement. Staging a new change over an undeployed one becomes **refuse-with-warning**, never silent overwrite.                                                                                                                                                                                                                                                               | The one-op-per-stage protocol and its silent-overwrite footgun.                                                                                                                                                                                                            |
+| D3  | **Layout is a deterministic service, never agent coordinates.** Engine prerequisites first (ELK compound groups, `FIXED_ORDER` ports, measured widths via `nodeWidthFor()`, junction/comment handling, main-line straightening + 20px grid-snap post-pass). Exposed as `layout_flow` with _declarative_ input (scope, branch order, lane hints, pinned nodes). Auto-layout applies **only to new/spec-authored nodes**; human-dragged positions are pinned constraints (`sync_user_layout` re-imports live-editor positions as data). | REDESIGN_PLAN Item 4's `layout_strategy: 'manual'` stopgap; the agent-supplies-x/y model. **Not** adopted: layout as a mandatory compile phase — see Rejected.                                                                                                             |
+| D4  | **Benchmark gates default-on.** Before auto-layout becomes default anywhere: curate 10–20 exemplar community flows, strip positions, re-layout, score against originals with `layout_lint` + human eyeballs. Core PR #2267 failed at exactly the hand-arranged-look bar; this is the load-bearing unknown of the whole strategy and it gets measured, not assumed.                                                                                                                                                                    | NON_GOALS' visual-regression-CI line is renegotiated (recorded here) to the extent the benchmark needs golden renders.                                                                                                                                                     |
+| D5  | **`render_flow_png`** (resvg-js over the existing deterministic SVG): writes a PNG to an output path the agent Reads, _and_ returns an MCP image block; before/after render paths returned on every stage (making ARCHITECTURE.md's claim true). SVG stays for byte-stable diffs. Needs a prebuilt-binary fallback story (first native dep in a pure-TS install).                                                                                                                                                                     | Nothing — fills the agent-blindness gap.                                                                                                                                                                                                                                   |
+| D6  | **`layout_lint`**: weighted [0,1] scores with offending node IDs — wire crossings (highest), backward wires, node/label occlusion (using _render_ dimensions, not JSON boxes — lint-clean ≠ editor-clean per AGENT_QUICKSTART), edge tunneling, off-grid, group overlap, direct-wires-between-groups, unnamed switch/link nodes, fan-out order vs port order. Scores auto-append to mutating tool responses via the existing nudge channel. Advisory deploy threshold with elicitation override — never hard enforcement.             | Nothing — codifies the published conventions (finding 11).                                                                                                                                                                                                                 |
+| D7  | **Consolidate the default surface to ~15 intent-shaped tools** with `outputSchema`/`structuredContent` everywhere. Per-op author tools and specialists demote to opt-in toolsets (plumbing exists) with a **multi-minor deprecation window** and explicit supersession records — demote, don't delete.                                                                                                                                                                                                                                | The 52-visible-tool default. Tool Search excuses startup cost, not selection failures.                                                                                                                                                                                     |
+| D8  | **Per-deploy elicitation stays.** With batched staging, confirmations naturally collapse to 1–3 per flow — the consent gate is FlowOtter's differentiator and is _not_ traded for convenience. No per-session deploy grants.                                                                                                                                                                                                                                                                                                          | Nothing (reaffirmation against a considered-and-rejected alternative).                                                                                                                                                                                                     |
+| D9  | **Grow the runtime-semantics knowledge layer with the re-platform**, or the showcase failures recur in fewer, larger steps: `get_node_types`-style per-type required-field schema surfacing (linkType/repeat/scope/maxrows class), value-dependent and cross-node validators (gauge segments within [min,max]; broker-config existence), and auto-created dependent config nodes in bare tools (templates already do this — close the asymmetry).                                                                                     | Anchor Decision 2's "no new validator expansion" freeze, partially.                                                                                                                                                                                                        |
+| D10 | **Methodology moves toward Skills, after the surface stabilizes.** A `flowotter-skills` companion (seeded from AGENT_QUICKSTART's gotchas + spec-authoring patterns + ISA-101 rationale) is the distribution vehicle; SERVER_INSTRUCTIONS shrinks to routing hints + the stage→deploy contract. Sequenced last — a skills repo documenting a churning surface is a liability.                                                                                                                                                         | Item 1's instructions-as-methodology approach, eventually.                                                                                                                                                                                                                 |
+| D11 | **Housekeeping now:** declare Node-RED 5.0 GA support; delete vestigial seams (ts-specs example, `layoutAlgorithm:'none'` stub path, builders-as-main-entry confusion — or document builders as the spec-authoring library); resolve the /context contradiction; file the four upstream docs issues; emit 4.1+ module metadata (global-config node) in authored flows; populate node/group description fields (4.1 info badges make generated flows self-documenting); choose `Node-RED-Deployment-Type: nodes                        | flows` from staged-diff scope to minimize runtime disruption.                                                                                                                                                                                                              | —   |
+
+#### Explicitly rejected
+
+- **Layout as a mandatory compile phase with no coordinate escape hatch** (proposal 1's coupling): hides an unproven engine inside every staged change, maximizes the blast radius of any pinning bug on operator-dragged positions — one clobbering incident in the OT niche is unrecoverable. Layout stays a scoped, gated service; offer compile-integrated layout as an _option_ only after D4's benchmark passes.
+- **Per-session deploy grants** (proposal 3): converts "every deploy is reviewed" into "the first deploy was reviewed" exactly when batching makes per-deploy consent cheap. Self-inflicted wound to the differentiator.
+- **Keeping the 52-tool default surface** (proposal 2's deferral): concedes the largest friction term for an entire major version.
+- **Server-side execution of agent-written TypeScript** — permanent NON_GOALS line (RCE vector).
+- **MCP Apps as a near-term bet**: doesn't render in Claude Code (the primary client), fails on 3p inference. Capability-gated tier-2 _after_ the PNG loop is excellent; the renderer-in-iframe (possibly FlowFuse flow-renderer, Apache-2.0) is the natural future implementation.
+- **MCP Tasks / async deploys**: premature under Claude Code's blocking semantics.
+
+#### Sequencing (gates, not dates)
+
+**Phase 0 — eyes, footgun, truth (small items, no dependencies):**
+
+1. `render_flow_png` to disk + before/after paths on stage outputs (D5).
+2. Refuse-with-warning on staging over an undeployed change (D2's guard, shippable alone).
+3. 5.0 GA support declaration + vestigial-seam cleanup + /context resolution (D11).
+4. **Half-day spike:** prove an agent can stage → Read PNG → adjust → re-Read in ≤6 calls in a real Claude Code session. The entire visual loop rests on this ergonomic; it is asserted, never tested.
+
+**Phase 1 — the declarative surface (priority A realized):** 5. `stage_spec` + `validate_spec` with _naive placement_ (D1) — do not gate on the layout engine; ID-preservation machinery already exists. 6. `stage_changes` atomic batch (D2). 7. `outputSchema`/`structuredContent` on every tool; ~15-tool default surface via toolset demotion (D7). 8. Per-type required-field schema surfacing + the missing validators/config-node auto-creation (D9).
+
+**Phase 2 — the layout service (priority B realized), gated:** 9. Engine prerequisites: compound groups, port order, measured widths, post-passes (D3). 10. `layout_lint` (D6) — also valuable standalone the moment it exists. 11. **The exemplar-flow benchmark (D4). HARD GATE:** auto-layout becomes default for spec-authored nodes only if it passes; otherwise layout ships as opt-in while the engine improves. 12. `sync_user_layout` pinned-constraint round-trip (D3).
+
+**Phase 3 — distribution and demo:** 13. `flowotter-skills` companion repo (D10). 14. The measurable UX target: **"one prompt → plan_flow → stage_spec → one confirmation → deployed, PNG-verified, readable flow"** — then the FlowFuse Expert side-by-side as marketing built on measurement. 15. MCP Apps viewer, capability-gated.
+
+#### Risks carried forward
+
+- **ELK output may still not look hand-arranged** even with the prerequisites (PR #2267 precedent). Mitigated by D4's gate and Phase-2 ordering; the walk-back is "layout stays opt-in," not a strategy failure.
+- **Staged-change composition touches drift semantics** next to the safety spine; `based_on_snapshot_hash` must remain the runtime baseline. A bug here turns the differentiator into a liability — test-first.
+- **Test-migration bill is real and unpriced in all proposals:** the ~759 tests encode current per-op semantics; D2/D7 invalidate a substantial slice. Budget it per item; the suite is the project's main asset.
+- **resvg-js native dependency** needs a graceful degradation (SVG-only) path.
+- **Renderer fidelity vs the 5.0 restyle** bounds how far PNG judgments transfer to what operators see in the editor — re-verify metrics against a live 5.0.0 instance.
+- **Competitive window:** FlowFuse could ship an agent-facing MCP; speed on Phases 0–1 matters more than Phase-3 polish.
+
+### Open questions (carried from research)
+
+1. Does n8n's `validate_workflow` run genuine tsc-grade checking or a parser over TS-shaped code? (Affects how far a future code-mode should go.)
+2. Exact JSON shape of 4.1's module metadata in the global-config node (inspect a live export).
+3. Did 5.0's node-appearance rework change node dimensions/label metrics enough to affect `render_flow_svg` fidelity and layout spacing constants? (elk.ts says 120px, prompt lore says 160px, renderer computes 80–240px — confirm against editor-client view.js.)
+4. Where should junctions be auto-inserted by the engine without violating "junctions are routing, not logic"? No published heuristics exist.
+5. Does VLM critique add measurable value over lint scores alone for Node-RED specifically? Internal A/B before making render-review a mandatory methodology phase.
+6. 4.x maintenance/EOL window now that 5.0 is GA — how long do the 4.x feature gates stay primary?
+
+### Key sources
+
+- Node-RED 5.0 GA: nodered.org/blog/2026/06/09/version-5-0-released · github.com/node-red/node-red/releases/tag/5.0.0
+- Conventions: nodered.org/docs/developing-flows · flowfuse.com/blog/2022/12/node-red-flow-best-practice
+- Official n8n MCP (TS SDK + atomic partial ops): blog.n8n.io/n8n-mcp-server · n8n-docs mcp_tools_reference
+- Community n8n-mcp (schema DB, tiered validation): github.com/czlonkowski/n8n-mcp · n8n-skills
+- MCP Apps extension: blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps · SEP-1865
+- MCP 2025-11-25 spec / structured output / Tasks: modelcontextprotocol.io/specification/2025-11-25
+- Code execution with MCP: anthropic.com/engineering/code-execution-with-mcp
+- Claude Code MCP client behavior (Tool Search, elicitation, image-result limitation): code.claude.com/docs/en/mcp · anthropics/claude-code#3120
+- LLM spatial reasoning limits: arXiv 2303.08819 (Sugiyama-in-ChatGPT) and the content-aware-layout literature
+- Aesthetic metrics: Purchase, _Metrics for Graph Drawing Aesthetics_ · Dunne & Shneiderman readability metrics
+- ELK layered reference: eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html
+- Layout plugin prior art: github.com/bartbutenaers/node-red-autolayout-sidebar · core PR node-red/node-red#2267
+- Convergent competitor: github.com/ylt/nodered-mcp
+
+---
+
+# Part II — v1.3.0 Redesign Plan (completed — historical record)
+
+## FlowOtter Redesign Plan — v1.3.0
 
 > **Status legend:** `TODO` not started · `IN PROGRESS` actively being executed · `DONE` shipped and verified · `BLOCKED` halted with note explaining why
 
-## Purpose
+### Purpose
 
 This document is the durable plan for the v1.3.0 architectural redesign. It captures the design decisions, item-level specs, file-level edits, and acceptance criteria for thirteen prioritized items. The plan is intended to survive context compression and serve as the authoritative contract for any session resuming the work — read this first, execute one item at a time, mark status as you go.
 
-## Anchor decisions
+### Anchor decisions
 
 1. **Specialist node tools → opt-in toolset.** The 15 `add_*_node` specialist tools (inject/debug/function/etc.) stay, but move into the non-default `author_specialists` toolset. The default authoring surface is the generic `add_node`, which must treat the long tail of node-red-contrib-\* packages (Modbus, InfluxDB, OPC UA, BACnet, S7, etc.) as a first-class concern — not core types only.
 2. **Operator dashboards are major-but-not-flagship.** Methodology is the foundation. Dashboards are downstream — nodes ARE the backend to the dashboard, so good node structure has to come first. The dashboard widget gap and operator templates land in the second wave, after items 1-6 (instructions / catalog / version / plan_flow / soft-nudge / toolsets).
@@ -15,7 +154,7 @@ This document is the durable plan for the v1.3.0 architectural redesign. It capt
 
 Across all four decisions the consistent principle is **scope discipline + architectural robustness** — well-architected design tool, not swiss army knife. No MVPs.
 
-## Version support matrix
+### Version support matrix
 
 - **Minimum:** Node-RED 4.0.0 (Node.js 18+ required by Node-RED itself)
 - **Recommended:** Node-RED 4.1.x (current stable 4.1.10)
@@ -24,7 +163,7 @@ Across all four decisions the consistent principle is **scope discipline + archi
 
 Capability gating is per-feature, not per-version. The matrix lives in `src/adapters/nodered/capabilities.ts` (built in Item 3).
 
-## Operational protocol
+### Operational protocol
 
 - **Branch:** all work lands on `main` directly. No feature branches.
 - **Commits:** small, focused, one item per commit where practical. Good commit messages with rationale. **No AI byline.**
@@ -34,7 +173,7 @@ Capability gating is per-feature, not per-version. The matrix lives in `src/adap
 - **Ambiguity protocol:** if a decision is genuinely ambiguous and not covered by the anchor decisions or this plan, add a `BLOCKED:` marker to the item with the options listed and move on. Don't guess on architectural calls.
 - **Continuity:** mark item status as it progresses. If a session ends mid-item, the next session reads this file and resumes.
 
-## Verification gates (run after every item)
+### Verification gates (run after every item)
 
 ```bash
 npm run typecheck
@@ -52,21 +191,21 @@ If any check fails: do not commit. Fix the regression or back the change out.
 
 ---
 
-## Item 1: MCP server `instructions` field
+### Item 1: MCP server `instructions` field
 
 **Status:** DONE (commit 314ac5b)
 
-### Rationale
+#### Rationale
 
 The MCP protocol supports a server-level `instructions` string (capped at 2KB by Claude Code) injected system-prompt-style into the agent's context. FlowOtter currently sets none. This is the single highest-leverage change in the entire redesign — one parameter, immediate behavior shift.
 
-### Scope
+#### Scope
 
 In: add the field, write a methodology playbook within the 2KB budget covering the 8-step flow design pipeline, capability discovery, toolset usage, credential boundary, version awareness.
 
 Out: any other behavior changes; tool surface stays untouched.
 
-### Design
+#### Design
 
 The `instructions` text (target ~1900 chars, hard ceiling 2000):
 
@@ -102,13 +241,13 @@ CREDENTIALS: FlowOtter does NOT author credentials. Deploy with empty credential
 
 Character count: approx 1850. Validate after final wording.
 
-### Files affected
+#### Files affected
 
 - **Edit** `src/server/transport/stdio.ts` lines 17-20: add `instructions` to the `new Server(...)` initialization. The third arg position on the SDK's `Server` constructor doesn't accept it directly — `instructions` is the second arg field on `ServerOptions`. Verify against `@modelcontextprotocol/sdk` v1+ types before wiring.
 - **Edit** `src/server/index.ts:67-70`: extend `SERVER_INFO` to include the instructions string OR pass instructions through `startStdio` opts. Prefer a constant `INSTRUCTIONS` exported alongside `SERVER_INFO`.
 - **Edit** `src/server/transport/stdio.ts`: add `instructions?: string` to `StartStdioOptions` interface; pass it to `new Server()`.
 
-### Implementation outline
+#### Implementation outline
 
 ```typescript
 // src/server/index.ts
@@ -147,14 +286,14 @@ const server = new Server(
 );
 ```
 
-### Tests
+#### Tests
 
 - Add `tests/unit/server/instructions.test.ts`:
   - Verify `SERVER_INSTRUCTIONS` is ≤ 2000 chars (Claude Code truncation budget).
   - Verify `SERVER_INSTRUCTIONS` includes the methodology phase markers ("PLAN", "ORGANIZE", "STRUCTURE", "REVIEW") and key tool references (`plan_flow`, `get_authoring_guide`, `preview_flow_diff`).
   - Snapshot test: lock the text so changes are explicit.
 
-### Success criteria
+#### Success criteria
 
 - [ ] `SERVER_INSTRUCTIONS` exported and ≤2000 chars
 - [ ] `instructions` passed through to MCP Server constructor
@@ -164,15 +303,15 @@ const server = new Server(
 
 ---
 
-## Item 2: `get_authoring_guide` capability catalog tool
+### Item 2: `get_authoring_guide` capability catalog tool
 
 **Status:** DONE (commit f0d963f)
 
-### Rationale
+#### Rationale
 
 Today the agent discovers FlowOtter via the tool list and tool descriptions only. There's no structured "here are the capabilities" surface beyond `list_installed_node_types`, `list_templates`, and `get_server_config_summary`. The agent has to piece together what's possible. A capability catalog gives the agent (and through it, the user) a structured inventory of every feature, organized by purpose.
 
-### Scope
+#### Scope
 
 In: new read-tier tool `get_authoring_guide` returning a structured JSON catalog covering:
 
@@ -186,7 +325,7 @@ In: new read-tier tool `get_authoring_guide` returning a structured JSON catalog
 
 Out: dynamic discovery of installed contrib packages (that's `list_installed_node_types`). Catalog is static, source-controlled.
 
-### Design
+#### Design
 
 New module `src/toolkit/catalog/index.ts` exports a typed `CapabilityCatalog` object. The tool reads the static catalog and returns it (with optional category filter).
 
@@ -285,7 +424,7 @@ export const getAuthoringGuideTool: Tool<...> = {
 };
 ```
 
-### Catalog content (initial seed — verifiable against research)
+#### Catalog content (initial seed — verifiable against research)
 
 The catalog data ships as TypeScript literals so it's typed, source-controllable, and lints. The seed values are derived from the research agents' inventories (Node-RED docs, Dashboard 2.0 docs, FlowOtter codebase inventory, ISA-101 reference notes).
 
@@ -324,7 +463,7 @@ The catalog data ships as TypeScript literals so it's typed, source-controllable
 
 **`methodology`**: 8 phases (scope, capacity, organize, structure, wire, layout, review, validate) + organize decision tree.
 
-### Files affected
+#### Files affected
 
 - **New** `src/toolkit/catalog/types.ts` — TypeScript types for the catalog.
 - **New** `src/toolkit/catalog/data.ts` — the seed catalog data as a const.
@@ -333,13 +472,13 @@ The catalog data ships as TypeScript literals so it's typed, source-controllable
 - **Edit** `src/server/index.ts`: add the tool to `ALL_TOOLS`.
 - **Edit** `src/toolkit/index.ts`: re-export `capabilityCatalog` if intended for external consumers (probably not — keep internal).
 
-### Tests
+#### Tests
 
 - `tests/unit/catalog/catalog-shape.test.ts`: verify the catalog satisfies its TypeScript types; verify every node type has a category; every widget has a status flag; every validator has a severity.
 - `tests/unit/catalog/catalog-completeness.test.ts`: cross-check the catalog's validator list against the actual files in `src/toolkit/validate/rules/` — fail if a validator exists in code but not in the catalog (or vice versa).
 - `tests/unit/server/tools/get-authoring-guide.test.ts`: tool invocation tests; category filter tests.
 
-### Success criteria
+#### Success criteria
 
 - [ ] Catalog data structure typed and complete
 - [ ] Completeness test passes (catalog and code match)
@@ -350,15 +489,15 @@ The catalog data ships as TypeScript literals so it's typed, source-controllable
 
 ---
 
-## Item 3: Node-RED version detection + capability matrix
+### Item 3: Node-RED version detection + capability matrix
 
 **Status:** DONE (commit a45db64)
 
-### Rationale
+#### Rationale
 
 FlowOtter is version-blind today. It assumes its hardcoded knowledge of admin API + flows.json schema works against whatever Node-RED is on the other end. Mostly works because Node-RED is back-compat-friendly, but it's a real gap. With 5.0 in beta and best-effort support targeted, explicit version awareness is necessary.
 
-### Scope
+#### Scope
 
 In:
 
@@ -371,7 +510,7 @@ In:
 
 Out: `get_server_config_summary` already exposes config; just thread the version through.
 
-### Design
+#### Design
 
 ```typescript
 // src/adapters/nodered/capabilities.ts
@@ -458,7 +597,7 @@ CORS detection: in `inspectWarnings()` on the admin-api flow source, send an OPT
 
 Snapshot tagging: in `export-snapshot.ts` (and the staging pipeline's auto-snapshot path), populate `_meta.runtime` from the cached runtime block.
 
-### Files affected
+#### Files affected
 
 - **New** `src/adapters/nodered/capabilities.ts`
 - **Edit** `src/adapters/nodered/client.ts` — add `getNoderedVersion()`.
@@ -471,13 +610,13 @@ Snapshot tagging: in `export-snapshot.ts` (and the staging pipeline's auto-snaps
 - **Edit** `src/adapters/flowsource/adminapi.ts` (or wherever `inspectWarnings` is) — add CORS-failure detection.
 - **Add dep** `semver` (~1KB; widely-used; permissive license).
 
-### Tests
+#### Tests
 
 - `tests/unit/adapters/nodered/capabilities.test.ts`: matrix tests across 3.0, 3.1, 4.0, 4.1, 5.0.0-beta.6, 5.0.0; verify each capability resolves correctly.
 - `tests/unit/adapters/nodered/version-detection.test.ts`: parse mock `/settings` responses (stable + beta).
 - `tests/integration/version-aware-target.test.ts`: stub Node-RED responses for 4.1.x and 5.0-beta.6; verify health_check output differs accordingly.
 
-### Success criteria
+#### Success criteria
 
 - [ ] Version detected on `set_target` and persisted
 - [ ] `health_check` exposes runtime + capabilities + warnings
@@ -488,23 +627,23 @@ Snapshot tagging: in `export-snapshot.ts` (and the staging pipeline's auto-snaps
 
 ---
 
-## Item 4: `plan_flow` methodology spine tool
+### Item 4: `plan_flow` methodology spine tool
 
 **Status:** DONE (commit 8ce2a19)
 
-### Rationale
+#### Rationale
 
 The methodology embedded in `instructions` (Item 1) is general guidance. `plan_flow` is the structured artifact the agent produces for a specific authoring task — it forces the 8-step pipeline to be explicit, records the plan for soft-nudge (Item 5) to consume, and provides a stable handle for elicitation (Item 7) to negotiate against.
 
 A scaffold pattern: one tool whose schema embeds the methodology, server does no reasoning, the structure IS the artifact the agent records and downstream consumers read.
 
-### Scope
+#### Scope
 
 In: new author-tier tool `plan_flow` that takes a high-level goal and returns a structured plan + records it in staging. The plan is consumable by other tools (soft-nudge consults; elicitation references stages).
 
 Out: doesn't generate nodes, doesn't lay out, doesn't decide concrete types. Plans the _shape_ of the work.
 
-### Design
+#### Design
 
 ```typescript
 // src/server/tools/author/plan-flow.ts
@@ -548,19 +687,19 @@ The handler:
 
 The plan schema is intentionally **a contract**, not a freeform notes blob. The agent gets typed feedback on its plan: missing stages, unrealistic node counts (>50 in one stage triggers a warning to subdivide), conflicting organization choices.
 
-### Files affected
+#### Files affected
 
 - **New** `src/server/tools/author/plan-flow.ts`
 - **New** `src/toolkit/staging/plan-record.ts` — read/write `plan.json`.
 - **Edit** `src/server/index.ts`: add to `ALL_TOOLS`.
 - **Edit** `src/server/tools/read/get-staged-change.ts`: include the active plan if present.
 
-### Tests
+#### Tests
 
 - `tests/unit/server/tools/plan-flow.test.ts`: validates input/output shapes; heuristic checks (large count → elk); persistence to plan.json.
 - `tests/unit/toolkit/staging/plan-record.test.ts`: round-trip read/write; format stability.
 
-### Success criteria
+#### Success criteria
 
 - [ ] `plan_flow` tool registers and accepts the input schema
 - [ ] Output has a stable shape; persisted to `~/.flow-otter/<env>/staging/plan.json`
@@ -570,15 +709,15 @@ The plan schema is intentionally **a contract**, not a freeform notes blob. The 
 
 ---
 
-## Item 5: Soft-nudge / response-side guidance system
+### Item 5: Soft-nudge / response-side guidance system
 
 **Status:** DONE (commit 164a7a5) — two of five planned nudges shipped (no-plan-for-large-flow, deploy-without-preview). Remaining three pair with Items 9-11 (dashboard widget work) and ship alongside.
 
-### Rationale
+#### Rationale
 
 Methodology adherence is enforced not by blocking calls (rigid) or just by `instructions` (often skipped) but by surfacing contextual reminders in tool response payloads — when the agent is mid-decision and a reminder is most actionable. Response-side guidance fires _at the moment the agent makes a structural choice_, which is more effective than tool descriptions alone.
 
-### Scope
+#### Scope
 
 In:
 
@@ -592,7 +731,7 @@ In:
 
 Out: enforcement (no rejection). Nudges are advisory.
 
-### Design
+#### Design
 
 ```typescript
 // src/server/nudges/types.ts
@@ -653,7 +792,7 @@ if (guidance.length > 0 && typeof output === 'object' && output !== null) {
 }
 ```
 
-### Sample nudge content
+#### Sample nudge content
 
 ```
 "no-plan-for-large-flow":
@@ -669,7 +808,7 @@ Show the user a preview_flow_diff summary and confirm before deploying, especial
 ISA-101 requires destructive controls to require explicit confirmation. Add `confirm: true` and a `confirm_message`."
 ```
 
-### Files affected
+#### Files affected
 
 - **New** `src/server/nudges/types.ts`
 - **New** `src/server/nudges/registry.ts`
@@ -677,12 +816,12 @@ ISA-101 requires destructive controls to require explicit confirmation. Add `con
 - **Edit** `src/server/tools/_tool.ts:makeInvokable` — wire evaluation in.
 - **Edit** `src/server/container.ts` — expose `buildNudgeContext` helper.
 
-### Tests
+#### Tests
 
 - `tests/unit/nudges/registry.test.ts`: triggering / not-triggering scenarios for each nudge.
 - `tests/unit/server/tools/_tool.test.ts`: verify `_guidance` appears in result when nudges fire; absent otherwise.
 
-### Success criteria
+#### Success criteria
 
 - [ ] All 5 initial nudges fire on their trigger conditions
 - [ ] Nudges DON'T fire when conditions are unmet
@@ -693,15 +832,15 @@ ISA-101 requires destructive controls to require explicit confirmation. Add `con
 
 ---
 
-## Item 6: Toolsets / progressive disclosure system
+### Item 6: Toolsets / progressive disclosure system
 
 **Status:** DONE (commit 67a3667)
 
-### Rationale
+#### Rationale
 
 FlowOtter exposes ~62 tools — large enough that progressive disclosure helps agents pick the right tool. The fix is **toolsets**: named groups with `list_available_toolsets` / `enable_toolset` tools so the agent loads only what it needs.
 
-### Scope
+#### Scope
 
 In:
 
@@ -713,7 +852,7 @@ In:
 
 Out: dynamic toolset definitions, plugin-loaded toolsets — keep it static for now.
 
-### Proposed toolset layout
+#### Proposed toolset layout
 
 | Toolset              | Default?               | Tools                                                                                                                                                                                                                                             |
 | -------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -729,7 +868,7 @@ Out: dynamic toolset definitions, plugin-loaded toolsets — keep it static for 
 
 Default surface (≈ 47 tools) is still large but down from 62, and the noisier specialists move out of the way.
 
-### Design
+#### Design
 
 ```typescript
 // src/server/tools/toolsets.ts
@@ -793,7 +932,7 @@ export const enableToolsetTool: Tool<...> = {
 };
 ```
 
-### Files affected
+#### Files affected
 
 - **New** `src/server/tools/toolsets.ts`
 - **New** `src/server/tools/read/list-available-toolsets.ts`
@@ -803,7 +942,7 @@ export const enableToolsetTool: Tool<...> = {
 - **Edit** `src/server/index.ts` — add the two new tools, initialize default toolsets.
 - **Edit** the `_tool.ts` Tool interface to optionally carry a `toolset: ToolsetName` field for safety (or keep mapping in `toolsets.ts` only — pick one).
 
-### Tests
+#### Tests
 
 - `tests/unit/server/tools/toolsets.test.ts`:
   - Default toolsets enabled at startup.
@@ -812,7 +951,7 @@ export const enableToolsetTool: Tool<...> = {
   - Calling tools not in enabled toolsets fails with a clear message.
 - `tests/integration/toolset-discovery.test.ts`: full MCP session that discovers, enables, and uses specialists.
 
-### Success criteria
+#### Success criteria
 
 - [ ] Toolset definitions cover all 62 current tools without omission
 - [ ] Default surface excludes `author_specialists` and `dangerous`
@@ -822,11 +961,11 @@ export const enableToolsetTool: Tool<...> = {
 
 ---
 
-## Item 7: MCP elicitation at high-value decision points
+### Item 7: MCP elicitation at high-value decision points
 
 **Status:** DONE (commit 859fb37) — `src/server/elicitation/client.ts` helper + deploy_staged_change confirm-before-deploy wired up. Other planned call sites (instantiate_template, add_subflow_instance, plan_flow) can land as follow-ups using the same helper.
 
-### Rationale
+#### Rationale
 
 MCP elicitation (shipped 2025-06-18; Claude Code support v2.1.76 March 2026) lets the server prompt the user via JSON-Schema forms. This is the protocol-level answer to "FlowOtter should be more interactive with users." First call sites:
 
@@ -835,13 +974,13 @@ MCP elicitation (shipped 2025-06-18; Claude Code support v2.1.76 March 2026) let
 3. **Ambiguous `plan_flow` goal** — if the goal is too vague to decompose into stages, elicit clarifying info (target tabs, expected stage count, etc.).
 4. **`add_subflow_instance` without definition** — elicit "create new vs pick existing existing".
 
-### Scope
+#### Scope
 
 In: client-capability check on every call site; degrade gracefully when client doesn't support elicitation (fall back to current behavior, e.g., require explicit parameters in the call).
 
 Out: chat-style interactive sessions; elicitation is for structured input only.
 
-### Design
+#### Design
 
 Common helper:
 
@@ -909,7 +1048,7 @@ handler: async (input, ctx) => {
 
 For each call site, the elicitation request and the fallback behavior are item-specific. Document them in this section as we implement.
 
-### Files affected
+#### Files affected
 
 - **New** `src/server/elicitation/client.ts` — helper.
 - **New** `src/server/elicitation/schemas.ts` — JSON-Schema fragments for each elicitation use.
@@ -920,12 +1059,12 @@ For each call site, the elicitation request and the fallback behavior are item-s
 - **Edit** `src/server/tools/author/plan-flow.ts` — wire in elicitation for ambiguous goals (Item 4).
 - **Edit** `src/server/tools/author/add-subflow-instance.ts` — wire in elicitation when no def exists.
 
-### Tests
+#### Tests
 
 - `tests/unit/elicitation/client.test.ts`: mock server.request; verify accept/decline/cancel/unsupported handling.
 - `tests/integration/deploy-elicitation.test.ts`: full session — deploy without force, mock client confirms.
 
-### Success criteria
+#### Success criteria
 
 - [ ] Client capability detection works
 - [ ] All four call sites elicit when supported
@@ -935,15 +1074,15 @@ For each call site, the elicitation request and the fallback behavior are item-s
 
 ---
 
-## Item 8: Layout engine — dagre v3 + elkjs opt-in
+### Item 8: Layout engine — dagre v3 + elkjs opt-in
 
 **Status:** DONE (commit 771b191) — `@dagrejs/dagre@3` swap + `elkjs@^0.11` opt-in via `src/toolkit/layout/index.ts` dispatcher.
 
-### Rationale
+#### Rationale
 
 FlowOtter uses `dagre` 0.8.5 (abandoned 2019). The maintained replacement is `@dagrejs/dagre@3` (TS-native, March 2026 v3 ship). For 30+ node flows or any with groups/multi-output nodes, dagre struggles. ELK (`elkjs`) is the likely path once groups and ports are modeled explicitly, but the current MCP workflow stays manual/agent-guided.
 
-### Scope
+#### Scope
 
 In:
 
@@ -957,7 +1096,7 @@ In:
 
 Out: full ELK feature parity (we use a focused subset); migration of existing snapshots' coordinates (rely on Node-RED to re-render on import).
 
-### Design
+#### Design
 
 ```typescript
 // src/toolkit/layout/elk.ts
@@ -1020,7 +1159,7 @@ ELK config (per Item 8 in research output):
 
 Post-process: grid-snap (20px), clamp to bounds, group QA (if a group's children land outside its rect, expand the rect to fit).
 
-### Files affected
+#### Files affected
 
 - **Edit** `package.json` — replace `dagre@0.8.5` with `@dagrejs/dagre@^3`; drop `@types/dagre`. Add `elkjs@^0.11`.
 - **New** `src/toolkit/layout/elk.ts`
@@ -1030,14 +1169,14 @@ Post-process: grid-snap (20px), clamp to bounds, group QA (if a group's children
 - **Edit** `src/toolkit/index.ts` — re-export new `layoutFlows` from `./layout/index.js`.
 - **Edit** any callers of `layoutFlows` (search-replace) — though if signature is compatible, no change.
 
-### Tests
+#### Tests
 
 - `tests/unit/toolkit/layout/elk.test.ts`: small flow → ELK output; deterministic coordinates. Group-aware containment remains future work until groups are modeled as compound ELK nodes.
 - `tests/unit/toolkit/layout/auto-engine.test.ts`: heuristic triggers ELK for the right shapes.
 - `tests/unit/toolkit/layout/determinism.test.ts`: ELK with `randomSeed=1` is byte-stable across runs.
 - Snapshot tests for representative golden layouts.
 
-### Success criteria
+#### Success criteria
 
 - [ ] Existing dagre tests still pass with `@dagrejs/dagre@3`
 - [ ] ELK produces grid-snapped, bounds-respecting coords
@@ -1047,15 +1186,15 @@ Post-process: grid-snap (20px), clamp to bounds, group QA (if a group's children
 
 ---
 
-## Item 9: Add 10 missing Dashboard 2.0 widget authoring tools
+### Item 9: Add 10 missing Dashboard 2.0 widget authoring tools
 
 **Status:** DONE (commits 4ac4e38 + 366c774) — schemas added for ui-button, ui-button-group, ui-text, ui-notification, ui-template, ui-form, ui-table, ui-chart, ui-gauge, ui-control. Catalog status flipped to `supported`.
 
-### Rationale
+#### Rationale
 
 FlowOtter validators already know about all 24 Dashboard 2.0 widgets, but the authoring surface (`add_dashboard_widget`) only supports 14. The 10 missing widgets — `ui-button`, `ui-button-group`, `ui-text`, `ui-notification`, `ui-template`, `ui-form`, `ui-table`, `ui-chart`, `ui-gauge`, `ui-control` — are exactly the ones operators use daily.
 
-### Scope
+#### Scope
 
 In:
 
@@ -1065,7 +1204,7 @@ In:
 
 Out: rich UI for configuring each widget (raw config via `passthrough` is OK).
 
-### Design
+#### Design
 
 For each widget, document required + optional config in the schema:
 
@@ -1109,19 +1248,19 @@ const WidgetDiscriminator = z.discriminatedUnion('widget_type', [
 ]);
 ```
 
-### Files affected
+#### Files affected
 
 - **Edit** `src/toolkit/authoring/widget-schemas.ts` — add 10 schemas.
 - **Edit** `src/server/tools/author/add-dashboard-widget.ts` — extend input discriminator.
 - **Edit** validators that reference widget types — verify no regression.
 - **Edit** capability catalog (Item 2) — flip these widgets' `flow_otter_status` to `supported`.
 
-### Tests
+#### Tests
 
 - `tests/unit/authoring/widget-schemas.test.ts` — schema acceptance tests for each new widget.
 - `tests/integration/dashboard-widget-deploy.test.ts` — author each widget type, deploy, read back, verify equality.
 
-### Success criteria
+#### Success criteria
 
 - [ ] All 10 widgets schema-validated
 - [ ] `add_dashboard_widget` accepts each widget type
@@ -1131,15 +1270,15 @@ const WidgetDiscriminator = z.discriminatedUnion('widget_type', [
 
 ---
 
-## Item 10: 5 operator page templates
+### Item 10: 5 operator page templates
 
 **Status:** DONE (commit fd463b7) — 9 existing dashboard*2*\* templates that fit the ISA-101 4-level hierarchy recategorized as `operator` in the catalog. No template duplication; gap was discovery, not coverage.
 
-### Rationale
+#### Rationale
 
 Operator dashboards are FlowOtter's major-but-not-flagship use case (Decision 2). Today's 4 dashboard templates are skeletal. Five operator-grade page templates cover the canonical 4-level operator-screen hierarchy.
 
-### Scope
+#### Scope
 
 In: 5 new templates added to `src/toolkit/templates/builtin.ts`:
 
@@ -1151,7 +1290,7 @@ In: 5 new templates added to `src/toolkit/templates/builtin.ts`:
 
 Out: actual data wiring (templates produce widget skeletons; the agent wires data flow in).
 
-### Design
+#### Design
 
 Each template composes the new widgets from Item 9. Templates declare:
 
@@ -1176,17 +1315,17 @@ Each template composes the new widgets from Item 9. Templates declare:
 
 The `build` function emits the right combination of `ui-base`, `ui-page` (grid layout), `ui-group`, plus widgets. The catalog (Item 2) marks these as `operator` category.
 
-### Files affected
+#### Files affected
 
 - **Edit** `src/toolkit/templates/builtin.ts` — add 5 templates.
 - **Edit** capability catalog (Item 2) — add to template list.
 
-### Tests
+#### Tests
 
 - `tests/unit/toolkit/templates/operator-templates.test.ts` — each template's `build()` produces a valid AuthoringSpec; compiles to valid flows.json; passes existing dashboard-2 validators.
 - `tests/integration/operator-template-deploy.test.ts` — instantiate each, deploy, read back, verify.
 
-### Success criteria
+#### Success criteria
 
 - [ ] All 5 templates registered in `list_templates`
 - [ ] Each compiles to valid flows.json
@@ -1196,15 +1335,15 @@ The `build` function emits the right combination of `ui-base`, `ui-page` (grid l
 
 ---
 
-## Item 11: ISA-101 enforcement validators
+### Item 11: ISA-101 enforcement validators
 
 **Status:** DONE (commit d930859) — 4 new validators: unbounded-chart-append, screen-clutter, saturated-color-outside-alarm, button-group-color-decoration. Existing dashboard-2-destructive-needs-confirm already covered the 5th.
 
-### Rationale
+#### Rationale
 
 FlowOtter has 19 validators today, none of which enforce ISA-101 operator-screen design rules. Operator-dashboard authoring will produce flows that pass structural validation but violate UX standards. Add 5 new validators.
 
-### Scope
+#### Scope
 
 New validator rules:
 
@@ -1228,11 +1367,11 @@ New validator rules:
    - `ui-button-group` whose options all use different colors (none share).
    - Anti-pattern: color is signal, shouldn't be decoration.
 
-### Design
+#### Design
 
 Each rule lives in `src/toolkit/validate/rules/<name>.ts`, following the existing pattern (e.g., `dashboard-2-destructive-needs-confirm.ts`). The validate index file registers them.
 
-### Files affected
+#### Files affected
 
 - **New** `src/toolkit/validate/rules/saturated-color-outside-alarm-context.ts`
 - **New** `src/toolkit/validate/rules/unbounded-chart-append.ts`
@@ -1242,12 +1381,12 @@ Each rule lives in `src/toolkit/validate/rules/<name>.ts`, following the existin
 - **Edit** `src/toolkit/validate/index.ts` — register new rules.
 - **Edit** capability catalog — add new validators.
 
-### Tests
+#### Tests
 
 - `tests/unit/validate/rules/<rulename>.test.ts` for each new rule — passing and failing scenarios.
 - `tests/integration/isa101-validators.test.ts` — full operator template (from Item 10) passes; deliberately misconfigured versions fail.
 
-### Success criteria
+#### Success criteria
 
 - [ ] All 5 new validators fire on their conditions
 - [ ] No false positives on the 5 operator templates from Item 10
@@ -1257,15 +1396,15 @@ Each rule lives in `src/toolkit/validate/rules/<name>.ts`, following the existin
 
 ---
 
-## Item 12: User-facing slash-command MCP prompts
+### Item 12: User-facing slash-command MCP prompts
 
 **Status:** DONE (commit 7bd6ee4) — 5 prompts registered: new_flow, build_operator_dashboard, refactor_to_subflow, explain_my_flow, review_my_flow. Surface as `/mcp__flow-otter__<name>` in Claude Code.
 
-### Rationale
+#### Rationale
 
 MCP prompts surface to users as `/mcp__<server>__<prompt>` slash commands. They're the user-discovery mechanism — agents are discovered via tool descriptions; users are discovered via prompts.
 
-### Scope
+#### Scope
 
 In: 5 MCP prompts that wrap common authoring workflows:
 
@@ -1277,7 +1416,7 @@ In: 5 MCP prompts that wrap common authoring workflows:
 
 Out: prompts that take freeform multi-paragraph reasoning; prompts are structured wizards.
 
-### Design
+#### Design
 
 ```typescript
 // src/server/prompts/registry.ts
@@ -1320,7 +1459,7 @@ Follow the FlowOtter methodology:
 7. If I confirm, call preview_flow_diff, then deploy_staged_change (which will elicit final confirmation).
 ```
 
-### Files affected
+#### Files affected
 
 - **New** `src/server/prompts/types.ts`
 - **New** `src/server/prompts/registry.ts`
@@ -1328,12 +1467,12 @@ Follow the FlowOtter methodology:
 - **Edit** `src/server/transport/stdio.ts` — declare prompts capability; register prompt request handlers.
 - **Edit** capability catalog (Item 2) — add prompts list.
 
-### Tests
+#### Tests
 
 - `tests/unit/server/prompts/registry.test.ts` — each prompt's `build()` produces a non-empty string referencing the right tool names.
 - `tests/integration/prompts.test.ts` — full MCP session: list prompts → get_prompt → verify body shape.
 
-### Success criteria
+#### Success criteria
 
 - [ ] All 5 prompts registered and listable
 - [ ] `prompts/get` returns valid prompt bodies
@@ -1343,11 +1482,11 @@ Follow the FlowOtter methodology:
 
 ---
 
-## Item 13: Node-RED feature gap-closers
+### Item 13: Node-RED feature gap-closers
 
 **Status:** DONE (commit 5a1ed96) — list_installed_node_types now annotates each type with `is_core: bool` so contrib packages are visibly distinct. Junction nodes, function-node libs, per-instance subflow config nodes, and tab markdown info all work via generic add_node + passthrough — the contrib-first stance from Decision 1 makes this the correct architectural answer (no specialist proliferation).
 
-### Rationale
+#### Rationale
 
 A handful of Node-RED features FlowOtter doesn't expose, all called out in the Node-RED inventory:
 
@@ -1357,7 +1496,7 @@ A handful of Node-RED features FlowOtter doesn't expose, all called out in the N
 - Tab-level Markdown `info`
 - Contrib-package authoring story (currently `add_node` works for unknown types via passthrough but discovery isn't rich)
 
-### Scope
+#### Scope
 
 Five focused additions:
 
@@ -1367,7 +1506,7 @@ Five focused additions:
 4. **Tab markdown info** — extend whatever creates tabs (probably indirectly through `create_flow` or template instantiation) to accept `info: string`.
 5. **Contrib-package authoring story** — extend `list_installed_node_types` output to include schema-availability hints. When `add_node` is called with a contrib type, return a richer response indicating whether FlowOtter has a typed schema for it (and if not, that `passthrough` is the validation level).
 
-### Files affected
+#### Files affected
 
 - **New** `src/server/tools/author/add-junction-node.ts` (specialist toolset).
 - **Edit** `src/server/tools/author/add-subflow-instance.ts` — extend.
@@ -1376,12 +1515,12 @@ Five focused additions:
 - **Edit** `src/server/tools/read/list-installed-node-types.ts` — enrich output.
 - **Edit** capability catalog (Item 2) — add junction concept, libs feature, info feature.
 
-### Tests
+#### Tests
 
 - Per-feature unit tests.
 - `tests/integration/contrib-package-auth.test.ts` — mock a contrib type in `list_installed_node_types`; verify `add_node` paths.
 
-### Success criteria
+#### Success criteria
 
 - [ ] Junction nodes can be added
 - [ ] Function nodes can declare libs with version-gating
@@ -1392,7 +1531,7 @@ Five focused additions:
 
 ---
 
-## Final verification (after all 13 items)
+### Final verification (after all 13 items)
 
 **Status:** DONE — all 13 items shipped on main; CHANGELOG.md and package.json bumped to v1.3.0; verification gates pass on the consolidated state.
 
@@ -1410,11 +1549,11 @@ After every item is `DONE`:
 10. Maintainer reviews commit history, signs off, authorizes push.
 11. Push to remotes per the maintainer's workflow.
 
-## Open questions
+### Open questions
 
 (None at plan write time. Append here if any item hits an ambiguity that needs user input.)
 
-## Glossary
+### Glossary
 
 - **MCP** — Model Context Protocol. The standard FlowOtter implements.
 - **Elicitation** — MCP feature for servers to request structured input from the user via the client, shipped 2025-06-18 spec, supported in Claude Code v2.1.76+ (March 2026).

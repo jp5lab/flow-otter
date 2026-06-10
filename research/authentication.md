@@ -228,7 +228,7 @@ Reading the file as it stands (98 LoC, three classes + an `authFromEnv`):
 
 4. **No revocation on shutdown** — `PasswordGrantAuth` mints a token and never calls `POST /auth/revoke`. Tokens accumulate in `~/.node-red/.sessions.json` until they expire (default 7 days). For a long-lived MCP server reconnecting often, this matters. Add an optional `dispose()` that revokes the cached token.
 
-5. **`refresh_token` is dead code** — the `expires_in` field is read but the `refresh_token` field is never read because Node-RED never sends one. Fine to keep the type for future-proofing, but the comment in `auth.ts` should say _"Node-RED does not issue refresh tokens — see docs/research/authentication.md §1.2; we re-run the password grant at expiry."_
+5. **`refresh_token` is dead code** — the `expires_in` field is read but the `refresh_token` field is never read because Node-RED never sends one. Fine to keep the type for future-proofing, but the comment in `auth.ts` should say _"Node-RED does not issue refresh tokens — see research/authentication.md §1.2; we re-run the password grant at expiry."_
 
 6. **No `tokenHeader` support** — if a deployment configures `adminAuth.tokenHeader: "x-my-custom-token"`, FlowOtter's `Authorization: Bearer ...` will be ignored and fall through to `default` (often anonymous-read-only). Add a `headerName?: string` to `BearerAuth` and `PasswordGrantAuth`.
 

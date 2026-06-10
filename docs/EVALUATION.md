@@ -7,9 +7,9 @@ playbook defines the loop that proves that, scenario by scenario, and the
 hygiene gate that keeps this public repository free of private data.
 
 It complements the per-commit verification gates (typecheck / lint / format /
-tests / build / tool-coverage, see `docs/REDESIGN_PLAN.md`): those prove the
+tests / build / tool-coverage, see `docs/DESIGN.md`): those prove the
 code is sound; this proves the _product_ is usable. Strategy context lives in
-`docs/STRATEGY_RETHINK_2026-06.md` — its phase gates reference the scenarios
+`docs/DESIGN.md` — its phase gates reference the scenarios
 below.
 
 ## Principles
@@ -111,7 +111,7 @@ wontfix — nothing stays untriaged.
 - **Parallel evaluation caveat:** staging holds one pending change per
   environment. Parallel sessions need distinct `ENVIRONMENT_NAME`s _and_
   distinct Node-RED targets (e.g. compose project copies on different ports) —
-  otherwise run scenarios sequentially. See `docs/PARALLEL-SESSIONS.md`.
+  otherwise run scenarios sequentially. See `docs/ARCHITECTURE.md`.
 - Orchestrated runs (subagent fan-out) are fine for _scoring and analysis_;
   the tool-driving session against a single runtime stays sequential.
 

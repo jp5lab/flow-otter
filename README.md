@@ -8,7 +8,7 @@ If you cloned this repo via an agent (Claude Code, Cursor, etc.), the project-sc
 
 ## Status
 
-**v1.3.0 — architectural redesign: methodology, catalog, visual authoring, dashboards, ISA-101.** Introduces a methodology playbook surfaced in the MCP `instructions` field, a structured capability catalog (`get_authoring_guide`), Node-RED version detection with feature gating, a `plan_flow` methodology spine, a response-side soft-nudge guidance system, named toolsets for progressive disclosure, MCP elicitation gating destructive operations, internal dagre/elkjs layout helpers, authoring schemas for the full Dashboard 2.0 widget catalog (24 widgets), 4 ISA-101 operator-screen validators, and 5 user-facing slash-command MCP prompts. There is not yet an MCP `layout_flow` tool; agents should place nodes/groups explicitly and review with `render_flow_svg`. See [`CHANGELOG.md`](CHANGELOG.md) for the per-item summary and [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) for the design rationale. Prior lines: v1.2 closed path-traversal exposure on `set_target`, fixed audit/subflow correctness bugs, hardened HTTP retry semantics. v1.1 fixed lossy roundtrip and wired the previously dead config knobs.
+**v1.3.0 — architectural redesign: methodology, catalog, visual authoring, dashboards, ISA-101.** Introduces a methodology playbook surfaced in the MCP `instructions` field, a structured capability catalog (`get_authoring_guide`), Node-RED version detection with feature gating, a `plan_flow` methodology spine, a response-side soft-nudge guidance system, named toolsets for progressive disclosure, MCP elicitation gating destructive operations, internal dagre/elkjs layout helpers, authoring schemas for the full Dashboard 2.0 widget catalog (24 widgets), 4 ISA-101 operator-screen validators, and 5 user-facing slash-command MCP prompts. There is not yet an MCP `layout_flow` tool; agents should place nodes/groups explicitly and review with `render_flow_svg`. See [`CHANGELOG.md`](CHANGELOG.md) for the per-item summary and [`docs/DESIGN.md`](docs/DESIGN.md) for the design rationale (and v2 roadmap). Prior lines: v1.2 closed path-traversal exposure on `set_target`, fixed audit/subflow correctness bugs, hardened HTTP retry semantics. v1.1 fixed lossy roundtrip and wired the previously dead config knobs.
 
 ### Tool surface (default visible: ~47 tools; 66 with all toolsets loaded)
 
@@ -192,12 +192,15 @@ The default config is read-only. Author/deploy/dangerous tools appear in `tools/
 
 - [Agent Quickstart](docs/AGENT_QUICKSTART.md) — how an AI agent drives FlowOtter
 - [Tool Reference](docs/TOOL_REFERENCE.md) — every tool, signature, example
-- [Architecture](docs/ARCHITECTURE.md) — layer boundaries + pipelines
+- [Architecture](docs/ARCHITECTURE.md) — layer boundaries, pipelines, and the parallel-session / multi-target process model
 - [Client Configuration](docs/CLIENT_CONFIG.md) — MCP client setup
 - [Security](docs/SECURITY.md) — threat model + redaction + tier gates
 - [Evaluation Playbook](docs/EVALUATION.md) — scenario-driven product evaluation + public-repo hygiene gate
 - [Non-Goals](docs/NON_GOALS.md) — what v1 explicitly does NOT do
+- [Design & Roadmap](docs/DESIGN.md) — completed v1.3.0 redesign plan + proposed v2 strategy
 - [Changelog](CHANGELOG.md) — per-version change record
+
+Internal Node-RED reference research (admin API, flows.json schema, auth, Dashboard 2.0, etc.) lives in [`research/`](research/) — background material, not part of the published package.
 
 ## License
 

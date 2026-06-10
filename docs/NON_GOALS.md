@@ -32,7 +32,7 @@ The items below are explicitly **out of scope** for the FlowOtter v1.x line. The
 ## Server-side surface
 
 - **Web UI for snapshots / audit log.** Both are filesystem-only artefacts inspected via `get_snapshot` / `get_audit_log_recent` MCP tools.
-- **Credential authoring.** FlowOtter does not author Node-RED credentials — flows deploy with empty credential fields and the user fills them in via the Node-RED editor. The `credential-leak` validator catches secrets stuffed into wrong fields. See decision rationale in `docs/REDESIGN_PLAN.md`.
+- **Credential authoring.** FlowOtter does not author Node-RED credentials — flows deploy with empty credential fields and the user fills them in via the Node-RED editor. The `credential-leak` validator catches secrets stuffed into wrong fields. See decision rationale in `docs/DESIGN.md`.
 
 ---
 

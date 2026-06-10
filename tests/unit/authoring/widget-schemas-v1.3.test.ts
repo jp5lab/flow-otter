@@ -8,7 +8,7 @@ import {
 
 /**
  * Coverage for the 10 widget schemas added in v1.3.0 / Item 9 of
- * REDESIGN_PLAN.md. Each schema is permissive (`.passthrough`) — these
+ * the v1.3.0 plan (docs/DESIGN.md). Each schema is permissive (`.passthrough`) — these
  * tests verify the named fields validate, plus the anchor requirement is
  * registered so add_dashboard_widget can place each widget correctly.
  */

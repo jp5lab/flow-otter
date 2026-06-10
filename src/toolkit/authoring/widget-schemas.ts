@@ -209,7 +209,7 @@ const GroupDialogPassthrough = z
   })
   .passthrough();
 
-// --- Widgets added in v1.3.0 (Item 9 of REDESIGN_PLAN.md) ---
+// --- Widgets added in v1.3.0 (Item 9 of the v1.3.0 plan in docs/DESIGN.md) ---
 //
 // Schemas are intentionally permissive (.passthrough): Dashboard 2.0 widget
 // config surface is broad and version-evolving; we lock in the
