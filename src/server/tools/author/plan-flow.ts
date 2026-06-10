@@ -39,34 +39,21 @@ const OutputSchema = z.object({
 type Output = z.infer<typeof OutputSchema>;
 
 /**
- * Pick a layout engine based on the planned flow shape. ELK gets selected
- * when the agent declares groups/subflows OR the total exceeds the dagre
- * sweet spot (~30 nodes). Mirrors the heuristic in layout/index.ts (Item 8)
- * so the plan and the actual layout call agree.
+ * Layout is currently an explicit authoring task, not an exposed automatic
+ * MCP operation. The toolkit still has deterministic layout helpers, but no
+ * `layout_flow` tool exists yet; plan_flow must not imply one.
  */
 function chooseLayoutStrategy(stages: readonly z.infer<typeof StageInputSchema>[]): {
-  strategy: 'dagre_auto' | 'elk_layered';
+  strategy: 'manual';
   rationale: string;
 } {
   const total = stages.reduce((n, s) => n + s.estimated_nodes, 0);
   const hasGroupOrSubflow = stages.some(
     (s) => s.organization === 'group' || s.organization === 'subflow',
   );
-  if (hasGroupOrSubflow) {
-    return {
-      strategy: 'elk_layered',
-      rationale: 'ELK handles groups and subflow containment better than dagre.',
-    };
-  }
-  if (total >= 30) {
-    return {
-      strategy: 'elk_layered',
-      rationale: `Total estimated nodes (${total}) is past dagre's sweet spot (~25-30). ELK produces cleaner layered layouts at this size.`,
-    };
-  }
   return {
-    strategy: 'dagre_auto',
-    rationale: `Total estimated nodes (${total}) fits dagre well; ELK overhead isn't worth it.`,
+    strategy: 'manual',
+    rationale: `Use explicit node positions, group geometry, and render_flow_svg review. Auto-layout is not exposed as an MCP tool yet${hasGroupOrSubflow ? '; grouped/subflow-heavy flows need human visual approval' : ''}${total >= 30 ? `, especially at ${total} estimated nodes` : ''}.`,
   };
 }
 
@@ -92,7 +79,7 @@ function buildNextActions(input: Input): string[] {
   }
   if (usesGroup) {
     out.push(
-      'For each "group" stage, call add_group after the constituent nodes are placed (groups reference node keys).',
+      'For each "group" stage, call add_group after the constituent nodes are placed. Supply position/size when you know the visual bounds.',
     );
   }
   out.push(
@@ -101,9 +88,7 @@ function buildNextActions(input: Input): string[] {
   out.push(
     'Once all nodes are placed, wire them: wire_nodes for single edges, set_wires for bulk.',
   );
-  out.push(
-    'Compute layout: pass the recommended engine in {engine} to layout helpers (or use auto-selection).',
-  );
+  out.push('Refine layout with explicit positions, move_node, and add_group geometry.');
   out.push('render_flow_svg and show the user; confirm with elicitation before deploying.');
   out.push(
     'validate_flow, preview_flow_diff, then deploy_staged_change — never deploy without explicit confirmation.',
@@ -145,7 +130,7 @@ function buildWarnings(input: Input, total: number): string[] {
 export const planFlowTool: Tool<Input, Output> = {
   name: 'plan_flow',
   description:
-    'Records a structured authoring plan for the current flow: stages, organization decisions (group vs subflow vs link vs tab), estimated node count, layout strategy. Writes ~/.flow-otter/<env>/staging/plan.json so soft-nudge guidance can later detect "you started adding nodes without planning." Use this BEFORE adding any nodes on a flow that will exceed ~10 nodes or contain operator dashboards.',
+    'Records a structured authoring plan for the current flow: stages, organization decisions (group vs subflow vs link vs tab), estimated node count, and layout guidance. Writes ~/.flow-otter/<env>/staging/plan.json so soft-nudge guidance can later detect "you started adding nodes without planning." Use this BEFORE adding any nodes on a flow that will exceed ~10 nodes or contain operator dashboards.',
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

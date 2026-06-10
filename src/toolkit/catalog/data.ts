@@ -885,8 +885,8 @@ export const METHODOLOGY: MethodologyEntry = {
     {
       name: 'layout',
       description:
-        'Auto-engine picks dagre or ELK by heuristic (≥30 nodes or groups present → ELK). Pass engine override only if you have a reason.',
-      tools: [],
+        'Explicit visual layout pass. Use node positions, move_node, add_group geometry, and render_flow_svg review; automatic layout is not exposed as an MCP tool yet.',
+      tools: ['move_node', 'add_group', 'render_flow_svg'],
     },
     {
       name: 'review',

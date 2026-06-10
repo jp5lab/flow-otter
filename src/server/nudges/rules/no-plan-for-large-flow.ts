@@ -43,6 +43,6 @@ export const noPlanForLargeFlowNudge: Nudge = {
   check: (ctx) => {
     if (ctx.staging.has_plan) return null;
     if (ctx.staging.node_count < TRIGGER_NODE_COUNT) return null;
-    return `No plan_flow record exists for the current staged change (${ctx.staging.node_count} nodes already staged). For flows of this size, FlowOtter's methodology recommends calling plan_flow first to decide stages, organization (groups vs subflows vs link nodes vs separate tabs), and layout strategy. Call plan_flow before continuing to add nodes.`;
+    return `No plan_flow record exists for the current staged change (${ctx.staging.node_count} nodes already staged). For flows of this size, FlowOtter's methodology recommends calling plan_flow first to decide stages, organization (groups vs subflows vs link nodes vs separate tabs), and visual layout approach. Call plan_flow before continuing to add nodes.`;
   },
 };

@@ -34,7 +34,7 @@ function arg(args: Readonly<Record<string, string>>, name: string, fallback = ''
 const newFlowPrompt: FlowOtterPrompt = {
   name: 'new_flow',
   description:
-    'Build a new Node-RED flow end-to-end with FlowOtter. Walks plan → organize → structure → wire → layout → review → deploy.',
+    'Build a new Node-RED flow end-to-end with FlowOtter. Walks plan → organize → structure → wire → visual review → deploy.',
   arguments: [
     {
       name: 'goal',
@@ -60,8 +60,8 @@ const newFlowPrompt: FlowOtterPrompt = {
         : `2. Start with an empty staged change.`,
       `3. For each stage: add nodes (prefer add_node; enable_toolset('author_specialists') if you need typed conveniences).`,
       `4. Wire stages with wire_nodes / set_wires.`,
-      `5. Layout is computed automatically (dagre for small flows, ELK for ≥30 nodes or grouped flows).`,
-      `6. render_flow_svg and show me the result.`,
+      `5. Refine layout explicitly with positions, move_node, and add_group geometry; do not assume auto-layout is available.`,
+      `6. render_flow_svg and show me the result before programming/deploying substantial flows.`,
       `7. validate_flow must pass.`,
       `8. preview_flow_diff, then deploy_staged_change — I will be elicited to confirm.`,
     ].join('\n');

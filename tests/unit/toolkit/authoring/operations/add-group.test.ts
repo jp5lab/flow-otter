@@ -28,6 +28,7 @@ describe('addGroup', () => {
     const inserted = tab.groups.find((g) => g.key === newGroupKey);
     expect(inserted?.name).toBe('My Group');
     expect(inserted?.nodeKeys).toEqual(['existing']);
+    expect(tab.nodes[0]?.groupKey).toBe(newGroupKey);
     expect(newGroupKey).toBe('group');
   });
 
@@ -57,5 +58,54 @@ describe('addGroup', () => {
     const { spec, newGroupKey } = addGroup(baseSpec, 'tab-main', { name: 'Empty' });
     const inserted = spec.tabs[0]!.groups.find((g) => g.key === newGroupKey);
     expect(inserted?.nodeKeys).toEqual([]);
+  });
+
+  it('honors explicit group geometry and metadata', () => {
+    const { spec, newGroupKey } = addGroup(baseSpec, 'tab-main', {
+      name: 'Nested',
+      nodeKeys: ['existing'],
+      position: { x: 60, y: 80 },
+      size: { w: 320, h: 180 },
+      parentKey: 'parent',
+      info: 'Operator-facing section notes',
+      style: { fill: '#f5f5f5' },
+    });
+    const inserted = spec.tabs[0]!.groups.find((g) => g.key === newGroupKey);
+    expect(inserted).toMatchObject({
+      name: 'Nested',
+      nodeKeys: ['existing'],
+      position: { x: 60, y: 80 },
+      size: { w: 320, h: 180 },
+      parentKey: 'parent',
+      info: 'Operator-facing section notes',
+      style: { fill: '#f5f5f5' },
+    });
+  });
+
+  it('moves claimed members out of any prior group', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          nodes: [
+            { key: 'existing', type: 'function', position: { x: 100, y: 100 }, groupKey: 'old' },
+          ],
+          connections: [],
+          groups: [{ key: 'old', name: 'Old', nodeKeys: ['existing'] }],
+          comments: [],
+        },
+      ],
+    };
+
+    const { spec: updated, newGroupKey } = addGroup(spec, 'tab-main', {
+      name: 'New',
+      nodeKeys: ['existing'],
+    });
+
+    const tab = updated.tabs[0]!;
+    expect(tab.nodes[0]?.groupKey).toBe(newGroupKey);
+    expect(tab.groups.find((g) => g.key === 'old')?.nodeKeys).toEqual([]);
+    expect(tab.groups.find((g) => g.key === newGroupKey)?.nodeKeys).toEqual(['existing']);
   });
 });

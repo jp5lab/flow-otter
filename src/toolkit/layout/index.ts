@@ -6,8 +6,8 @@
  *     node), or ≥30 total nodes — i.e., past dagre's sweet spot.
  *   - dagre otherwise — smaller bundle, synchronous, no startup cost.
  *
- * The agent can override with `engine: 'dagre' | 'elk'` if it wants a
- * specific engine. `engine: 'auto'` (the default) runs the heuristic.
+ * This is a toolkit helper, not an MCP tool. Agents currently lay out flows
+ * through explicit positions/group geometry plus render_flow_svg review.
  *
  * Per FlowOtter Decision 1, Item 8 of the v1.3.0 plan: small flows stay
  * fast with dagre; flows that benefit from port/group awareness escalate
@@ -27,8 +27,8 @@ export interface LayoutFlowsOpts extends DagreOpts, ElkLayoutOpts {
 }
 
 /**
- * Heuristic for auto-engine selection. Mirrors the layout_strategy
- * decision in plan_flow so plan + layout agree.
+ * Heuristic for auto-engine selection used by internal callers. plan_flow
+ * returns manual guidance until a real MCP layout_flow tool exists.
  */
 function autoEngine(spec: AuthoringSpec): 'dagre' | 'elk' {
   let totalNodes = 0;

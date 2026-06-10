@@ -6,11 +6,29 @@ import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 
+const PositionSchema = z
+  .object({
+    x: z.number(),
+    y: z.number(),
+  })
+  .strict();
+
+const SizeSchema = z
+  .object({
+    w: z.number().positive(),
+    h: z.number().positive(),
+  })
+  .strict();
+
 const InputSchema = z
   .object({
     tab_id: z.string().min(1, 'tab_id is required'),
     name: z.string().min(1, 'name is required').max(24),
     node_keys: z.array(z.string().min(1)).optional(),
+    position: PositionSchema.optional(),
+    size: SizeSchema.optional(),
+    parent_key: z.string().min(1).optional(),
+    info: z.string().optional(),
     style: z.record(z.unknown()).optional(),
   })
   .strict();
@@ -45,7 +63,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const addGroupTool: Tool<Input, Output> = {
   name: 'add_group',
   description:
-    'Stages a new group on the given tab. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+    'Stages a new visual group on the given tab. Supports node membership, position, size, parent group, info, and style so agents can sketch readable Node-RED sections before programming internals. Does NOT deploy.',
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {
@@ -57,6 +75,26 @@ export const addGroupTool: Tool<Input, Output> = {
         type: 'array',
         items: { type: 'string', minLength: 1 },
       },
+      position: {
+        type: 'object',
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+        },
+        required: ['x', 'y'],
+        additionalProperties: false,
+      },
+      size: {
+        type: 'object',
+        properties: {
+          w: { type: 'number', exclusiveMinimum: 0 },
+          h: { type: 'number', exclusiveMinimum: 0 },
+        },
+        required: ['w', 'h'],
+        additionalProperties: false,
+      },
+      parent_key: { type: 'string', minLength: 1 },
+      info: { type: 'string' },
       style: { type: 'object', additionalProperties: true },
     },
     required: ['tab_id', 'name'],
@@ -74,6 +112,10 @@ export const addGroupTool: Tool<Input, Output> = {
         }
         const opts: Parameters<typeof addGroup>[2] = { name: input.name };
         if (input.node_keys !== undefined) opts.nodeKeys = input.node_keys;
+        if (input.position !== undefined) opts.position = input.position;
+        if (input.size !== undefined) opts.size = input.size;
+        if (input.parent_key !== undefined) opts.parentKey = input.parent_key;
+        if (input.info !== undefined) opts.info = input.info;
         if (input.style !== undefined) opts.style = input.style;
         const { spec: nextSpec, newGroupKey } = addGroup(priorSpec, tabId, opts);
         return { nextSpec, extras: { tabId, newGroupKey } };
