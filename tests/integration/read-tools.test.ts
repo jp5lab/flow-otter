@@ -125,11 +125,16 @@ describe('read tools against seeded Node-RED', () => {
     expect(typeof out.has_errors).toBe('boolean');
   });
 
-  it('render_flow_svg produces an svg string', async () => {
+  it('render_flow_svg produces an svg string with center-anchored geometry (REND-3)', async () => {
     const out = (await callTool(rig.registry, rig.container, 'render_flow_svg', {
       tab_id: FIXTURE_TAB_ID,
     })) as { svg: string };
     expect(out.svg).toContain('<svg');
+    // Seeded inject 'Tick' at (100, 100): w 100 → top-left (50, 85); inject
+    // has no input port, one output port centered on the right edge.
+    expect(out.svg).toContain('<rect x="50" y="85" width="100" height="30"');
+    expect(out.svg).toContain('<circle cx="150" cy="100"');
+    expect(out.svg.match(/<circle /g)).toHaveLength(1);
   });
 
   it('export_snapshot + list_snapshots + get_snapshot round-trip', async () => {

@@ -1,25 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="544" height="194" viewBox="0 0 544 194">
-  <rect width="544" height="194" fill="#fafafa"/>
-  <path d="M 180 115 C 210 115, 210 115, 240 115" stroke="#888" stroke-width="2" fill="none"/>
-  <path d="M 340 115 C 380 115, 380 75, 420 75" stroke="#888" stroke-width="2" fill="none"/>
-  <path d="M 340 130 C 380 130, 380 115, 420 115" stroke="#888" stroke-width="2" fill="none"/>
-  <path d="M 340 145 C 380 145, 380 155, 420 155" stroke="#888" stroke-width="2" fill="none"/>
-  <rect x="80" y="100" width="100" height="30" rx="4" ry="4" fill="#a6bbcf" stroke="#888888" stroke-width="1"/>
-  <text x="130" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Trigger</text>
-  <circle cx="80" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
-  <circle cx="180" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
-  <rect x="240" y="100" width="100" height="30" rx="4" ry="4" fill="#fdd0a2" stroke="#888888" stroke-width="1"/>
-  <text x="290" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Fan</text>
-  <circle cx="240" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
-  <circle cx="340" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
-  <rect x="420" y="60" width="100" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
-  <text x="470" y="79" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">D1</text>
-  <circle cx="420" cy="75" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
-  <rect x="420" y="100" width="100" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
-  <text x="470" y="119" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">D2</text>
-  <circle cx="420" cy="115" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
-  <rect x="420" y="140" width="100" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
-  <text x="470" y="159" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">D3</text>
-  <circle cx="420" cy="155" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="494" height="179" viewBox="0 0 494 179">
+  <rect width="494" height="179" fill="#fafafa"/>
+  <path d="M 130 100 C 160 100, 160 100, 190 100" stroke="#888" stroke-width="2" fill="none"/>
+  <path d="M 290 87 C 330 87, 330 60, 370 60" stroke="#888" stroke-width="2" fill="none"/>
+  <path d="M 290 100 C 330 100, 330 100, 370 100" stroke="#888" stroke-width="2" fill="none"/>
+  <path d="M 290 113 C 330 113, 330 140, 370 140" stroke="#888" stroke-width="2" fill="none"/>
+  <rect x="30" y="85" width="100" height="30" rx="4" ry="4" fill="#a6bbcf" stroke="#888888" stroke-width="1"/>
+  <text x="80" y="104" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Trigger</text>
+  <circle cx="130" cy="100" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="190" y="77.50" width="100" height="45" rx="4" ry="4" fill="#fdd0a2" stroke="#888888" stroke-width="1"/>
+  <text x="240" y="104" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">Fan</text>
+  <circle cx="190" cy="100" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="290" cy="87" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="290" cy="100" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <circle cx="290" cy="113" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="370" y="45" width="100" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
+  <text x="420" y="64" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">D1</text>
+  <circle cx="370" cy="60" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="370" y="85" width="100" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
+  <text x="420" y="104" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">D2</text>
+  <circle cx="370" cy="100" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
+  <rect x="370" y="125" width="100" height="30" rx="4" ry="4" fill="#87a980" stroke="#888888" stroke-width="1"/>
+  <text x="420" y="144" font-family="Arial,sans-serif" font-size="12" fill="#222222" text-anchor="middle">D3</text>
+  <circle cx="370" cy="140" r="5" fill="#d9d9d9" stroke="#999" stroke-width="1"/>
 </svg>

@@ -34,7 +34,12 @@ export {
   type DiagnosticSeverity,
 } from './validate/index.js';
 export { lintFlows } from './lint/flows-lint.js';
-export { renderSvg } from './render/svg.js';
+export {
+  renderSvg,
+  renderGeometry,
+  type RenderGeometryEntry,
+  type RenderGeometryPort,
+} from './render/svg.js';
 export { diffFlows, summarizeDiff, type SemanticDiff } from './diff/semantic.js';
 export { normalize } from './diff/normalize.js';
 export { snapToGrid, isOnGrid, DEFAULT_GRID } from './layout/grid.js';

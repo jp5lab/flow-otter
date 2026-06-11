@@ -1,17 +1,51 @@
+/**
+ * Deterministic SVG renderer + render geometry (REND-3).
+ *
+ * Geometry rules (editor-true, pinned by the REND-1 fixtures via metrics.ts):
+ *   - Node and comment x/y are CENTER anchors (the editor convention);
+ *     group x/y/w/h is a top-left bounding box, exactly as in flows.json.
+ *   - Node dimensions come from `nodeDimensionsFor` (frozen contract #2);
+ *     ports from `outputPortAnchors`/`inputPortAnchor`.
+ *   - Output-port counts read TOP-LEVEL `outputs`/`rules` via
+ *     `getOutputPortCount(n.type, n)` (the phantom `passthrough` read is
+ *     dead); subflow instances take their port counts from the subflow
+ *     definition's `in`/`out` arrays.
+ *   - Junctions are 10×10 waypoints centered on (x, y), drawn as r=5
+ *     circles, and participate in the wire walk via `wires[0]`.
+ *   - Config nodes never render: a node referenced from ANOTHER node's
+ *     scalar string prop (excluding wires/links/scope/g/z/d/id) is
+ *     config-by-reference and excluded — renderer-side workaround for
+ *     stamped canvas fields on config nodes (audit e1#9; root cause WSB-8) —
+ *     with `isConfigNode` / non-regular shape checks as belt-and-braces.
+ *   - The whole body is translated so negative extents (center-anchored
+ *     nodes near the origin, port overhang included) are never clipped.
+ *
+ * `renderGeometry(flows, tabId)` is frozen contract #1: the per-node
+ * `{id, x, y, w, h, ports[]}` array (center-convention, post-translate)
+ * consumed by the REND-7 editor-fidelity comparator, EVAL-4 blind packs and
+ * `render_flow_png include_geometry`. SVG coordinates equal geometry
+ * coordinates exactly — the translate is applied arithmetically, not via a
+ * transform attribute.
+ */
 import {
   hasCanvasPosition,
   isComment,
+  isConfigNode,
   isGroup,
+  isJunction,
   isRegularNode,
+  isSubflowDef,
+  isSubflowInstance,
   isTab,
+  SUBFLOW_INSTANCE_PREFIX,
   type FlowsJson,
   type FlowsJsonNode,
-  type RegularNode,
+  type SubflowDefNode,
   type TabNode,
 } from '../../shared/flows-json.js';
-import { getInputPortCount, getOutputPortCount } from '../authoring/types.js';
+import { getInputPortCount, getOutputPortCount, isNodeLabelHidden } from '../authoring/types.js';
 
-import { fitLabel, nodeDimensionsFor } from './metrics.js';
+import { fitLabel, inputPortAnchor, nodeDimensionsFor, outputPortAnchors } from './metrics.js';
 
 export interface RenderSvgOptions {
   /** Render only this tab. If omitted, renders the first tab. */
@@ -29,10 +63,12 @@ const DEFAULTS = {
   padding: 24,
 } as const;
 
-const NODE_HEIGHT = 30;
 const PORT_RADIUS = 5;
 const PORT_FILL = '#d9d9d9';
 const PORT_STROKE = '#999';
+const JUNCTION_RADIUS = 5;
+const JUNCTION_FILL = '#eeeeee';
+const JUNCTION_SIZE = 10;
 const TAB_GAP = 40;
 const TAB_LABEL_OFFSET = 8;
 
@@ -46,6 +82,21 @@ const TYPE_COLOR: Readonly<Record<string, string>> = {
   comment: '#ffffff',
   default: '#dddddd',
 };
+
+/**
+ * Scalar string props under these keys never mark their target as a config
+ * node: wiring/topology (`wires`, `links`, `scope`), placement (`g`, `z`),
+ * flags (`d`) and the node's own `id`.
+ */
+const CONFIG_REF_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
+  'wires',
+  'links',
+  'scope',
+  'g',
+  'z',
+  'd',
+  'id',
+]);
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? n.toString() : n.toFixed(2);
@@ -74,20 +125,49 @@ function findTab(flows: FlowsJson, tabId: string | undefined): TabNode | undefin
   return undefined;
 }
 
-interface NodeBox {
-  id: string;
+/** A rendered port (box center), in absolute post-translate canvas coordinates. */
+export interface RenderGeometryPort {
+  kind: 'input' | 'output';
+  index: number;
   x: number;
+  y: number;
+}
+
+/**
+ * Frozen contract #1 — one per-canvas-object geometry entry:
+ * `{id, x, y, w, h, ports[]}`, center-convention, post-translate. `kind` is
+ * an additive discriminator (junctions have no id attribute in the editor
+ * DOM, so fidelity comparators pair them by coordinates).
+ */
+export interface RenderGeometryEntry {
+  id: string;
+  kind: 'node' | 'junction' | 'group' | 'comment';
+  /** Center x (groups are converted from their top-left bbox). */
+  x: number;
+  /** Center y (groups are converted from their top-left bbox). */
   y: number;
   w: number;
   h: number;
+  ports: RenderGeometryPort[];
+}
+
+interface DrawNode {
+  id: string;
+  kind: 'node' | 'junction';
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
   label: string;
+  hideLabel: boolean;
   fill: string;
-  outputs: number;
-  isRegular: boolean;
-  isLinkIn: boolean;
+  hasInput: boolean;
+  inputPoint: { x: number; y: number };
+  outputPoints: Array<{ x: number; y: number }>;
 }
 
 interface GroupBox {
+  id: string;
   x: number;
   y: number;
   w: number;
@@ -96,8 +176,9 @@ interface GroupBox {
 }
 
 interface CommentBox {
-  x: number;
-  y: number;
+  id: string;
+  cx: number;
+  cy: number;
   w: number;
   h: number;
   label: string;
@@ -118,6 +199,17 @@ interface RenderedTab {
   width: number;
   height: number;
   label: string;
+}
+
+interface TabGeometry {
+  drawNodes: DrawNode[];
+  groups: GroupBox[];
+  comments: CommentBox[];
+  wires: WireSegment[];
+  /** Geometry entries in flows order (frozen contract #1). */
+  entries: RenderGeometryEntry[];
+  width: number;
+  height: number;
 }
 
 export function renderSvg(flows: FlowsJson, opts: RenderSvgOptions = {}): string {
@@ -158,142 +250,316 @@ export function renderSvg(flows: FlowsJson, opts: RenderSvgOptions = {}): string
   return svgRoot(r.width, r.height, required.background, r.body);
 }
 
-function renderTab(tab: TabNode, flows: FlowsJson, opts: RequiredOpts): RenderedTab {
+/**
+ * Frozen contract #1: per-node `{id, x, y, w, h, ports[]}` geometry for one
+ * tab (the first tab when `tabId` is omitted; `[]` for an unknown tab id,
+ * mirroring `renderSvg`'s empty canvas). Center-convention, post-translate —
+ * the values equal the coordinates in the `renderSvg` output byte-for-byte.
+ */
+export function renderGeometry(flows: FlowsJson, tabId?: string): RenderGeometryEntry[] {
+  const tab = findTab(flows, tabId);
+  if (!tab) return [];
+  return computeTabGeometry(tab, flows).entries;
+}
+
+/**
+ * Ids of nodes referenced from ANOTHER node's scalar string prop — the
+ * config-by-reference exclusion (e1#9 renderer-side workaround; WSB-8 owns
+ * the root cause). Self-references (`_authoringKey` equals the node's own id
+ * on adopted flows) never count.
+ */
+function configByReferenceIds(flows: FlowsJson): Set<string> {
+  const ids = new Set<string>();
+  for (const n of flows) ids.add(n.id);
+  const referenced = new Set<string>();
+  for (const n of flows) {
+    for (const [key, value] of Object.entries(n)) {
+      if (CONFIG_REF_EXCLUDED_KEYS.has(key)) continue;
+      if (typeof value === 'string' && value !== n.id && ids.has(value)) referenced.add(value);
+    }
+  }
+  return referenced;
+}
+
+function wiresOf(n: FlowsJsonNode): string[][] {
+  const wires = (n as { wires?: unknown }).wires;
+  if (!Array.isArray(wires)) return [];
+  return wires as string[][];
+}
+
+function computeTabGeometry(tab: TabNode, flows: FlowsJson): TabGeometry {
   const tabNodes = flows.filter(
-    (n): n is RegularNode | FlowsJsonNode =>
+    (n): n is FlowsJsonNode & { x: number; y: number } =>
       hasCanvasPosition(n) && (n as { z?: string }).z === tab.id,
   );
 
-  const idToNode = new Map<string, FlowsJsonNode>();
-  for (const n of flows) idToNode.set(n.id, n);
+  const subflowDefs = new Map<string, SubflowDefNode>();
+  for (const n of flows) if (isSubflowDef(n)) subflowDefs.set(n.id, n);
 
-  const boxes: NodeBox[] = [];
+  const configIds = configByReferenceIds(flows);
+
+  const drawNodes: DrawNode[] = [];
   const groups: GroupBox[] = [];
   const comments: CommentBox[] = [];
-  const boxById = new Map<string, NodeBox>();
+  const drawById = new Map<string, DrawNode>();
+  const groupById = new Map<string, GroupBox>();
+  const commentById = new Map<string, CommentBox>();
 
   for (const n of tabNodes) {
-    if (!hasCanvasPosition(n)) continue;
     const rawName =
       typeof (n as { name?: string }).name === 'string' ? (n as { name: string }).name : '';
     if (isGroup(n)) {
       const gw = (n as { w?: number }).w ?? 200;
       const gh = (n as { h?: number }).h ?? 100;
-      groups.push({ x: n.x, y: n.y, w: gw, h: gh, label: rawName });
+      const g: GroupBox = { id: n.id, x: n.x, y: n.y, w: gw, h: gh, label: rawName };
+      groups.push(g);
+      groupById.set(n.id, g);
       continue;
     }
     if (isComment(n)) {
-      const cw = (n as { w?: number }).w ?? 160;
-      const ch = (n as { h?: number }).h ?? 30;
-      comments.push({ x: n.x, y: n.y, w: cw, h: ch, label: rawName });
+      const explicitW = (n as { w?: number }).w;
+      const explicitH = (n as { h?: number }).h;
+      // Same sizing as compile's auto-fit: explicit size wins, otherwise the
+      // editor measures comments through the standard label formula.
+      const measured = nodeDimensionsFor(rawName, { inputs: 0, outputs: 0 });
+      const c: CommentBox = {
+        id: n.id,
+        cx: n.x,
+        cy: n.y,
+        w: explicitW ?? measured.w,
+        h: explicitH ?? measured.h,
+        label: rawName,
+      };
+      comments.push(c);
+      commentById.set(n.id, c);
       continue;
     }
-    const passthrough = (n as { passthrough?: Record<string, unknown> }).passthrough;
-    const outputs = isRegularNode(n) ? getOutputPortCount(n.type, passthrough) : 0;
+    if (isJunction(n)) {
+      const j: DrawNode = {
+        id: n.id,
+        kind: 'junction',
+        cx: n.x,
+        cy: n.y,
+        w: JUNCTION_SIZE,
+        h: JUNCTION_SIZE,
+        label: '',
+        hideLabel: true,
+        fill: JUNCTION_FILL,
+        hasInput: true,
+        // Junction wires attach at the waypoint itself.
+        inputPoint: { x: n.x, y: n.y },
+        outputPoints: [{ x: n.x, y: n.y }],
+      };
+      drawNodes.push(j);
+      drawById.set(n.id, j);
+      continue;
+    }
+    // Config nodes never render: config-by-reference is the primary signal
+    // (stamped canvas fields, e1#9); the shape checks are belt-and-braces.
+    if (configIds.has(n.id) || isConfigNode(n) || !isRegularNode(n)) continue;
+
+    const rec = n as Record<string, unknown>;
+    let inputs: number;
+    let outputs: number;
+    if (isSubflowInstance(n)) {
+      const def = subflowDefs.get(n.type.slice(SUBFLOW_INSTANCE_PREFIX.length));
+      inputs = def?.in?.length ?? 1;
+      outputs = def?.out?.length ?? 1;
+    } else {
+      inputs = getInputPortCount(n.type, rec);
+      outputs = getOutputPortCount(n.type, rec);
+    }
+    // Degenerate-input guard: every wire row must own a port so wire
+    // endpoints always equal port coordinates. Valid flows always satisfy
+    // wires.length === outputs already.
+    outputs = Math.max(outputs, wiresOf(n).length);
+    const hideLabel = isNodeLabelHidden(n.type, rec);
     const label = rawName !== '' ? rawName : n.type;
-    // Editor-true width (REND-2). Heights, anchors, ports and label-hidden
-    // link pills are REND-3's renderer-geometry pass.
-    const { w } = nodeDimensionsFor(label, {
-      inputs: getInputPortCount(n.type, passthrough),
-      outputs,
-    });
-    const fitted = fitLabelToBox(label, w);
-    const box: NodeBox = {
+    const { w, h } = nodeDimensionsFor(label, { inputs, outputs, hideLabel });
+    const left = n.x - w / 2;
+    const top = n.y - h / 2;
+    const inAnchor = inputPortAnchor(h);
+    const box: DrawNode = {
       id: n.id,
-      x: n.x,
-      y: n.y,
+      kind: 'node',
+      cx: n.x,
+      cy: n.y,
       w,
-      h: NODE_HEIGHT,
-      label: fitted,
+      h,
+      label,
+      hideLabel,
       fill: colorFor(n),
-      outputs,
-      isRegular: isRegularNode(n),
-      isLinkIn: n.type === 'link in' || n.type === 'link_in',
+      hasInput: inputs > 0,
+      inputPoint: { x: left + inAnchor.x, y: top + inAnchor.y },
+      outputPoints: outputPortAnchors(w, h, outputs).map((a) => ({
+        x: left + a.x,
+        y: top + a.y,
+      })),
     };
-    boxes.push(box);
-    boxById.set(n.id, box);
+    drawNodes.push(box);
+    drawById.set(n.id, box);
   }
 
   const wires: WireSegment[] = [];
   for (const n of tabNodes) {
-    if (!isRegularNode(n)) continue;
-    const fromBox = boxById.get(n.id);
+    const fromBox = drawById.get(n.id);
     if (!fromBox) continue;
-    const wiresArr = n.wires ?? [];
-    for (let port = 0; port < wiresArr.length; port++) {
-      const targets = wiresArr[port] ?? [];
-      for (const targetId of targets) {
-        const targetBox = boxById.get(targetId);
-        if (!targetBox) {
-          const target = idToNode.get(targetId);
-          if (!target || !hasCanvasPosition(target)) continue;
-          wires.push({
-            from: { x: fromBox.x + fromBox.w, y: outputPortY(fromBox, port, fromBox.outputs) },
-            to: { x: target.x, y: target.y + NODE_HEIGHT / 2 },
-          });
-          continue;
-        }
-        wires.push({
-          from: { x: fromBox.x + fromBox.w, y: outputPortY(fromBox, port, fromBox.outputs) },
-          to: { x: targetBox.x, y: targetBox.y + targetBox.h / 2 },
-        });
+    // Junctions have a single output port: walk wires[0] only.
+    const rows = fromBox.kind === 'junction' ? wiresOf(n).slice(0, 1) : wiresOf(n);
+    for (let port = 0; port < rows.length; port++) {
+      const from = fromBox.outputPoints[port];
+      if (!from) continue;
+      for (const targetId of rows[port] ?? []) {
+        const targetBox = drawById.get(targetId);
+        // Excluded (config) or off-tab targets draw no wire.
+        if (!targetBox) continue;
+        wires.push({ from: { ...from }, to: { ...targetBox.inputPoint } });
       }
     }
   }
 
+  // Extents (port overhang included) drive the whole-body translate: nothing
+  // may render at negative coordinates, so center-anchored nodes at or near
+  // the origin stay fully visible.
+  let xMin = 0;
+  let yMin = 0;
   let xMax = 0;
   let yMax = 0;
-  for (const b of boxes) {
-    xMax = Math.max(xMax, b.x + b.w);
-    yMax = Math.max(yMax, b.y + b.h);
+  for (const b of drawNodes) {
+    // Junction ports attach at the waypoint center — no port overhang.
+    const inOverhang = b.kind === 'node' && b.hasInput ? PORT_RADIUS : 0;
+    const outOverhang = b.kind === 'node' && b.outputPoints.length > 0 ? PORT_RADIUS : 0;
+    xMin = Math.min(xMin, b.cx - b.w / 2 - inOverhang);
+    yMin = Math.min(yMin, b.cy - b.h / 2);
+    xMax = Math.max(xMax, b.cx + b.w / 2 + outOverhang);
+    yMax = Math.max(yMax, b.cy + b.h / 2);
   }
   for (const g of groups) {
+    xMin = Math.min(xMin, g.x);
+    yMin = Math.min(yMin, g.y);
     xMax = Math.max(xMax, g.x + g.w);
     yMax = Math.max(yMax, g.y + g.h);
   }
   for (const c of comments) {
-    xMax = Math.max(xMax, c.x + c.w);
-    yMax = Math.max(yMax, c.y + c.h);
+    xMin = Math.min(xMin, c.cx - c.w / 2);
+    yMin = Math.min(yMin, c.cy - c.h / 2);
+    xMax = Math.max(xMax, c.cx + c.w / 2);
+    yMax = Math.max(yMax, c.cy + c.h / 2);
   }
-  const width = xMax + opts.padding;
-  const height = yMax + opts.padding;
+  const tx = -xMin;
+  const ty = -yMin;
+  if (tx !== 0 || ty !== 0) {
+    for (const b of drawNodes) {
+      b.cx += tx;
+      b.cy += ty;
+      b.inputPoint.x += tx;
+      b.inputPoint.y += ty;
+      for (const p of b.outputPoints) {
+        p.x += tx;
+        p.y += ty;
+      }
+    }
+    for (const g of groups) {
+      g.x += tx;
+      g.y += ty;
+    }
+    for (const c of comments) {
+      c.cx += tx;
+      c.cy += ty;
+    }
+    for (const wire of wires) {
+      wire.from.x += tx;
+      wire.from.y += ty;
+      wire.to.x += tx;
+      wire.to.y += ty;
+    }
+  }
+
+  // Geometry entries in flows order (frozen contract #1).
+  const entries: RenderGeometryEntry[] = [];
+  for (const n of tabNodes) {
+    const g = groupById.get(n.id);
+    if (g) {
+      entries.push({
+        id: g.id,
+        kind: 'group',
+        x: g.x + g.w / 2,
+        y: g.y + g.h / 2,
+        w: g.w,
+        h: g.h,
+        ports: [],
+      });
+      continue;
+    }
+    const c = commentById.get(n.id);
+    if (c) {
+      entries.push({ id: c.id, kind: 'comment', x: c.cx, y: c.cy, w: c.w, h: c.h, ports: [] });
+      continue;
+    }
+    const b = drawById.get(n.id);
+    if (!b) continue;
+    const ports: RenderGeometryPort[] = [];
+    if (b.hasInput) {
+      ports.push({ kind: 'input', index: 0, x: b.inputPoint.x, y: b.inputPoint.y });
+    }
+    for (let i = 0; i < b.outputPoints.length; i++) {
+      const p = b.outputPoints[i]!;
+      ports.push({ kind: 'output', index: i, x: p.x, y: p.y });
+    }
+    entries.push({ id: b.id, kind: b.kind, x: b.cx, y: b.cy, w: b.w, h: b.h, ports });
+  }
+
+  return {
+    drawNodes,
+    groups,
+    comments,
+    wires,
+    entries,
+    width: xMax + tx,
+    height: yMax + ty,
+  };
+}
+
+function renderTab(tab: TabNode, flows: FlowsJson, opts: RequiredOpts): RenderedTab {
+  const geo = computeTabGeometry(tab, flows);
 
   const parts: string[] = [];
-  for (const g of groups) {
+  for (const g of geo.groups) {
     parts.push(groupRect(g.x, g.y, g.w, g.h));
     if (g.label) parts.push(text(g.x + 8, g.y + 16, g.label, '#666666', 12));
   }
-  for (const c of comments) {
-    parts.push(commentRect(c.x, c.y, c.w, c.h));
-    if (c.label) parts.push(text(c.x + 8, c.y + 16, c.label, '#333333', 12));
+  for (const c of geo.comments) {
+    const left = c.cx - c.w / 2;
+    const top = c.cy - c.h / 2;
+    parts.push(commentRect(left, top, c.w, c.h));
+    if (c.label) parts.push(text(left + 8, top + 16, c.label, '#333333', 12));
   }
-  for (const wire of wires) {
+  for (const wire of geo.wires) {
     parts.push(wirePath(wire));
   }
-  for (const box of boxes) {
-    parts.push(rect(box.x, box.y, box.w, box.h, box.fill, '#888888', 1));
-    parts.push(text(box.x + box.w / 2, box.y + box.h / 2 + 4, box.label, '#222222', 12, 'middle'));
-    if (box.isRegular && !box.isLinkIn) {
-      parts.push(circle(box.x, box.y + box.h / 2, PORT_RADIUS, PORT_FILL, PORT_STROKE, 1));
+  for (const b of geo.drawNodes) {
+    if (b.kind === 'junction') {
+      parts.push(circle(b.cx, b.cy, JUNCTION_RADIUS, JUNCTION_FILL, PORT_STROKE, 1));
+      continue;
     }
-    for (let i = 0; i < box.outputs; i++) {
-      parts.push(
-        circle(
-          box.x + box.w,
-          outputPortY(box, i, box.outputs),
-          PORT_RADIUS,
-          PORT_FILL,
-          PORT_STROKE,
-          1,
-        ),
-      );
+    const left = b.cx - b.w / 2;
+    const top = b.cy - b.h / 2;
+    parts.push(rect(left, top, b.w, b.h, b.fill, '#888888', 1));
+    if (!b.hideLabel) {
+      parts.push(text(b.cx, b.cy + 4, fitLabelToBox(b.label, b.w), '#222222', 12, 'middle'));
+    }
+    if (b.hasInput) {
+      parts.push(circle(b.inputPoint.x, b.inputPoint.y, PORT_RADIUS, PORT_FILL, PORT_STROKE, 1));
+    }
+    for (const p of b.outputPoints) {
+      parts.push(circle(p.x, p.y, PORT_RADIUS, PORT_FILL, PORT_STROKE, 1));
     }
   }
 
   return {
     body: parts.join('\n  '),
-    width,
-    height,
+    width: geo.width + opts.padding,
+    height: geo.height + opts.padding,
     label: tab.label,
   };
 }
@@ -303,10 +569,6 @@ function fitLabelToBox(label: string, boxWidthPx: number): string {
   if (interiorPx <= 0) return label;
   const maxUnits = Math.round((interiorPx * 1000) / 12);
   return fitLabel(label, maxUnits);
-}
-
-function outputPortY(box: NodeBox, port: number, totalPorts: number): number {
-  return box.y + ((port + 1) * box.h) / (totalPorts + 1);
 }
 
 function svgRoot(width: number, height: number, bg: string, body: string): string {
