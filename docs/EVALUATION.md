@@ -163,6 +163,70 @@ Setup (seeding, `set_target`, read-tier discovery) and post-deploy
 verification belong in their own unbudgeted sections so the budgeted
 account measures the authoring loop itself — neither padded nor laundered.
 
+## Editor ground-truth metrics (capture recipe)
+
+The renderer/dimension model is calibrated against the REAL Node-RED
+editor, not against constants in the repo. The fixtures under
+`tests/fixtures/editor-metrics/` (`nodered-4.1.11.json`,
+`nodered-5.0.0.json`) are **one-time captures, committed**; CI never runs
+the capture — it only pins the captured values
+(`tests/unit/toolkit/render/editor-metrics-fixture.test.ts`). Re-capture on
+every Node-RED **minor** bump and whenever the renderer-fidelity check
+(REND-7) flags drift.
+
+The capture stack is `scripts/eval/cdp.mjs` — raw Chrome DevTools Protocol
+over the existing `ws` dependency (no playwright/puppeteer; `puppeteer-core`
+is the documented fallback if raw CDP ever proves brittle). It is the single
+shared browser-automation module for metrics capture, the fidelity harness,
+and eval screenshot legs.
+
+**4.1 leg** (sterile compose stack on the default image):
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d
+node scripts/editor-metrics-dump.mjs            # writes tests/fixtures/editor-metrics/nodered-<version>.json
+```
+
+The script deploys `tests/fixtures/render/calibration-flow.json` (a 0–40-char
+label ladder, one of each core node type — inject/debug buttons, switch with
+1/2/4 rules, link `l:true/false`, catch/status/complete — comments, a wired
+junction, and a 2-node group), dumps the editor's `RED.nodes` model geometry
+plus junction/comment/group DOM bboxes, label `getComputedStyle`, and
+per-port-count output-port offsets over CDP, then **restores the previously
+deployed flows**. It also dismisses the telemetry/tour modals server-side
+(`POST /settings/user`) first — the compose stack's `/data` is ephemeral, so
+a fresh container always needs this.
+
+**5.0 leg** (temporary compose override; do not commit the override):
+
+```bash
+cat > /tmp/nr5-override.yml <<'EOF'
+services:
+  node-red:
+    image: nodered/node-red:5.0.0
+EOF
+docker compose -f deploy/docker-compose.yml down
+docker compose -f deploy/docker-compose.yml -f /tmp/nr5-override.yml up -d
+node scripts/editor-metrics-dump.mjs            # writes nodered-5.0.0.json
+# restore the 4.1 stack when done:
+docker compose -f deploy/docker-compose.yml down
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Run `npm run format` after a capture so the fixture JSON is
+prettier-normalized before committing.
+
+- **Empirical result (2026-06-10, resolves DESIGN.md open question 3):**
+  5.0.0's node-appearance rework changed NO dimension-bearing geometry vs
+  4.1.11 — model `w`/`h`, body rects, port anchors, and label metrics are
+  identical; the only DOM drift is a cosmetic ≤4px outer-`getBBox()` halo.
+  Both facts are pinned by the cross-version drift test, which fails loudly
+  with a per-node table if a future re-capture diverges.
+- **Versioning assumption (recorded in each fixture):** 4.0.x is
+  dimension-identical to 4.1.x — the appearance rework shipped in 5.0. An
+  optional 4.0 capture leg is welcome if a 4.0 container is handy; commit it
+  as a third fixture if it ever disagrees.
+
 ## Iteration protocol
 
 1. Run a scenario → score it.
