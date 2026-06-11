@@ -1,14 +1,14 @@
 # FlowOtter — Design & Roadmap
 
-This document consolidates two design records: the **proposed v2 strategy** (forward-looking) and the **completed v1.3.0 redesign plan** (historical). For shipped changes, see [`CHANGELOG.md`](../CHANGELOG.md).
+This document consolidates two design records: the **v2 strategy** (ratified as amended 2026-06-10 — see the ratification record in Part I) and the **completed v1.3.0 redesign plan** (historical). For shipped changes, see [`CHANGELOG.md`](../CHANGELOG.md).
 
 ---
 
-# Part I — v2 Strategy (proposed)
+# Part I — v2 Strategy (ratified as amended, 2026-06-10)
 
 ## FlowOtter Strategy Rethink — June 2026
 
-> **Status:** PROPOSED — research complete, awaiting maintainer ratification.
+> **Status:** RATIFIED AS AMENDED — 2026-06-10, by the layout-audit fix plan ([`docs/plans/2026-06-10-fix-plan.md`](plans/2026-06-10-fix-plan.md)); evidence record: [`docs/audits/2026-06-10-layout-audit.md`](audits/2026-06-10-layout-audit.md). The ratification record below binds the phases to fix-plan work-item ids and records the amendments; inline notes marked **[Ratified 2026-06-10: …]** amend the original text in place (original wording preserved for the historical record).
 > **Supersedes:** the implicit v1.x surface strategy (fine-grained tools as the only authoring path; layout as agent-supplied coordinates). Engages and partially supersedes REDESIGN_PLAN.md Anchor Decisions 1–2 (see Decisions below). Per-item supersession is recorded explicitly — the v1.0.0 "seal" was abandoned silently and that must not happen again.
 > **Research provenance:** multi-agent research run, 2026-06-09 — codebase ground-truth audit, prior-research staleness review, Node-RED ecosystem survey, MCP spec/client survey, n8n + competitive survey, layout/visual-feedback literature survey; three independent strategy proposals; two adversarial critiques. Key sources cited inline.
 
@@ -89,11 +89,11 @@ The pitch this earns: **the only flow-authoring MCP where what ships is safe (st
 **Phase 0 — eyes, footgun, truth (small items, no dependencies):**
 
 1. `render_flow_png` to disk + before/after paths on stage outputs (D5).
-2. Refuse-with-warning on staging over an undeployed change (D2's guard, shippable alone).
+2. Refuse-with-warning on staging over an undeployed change (D2's guard, shippable alone). **[Ratified 2026-06-10: already DONE at HEAD — this item mischaracterized the codebase. `runStagedAuthorOp` refuses with `ToolBlockedError` on any pending stage (`src/server/tools/author/_stage-pipeline.ts:72-82`, verified). The staging guards that remain for fix-plan Phase 1 are WSB-1 (transport error serialization), WSB-3 (stage-time no-op refusal + hash-equal auto-clear), and WSB-6 (casing/agent_id/alias).]**
 3. 5.0 GA support declaration + vestigial-seam cleanup + /context resolution (D11).
-4. **Half-day spike:** prove an agent can stage → Read PNG → adjust → re-Read in ≤6 calls in a real Claude Code session. The entire visual loop rests on this ergonomic; it is asserted, never tested.
+4. **Half-day spike:** prove an agent can stage → Read PNG → adjust → re-Read in ≤6 calls in a real Claude Code session. The entire visual loop rests on this ergonomic; it is asserted, never tested. **[Ratified 2026-06-10: BINDING — this live unscripted session is the fix plan's Phase-1 exit requirement; the scripted `eval:s5` run is the standing regression, never a substitute for it.]**
 
-**Phase 1 — the declarative surface (priority A realized):** 5. `stage_spec` + `validate_spec` with _naive placement_ (D1) — do not gate on the layout engine; ID-preservation machinery already exists. 6. `stage_changes` atomic batch (D2). 7. `outputSchema`/`structuredContent` on every tool; ~15-tool default surface via toolset demotion (D7). 8. Per-type required-field schema surfacing + the missing validators/config-node auto-creation (D9).
+**Phase 1 — the declarative surface (priority A realized):** 5. `stage_spec` + `validate_spec` with _naive placement_ (D1) — do not gate on the layout engine; ID-preservation machinery already exists. **[Ratified 2026-06-10: SUPERSEDED — `stage_spec` moves to fix-plan Phase 3 (v2.0.0) and ships only with real computed placement, never naive placement; see ratification record amendment 3.]** 6. `stage_changes` atomic batch (D2). 7. `outputSchema`/`structuredContent` on every tool; ~15-tool default surface via toolset demotion (D7). 8. Per-type required-field schema surfacing + the missing validators/config-node auto-creation (D9).
 
 **Phase 2 — the layout service (priority B realized), gated:** 9. Engine prerequisites: compound groups, port order, measured widths, post-passes (D3). 10. `layout_lint` (D6) — also valuable standalone the moment it exists. 11. **The exemplar-flow benchmark (D4). HARD GATE:** auto-layout becomes default for spec-authored nodes only if it passes; otherwise layout ships as opt-in while the engine improves. 12. `sync_user_layout` pinned-constraint round-trip (D3).
 
@@ -132,6 +132,40 @@ The pitch this earns: **the only flow-authoring MCP where what ships is safe (st
 - ELK layered reference: eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html
 - Layout plugin prior art: github.com/bartbutenaers/node-red-autolayout-sidebar · core PR node-red/node-red#2267
 - Convergent competitor: github.com/ylt/nodered-mcp
+
+### Ratification record — 2026-06-10 (layout-audit fix plan)
+
+The 2026-06-10 layout audit ([`docs/audits/2026-06-10-layout-audit.md`](audits/2026-06-10-layout-audit.md), verdict **NOT-YET** at v1.3.0 HEAD `0648c57`) tested this strategy's claims end-to-end against a sterile Node-RED 4.1.11 stack. Its fix plan ([`docs/plans/2026-06-10-fix-plan.md`](plans/2026-06-10-fix-plan.md)) **ratifies this strategy as amended below**. The fix plan's §2 phase table is the binding execution order; work-item ids below are exactly the fix plan's.
+
+#### Phase → release → work items (binding)
+
+| Fix-plan phase                                        | Release    | Work items                                                                                                                                                                                                              |
+| ----------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 — faithful eyes + honest errors               | v1.4.0     | EVAL-7 (lands first, ratifies this plan), EVAL-1, WSB-1, WSB-3, WSB-6, WSB-5-PR1 (pure refactor), REND-1 → REND-2 → REND-3 → REND-4 → REND-5 → REND-8, REND-7, D-5, EVAL-2, EVAL-6 (canary steps + AUDIT-RERUN anchors) |
+| Phase 2 — batch staging, full lifecycle, spatial lint | v1.5.0     | WSB-2 → WSB-4 → WSB-5 (PR-2/3), WSB-7 (new), WSB-8 (new), D-1 (merged with REND-6), D-2, D-4, D-3, LAYO-1, EVAL-3, EVAL-5; plus NR5-1, NR5-13, NR5-4 (link half)                                                        |
+| Phase 3 — layout engine, flagship, scored benchmark   | v2.0.0     | LAYO-2 (descoped) ∥ LAYO-3 → LAYO-4 (epic, kill-switch) → LAYO-5 → LAYO-6, D-6, D-7, EVAL-4 (scored mode); DESIGN-D1 `stage_spec` + the D7 surface consolidation riding the major; remaining NR5 items                  |
+| Phase 4 — FULLY FIXED declaration                     | no release | Audit re-run with fresh judges per `eval/replay/AUDIT-RERUN.md` (created by EVAL-6) against the fix plan's §1 mechanical anchors                                                                                        |
+
+#### Amendments (recorded supersessions, per this document's convention)
+
+1. **Stage-over-stage refusal already shipped — phase map corrected.** Phase-0 item 2 above mischaracterized HEAD: the refusal already exists — `runStagedAuthorOp` throws `ToolBlockedError` on any pending stage (`src/server/tools/author/_stage-pipeline.ts:72-82`, verified 2026-06-10). The staging guards that remain for fix-plan Phase 1, from decision D2's family, are **WSB-1** (structured error payloads serialized through the stdio transport), **WSB-3** (stage-time no-op refusal + hash-equal stale-stage auto-clear), and **WSB-6** (casing reconciliation, `agent_id`/ownership exposure, `tab_id` alias on `move_node`).
+2. **The Phase-0 live half-day spike (item 4) is restored as BINDING, not superseded.** The live unscripted Claude Code session demonstrating the stage → see → adjust → re-see loop within budget is the fix plan's Phase-1 exit requirement; the scripted `eval:s5` run is the standing regression, never a substitute.
+3. **`stage_spec` (decision D1) moves from this document's Phase 1 to fix-plan Phase 3 (v2.0.0).** Supersedes Sequencing item 5's "naive placement" stopgap: the flagship declarative surface ships only with real computed placement, fixing the audit report's §5.6 critique ("Phase-1 sequencing ships the flagship claim regressed").
+4. **Fix-plan work item D-3 (layout lint wired into the read surface — distinct from this document's decision D3) grows tool output schemas in v1.5.0, additive only.** Recorded here so the schema growth is a versioned, priced migration bill (fix-plan risk #8), not silent drift.
+
+#### Five frozen cross-stream contracts (frozen in week 1 of execution)
+
+1. `renderGeometry(flows, tabId)` exported from `src/toolkit/render` — per-node `{id, x, y, w, h, ports[]}` (center-convention, post-translate); the single geometry source for the fidelity comparator and blind judging packs; `render_flow_png` mirrors the same array via `include_geometry: boolean` (default false).
+2. `GeometryProvider` (node dims **w and h** + port anchors), implemented once in `src/toolkit/render/metrics.ts`; consumed by D-1 lint, D-4 placement, and the LAYO-4 engine — no re-derived formulas.
+3. `src/toolkit/lanes.ts` — ONE lanes module: `Lane`, `LANE_NAMES`, `LANE_ORDER = ['main','indicate','error']`, `LANE_GAP = 120`, one error-closure algorithm with `TabSpec` and `FlowsJson` adapters; the taught 120px and the engine gap are the same exported constant.
+4. `stage_changes` op vocabulary (`op-schemas.ts`, move op normalized to `tab_id`) ↔ the EVAL-5 e2 replay steps file, landed in the same PR series.
+5. `layout_lint` weighted [0,1] per-rule score schema ↔ EVAL-3's sha256-frozen thresholds.
+
+#### Recorded deferrals (audit ledger items triaged but deferred)
+
+- **e1#13 — debug message buffer is lazy** (the WebSocket subscription starts at first use, so debug events emitted before the first `get_recent_debug_messages` call are missed). Deferred; fix when picked up is subscribe-on-target. Owner on record: maintainer (JP5Lab); revisit at fix-plan Phase-2 planning.
+- **e2#12 — `_authoringKey` stamping / key-order churn in diffs**: recorded wontfix (cosmetic; diff tooling should be order-insensitive).
+- **e2#13 — eval driver SIGPIPE**: harness fault, recorded; EVAL-1 adds the EPIPE guard to the promoted driver.
 
 ---
 

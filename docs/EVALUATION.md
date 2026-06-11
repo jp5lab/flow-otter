@@ -118,8 +118,10 @@ wontfix — nothing stays untriaged.
 ## Public-repo hygiene (the privacy gate)
 
 This repository is developed on personal workstations but published publicly —
-GitHub **and** npm (`files` ships `docs/` in the tarball, so docs hygiene is
-release hygiene). The gate:
+GitHub **and** npm. The npm tarball ships only `dist`, `README.md`,
+`CHANGELOG.md`, and `LICENSE` (package.json `files`); `docs/` reaches the
+public through the GitHub repo, so docs hygiene is release hygiene either way.
+The gate:
 
 1. **`npm run privacy:scan`** — scans tracked + untracked-unignored text files
    for private-information patterns (LAN addresses, home-directory paths,
