@@ -82,6 +82,87 @@ Ledger triage (do this while it's fresh): each entry becomes a validator rule,
 a schema field, a nudge, a template fix, a skills/doc line, or a recorded
 wontfix — nothing stays untriaged.
 
+## The eval driver (`scripts/eval/driver.mjs`)
+
+Scenario runs are driven by the committed MCP eval driver — it speaks real
+MCP over stdio to the server binary, exactly as an agent client would
+(promoted from the gitignored driver used in the 2026-06-10 layout audit):
+
+```bash
+node scripts/eval/driver.mjs <steps-file.json>    # one JSON object per step (JSONL)
+```
+
+- **Server command:** `node dist/bin/flow-otter.js` by default; override with
+  `FLOW_OTTER_CMD` (whitespace-split), e.g.
+  `FLOW_OTTER_CMD="node node_modules/tsx/dist/cli.mjs bin/flow-otter.ts"` to
+  drive the TypeScript source directly.
+- **Steps-file schema v2:** a steps file is `{version: 2, env, listTools?,
+describe?, sections: [...]}`. Each section is
+  `{name, budget?, layout_computed?, calls: [...]}`; each step is exactly one
+  of a tool call (`{tool, args?, save?, maxLen?, elicitation?, expect?}`), a
+  shell step (`{exec, mutates?, save?, maxLen?, expect?}`), or `{sleep: ms}`.
+  `expect` supports `{error: bool, match: regex, not_match: regex}`;
+  `elicitation: "accept" | "decline"` answers the server's consent
+  elicitation for that call (no directive = decline — never consent by
+  accident). Legacy v1 files (flat `calls`) are wrapped into a single
+  unbudgeted section. Unknown keys anywhere — including budget keys — are
+  hard errors, so a typo can never silently unbind a gate.
+- **Exit codes:** `0` = every section within budget and every expectation
+  met; `1` = budget violation or expectation failure (gate fail); `2` = run
+  aborted (malformed steps file, anti-gaming lint, `$PREV` poisoning,
+  connect failure).
+- **`$PREV` poisoning is a hard error.** `$PREV.path.to.field` resolves
+  against the parsed JSON of the immediately preceding tool call. If that
+  call failed, returned non-JSON, or the path resolves to `undefined`, the
+  run ABORTS (exit 2) instead of substituting a stale value — the failure
+  class behind the audit's two 79-call cascades is structurally dead.
+- **EPIPE guard:** a downstream pipe closing (e.g. `| head`) ends the run
+  quietly instead of crashing it mid-flight.
+- **Anti-gaming steps-file lint:** in any section flagged
+  `layout_computed: true`, no tool-call payload may contain position fields
+  (`position` keys, numeric `x`/`y`). A violation fails the run (exit 2)
+  before any call is made — a hand-placed spec disqualifies the run. This is
+  the mechanical "position-free" assertion the FULLY FIXED criteria require
+  for the e1-phase2 replay leg and all S6 leg-B specs.
+- **Comparator util (`scripts/eval/compare.mjs`):** shared safety
+  post-conditions for replay/canary runs — `compareWiring` /
+  `wiringFingerprint` assert wiring-map byte-identity (a pure reorganization
+  must not change the logical graph), and `canonicalFlowsHash` is the
+  scenario-level idempotence comparator (byte-equivalent to the server's
+  `canonicalHash`, pinned by unit test).
+
+## Budget glossary (normative)
+
+Every gate budget is checked against the driver's per-section budget
+account — friction scores derive from this account, not from judge
+sympathy. The counters (pinned rule-by-rule in
+`tests/unit/scripts/eval/budget.test.ts`):
+
+| Counter                | Counts                                                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp_calls`            | Every MCP tool call. Harness introspection (`listTools`/`describe`) and `exec`/`sleep` steps never count here.                                                    |
+| `failed`               | Every MCP tool call that returned `isError` or threw — **including expected failures** (`expect.error: true`). Drills that provoke errors budget `max_failed` up. |
+| `exec_steps`           | Every `exec` shell step (file reads, curl probes, screenshots).                                                                                                   |
+| `total_invocations`    | `mcp_calls + exec_steps` — the S5 "total invocations (MCP + Read/exec)" basis.                                                                                    |
+| `deploy_confirmations` | Every elicitation answered **accept**, plus every call carrying top-level `confirm: true` (the scripted-client consent path).                                     |
+| `elicitation_declines` | Every elicitation answered decline/cancel.                                                                                                                        |
+| `force_uses`           | Every call with top-level `force: true`. Force implies consent but is counted HERE, not in `deploy_confirmations` — gates hold `max_force: 0`.                    |
+| `force_takeover_uses`  | Every call with top-level `force_takeover: true`.                                                                                                                 |
+| `oob_mutations`        | Every step flagged `mutates: true` — out-of-band runtime mutations (e.g. a direct Admin-API POST from an `exec` step).                                            |
+
+Budget keys bind one-to-one: `max_mcp_calls`, `max_failed`,
+`max_exec_steps`, `max_total_invocations`, `max_deploy_confirmations`,
+`max_elicitation_declines`, `max_force`, `max_force_takeover`, `max_oob`.
+A counter equal to its limit passes; one over fails the section.
+
+**Counting boundary** (verbatim — cited by gate acceptance tests; keep this sentence on one line):
+
+> budgeted section starts at the first author-tier call and ends at deploy; setup/target/read-discovery calls before it are unbudgeted
+
+Setup (seeding, `set_target`, read-tier discovery) and post-deploy
+verification belong in their own unbudgeted sections so the budgeted
+account measures the authoring loop itself — neither padded nor laundered.
+
 ## Iteration protocol
 
 1. Run a scenario → score it.
