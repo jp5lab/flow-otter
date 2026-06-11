@@ -19,6 +19,7 @@ export type CatalogCategory =
   | 'templates'
   | 'validators'
   | 'design_principles'
+  | 'layout_conventions'
   | 'methodology';
 
 export type NodeTypeCategory =
@@ -144,6 +145,30 @@ export interface DesignPrincipleEntry {
 }
 
 /**
+ * One layout-readability criterion from the 2026-06-10 layout audit
+ * (docs/audits/2026-06-10-layout-audit.md). Exactly EIGHT entries exist,
+ * 1:1 with the audit criteria; together they teach the numeric layout
+ * conventions (20px grid, 140-220px column pitch, 120px lane gap, ~1420px
+ * visible viewport) in-band.
+ *
+ * `lint_rule` names the scored layout-lint rule that machine-checks the
+ * criterion. The ids are FROZEN by the fix plan
+ * (docs/plans/2026-06-10-fix-plan.md, items D-1/D-2) and register with the
+ * v1.5.0 layout lint; until then `validate_flow` does not yet emit them.
+ * tests/unit/catalog/layout-conventions.test.ts pins catalog ↔ rule-id
+ * completeness in both directions once the rules exist.
+ */
+export interface LayoutConventionEntry {
+  /** Stable snake_case id of the audit criterion. */
+  readonly criterion: string;
+  /** The convention statement, with its numbers. */
+  readonly convention: string;
+  /** Frozen scored layout-lint rule id (`layout-*` namespace). */
+  readonly lint_rule: string;
+  readonly notes?: string;
+}
+
+/**
  * The authoring methodology. One phase per object; the `tools` array
  * lists the FlowOtter tool calls associated with that phase.
  */
@@ -180,5 +205,6 @@ export interface CapabilityCatalog {
   readonly templates: readonly TemplateEntry[];
   readonly validators: readonly ValidatorEntry[];
   readonly design_principles: readonly DesignPrincipleEntry[];
+  readonly layout_conventions: readonly LayoutConventionEntry[];
   readonly methodology: MethodologyEntry;
 }

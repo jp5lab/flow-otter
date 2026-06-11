@@ -10,6 +10,7 @@ const CATEGORY_VALUES = [
   'templates',
   'validators',
   'design_principles',
+  'layout_conventions',
   'methodology',
 ] as const;
 
@@ -30,7 +31,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const getAuthoringGuideTool: Tool<Input, Output> = {
   name: 'get_authoring_guide',
   description:
-    'Returns the FlowOtter capability catalog: Node-RED concepts, core node types, Dashboard 2.0 widgets (with FlowOtter support status), built-in templates, validators, ISA-101 design principles, and the authoring methodology. Filter via `categories` to load only what you need (default: full catalog). Read-only.',
+    'Returns the FlowOtter capability catalog: Node-RED concepts, core node types, Dashboard 2.0 widgets (with FlowOtter support status), built-in templates, validators, ISA-101 design principles, the eight numeric layout conventions, and the authoring methodology. Filter via `categories` to load only what you need (default: full catalog). Read-only.',
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: {
@@ -40,7 +41,7 @@ export const getAuthoringGuideTool: Tool<Input, Output> = {
         type: 'array',
         items: { type: 'string', enum: [...CATEGORY_VALUES] },
         description:
-          'Optional subset filter. Omit to return the full catalog. Valid values: node_red_concepts, core_node_types, dashboard_widgets, templates, validators, design_principles, methodology.',
+          'Optional subset filter. Omit to return the full catalog. Valid values: node_red_concepts, core_node_types, dashboard_widgets, templates, validators, design_principles, layout_conventions, methodology.',
       },
     },
     additionalProperties: false,

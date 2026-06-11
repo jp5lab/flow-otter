@@ -23,6 +23,8 @@ describe('SERVER_INSTRUCTIONS', () => {
     'preview_flow_diff',
     'deploy_staged_change',
     'render_flow_svg',
+    'render_flow_png',
+    'stage_changes',
     'validate_flow',
     'list_available_toolsets',
     'enable_toolset',
@@ -32,6 +34,27 @@ describe('SERVER_INSTRUCTIONS', () => {
     'health_check',
   ])('references tool %s', (toolName) => {
     expect(SERVER_INSTRUCTIONS).toContain(toolName);
+  });
+
+  // D-5 (R6/F4): the layout conventions are taught WITH NUMBERS, in-band.
+  // These exact tokens are the fix plan's pinned assertion set — 20px grid,
+  // 140-220px column pitch, error lane ≥120px BELOW, switch port 0 on top,
+  // ≤1420px visible viewport.
+  it.each(['20px', '140-220', 'BELOW', 'port 0', '1420', '120'])(
+    'teaches layout convention token %s',
+    (token) => {
+      expect(SERVER_INSTRUCTIONS).toContain(token);
+    },
+  );
+
+  // The PNG channel is consumed by reading png_path from disk — the
+  // instructions must say so (REND-5 handed this one-line mention to D-5).
+  it('tells the agent to Read the render_flow_png png_path from disk', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('png_path');
+  });
+
+  it('points at the layout_conventions catalog category', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('layout_conventions');
   });
 
   // Document the four anchor decisions in the playbook so the agent has them

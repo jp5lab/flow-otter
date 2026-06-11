@@ -19,6 +19,7 @@ describe('capability catalog', () => {
     expect(cat.templates.length).toBeGreaterThan(10);
     expect(cat.validators.length).toBeGreaterThanOrEqual(18);
     expect(cat.design_principles.length).toBeGreaterThan(3);
+    expect(cat.layout_conventions.length).toBe(8);
     expect(cat.methodology.phases.length).toBeGreaterThan(5);
     expect(cat.methodology.organize_decision_tree.length).toBeGreaterThan(3);
   });

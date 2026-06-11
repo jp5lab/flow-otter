@@ -60,7 +60,7 @@ const newFlowPrompt: FlowOtterPrompt = {
         : `2. Start with an empty staged change.`,
       `3. For each stage: add nodes (prefer add_node; enable_toolset('author_specialists') if you need typed conveniences).`,
       `4. Wire stages with wire_nodes / set_wires.`,
-      `5. Refine layout explicitly with positions, move_node, and add_group geometry; do not assume auto-layout is available.`,
+      `5. Refine layout explicitly with positions, move_node, and add_group geometry (do not assume auto-layout is available): 20px grid; stages left-to-right at a 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; keep the tab ≤1420px wide.`,
       `6. render_flow_svg with against:'staged' (the default renders the deployed runtime, which does not include your pending change) and show me the result before programming/deploying substantial flows.`,
       `7. validate_flow must pass.`,
       `8. preview_flow_diff, then deploy_staged_change — I will be elicited to confirm.`,
@@ -180,8 +180,9 @@ const reviewMyFlowPrompt: FlowOtterPrompt = {
       `1. ${tab ? `analyze_flow('${tab}')` : 'analyze_all_flows()'} for structural breakdown.`,
       `2. ${tab ? `validate_flow('${tab}')` : 'validate_all_flows()'} for diagnostics.`,
       `3. ${tab ? `render_flow_svg('${tab}')` : ''}`,
-      `4. Summarize: errors > warnings > info. For each, give the specific rule, the affected node, and the recommended fix.`,
-      `5. If ISA-101 rules fired (saturated-color-outside-alarm, screen-clutter, unbounded-chart-append, button-group-color-decoration, dashboard-2-destructive-needs-confirm), explain the design principle behind them.`,
+      `4. Review layout against the eight layout_conventions criteria (get_authoring_guide(['layout_conventions'])); report the per-rule layout scores from validate_flow when present.`,
+      `5. Summarize: errors > warnings > info. For each, give the specific rule, the affected node, and the recommended fix.`,
+      `6. If ISA-101 rules fired (saturated-color-outside-alarm, screen-clutter, unbounded-chart-append, button-group-color-decoration, dashboard-2-destructive-needs-confirm), explain the design principle behind them.`,
     ].join('\n');
   },
 };

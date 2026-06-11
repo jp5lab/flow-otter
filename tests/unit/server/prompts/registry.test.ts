@@ -44,6 +44,16 @@ describe('FlowOtter prompts registry', () => {
     expect(body).toContain('pipe MQTT to debug');
   });
 
+  // D-5: the layout step teaches the numeric conventions (same pinned token
+  // set as SERVER_INSTRUCTIONS — fix-plan F4 regression anchors).
+  it.each(['20px', '140-220', 'BELOW', 'port 0', '1420', '120'])(
+    'new_flow layout step teaches convention token %s',
+    (token) => {
+      const body = findPrompt('new_flow')!.build({ goal: 'x' });
+      expect(body).toContain(token);
+    },
+  );
+
   it('new_flow with template arg references instantiate_template', () => {
     const body = findPrompt('new_flow')!.build({ goal: 'x', template: 'mqtt_to_debug' });
     expect(body).toContain("instantiate_template('mqtt_to_debug')");
@@ -89,5 +99,13 @@ describe('FlowOtter prompts registry', () => {
     const body = findPrompt('review_my_flow')!.build({});
     expect(body).toContain('analyze_all_flows');
     expect(body).toContain('validate_all_flows');
+  });
+
+  // D-5: review_my_flow gained a layout-scores step pointing at the
+  // layout_conventions catalog category and validate_flow's layout scores.
+  it('review_my_flow includes the layout-scores review step', () => {
+    const body = findPrompt('review_my_flow')!.build({});
+    expect(body).toContain("get_authoring_guide(['layout_conventions'])");
+    expect(body).toContain('layout scores');
   });
 });

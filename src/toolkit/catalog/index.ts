@@ -2,6 +2,7 @@ import {
   CORE_NODE_TYPES,
   DASHBOARD_2_WIDGETS,
   DESIGN_PRINCIPLES,
+  LAYOUT_CONVENTIONS,
   METHODOLOGY,
   NODE_RED_CONCEPTS,
   TEMPLATES,
@@ -13,6 +14,7 @@ import type {
   ConceptEntry,
   DashboardWidgetEntry,
   DesignPrincipleEntry,
+  LayoutConventionEntry,
   MethodologyEntry,
   NodeTypeEntry,
   TemplateEntry,
@@ -25,6 +27,7 @@ export type {
   ConceptEntry,
   DashboardWidgetEntry,
   DesignPrincipleEntry,
+  LayoutConventionEntry,
   MethodologyEntry,
   NodeTypeEntry,
   TemplateEntry,
@@ -41,6 +44,7 @@ export function buildCatalog(flowOtterVersion: string): CapabilityCatalog {
     templates: TEMPLATES,
     validators: VALIDATORS,
     design_principles: DESIGN_PRINCIPLES,
+    layout_conventions: LAYOUT_CONVENTIONS,
     methodology: METHODOLOGY,
   };
 }
@@ -58,6 +62,7 @@ export interface CatalogSubset {
   readonly templates?: readonly TemplateEntry[];
   readonly validators?: readonly ValidatorEntry[];
   readonly design_principles?: readonly DesignPrincipleEntry[];
+  readonly layout_conventions?: readonly LayoutConventionEntry[];
   readonly methodology?: MethodologyEntry;
 }
 
@@ -94,6 +99,10 @@ export function selectCatalog(
       case 'design_principles':
         (subset as { design_principles: readonly DesignPrincipleEntry[] }).design_principles =
           full.design_principles;
+        break;
+      case 'layout_conventions':
+        (subset as { layout_conventions: readonly LayoutConventionEntry[] }).layout_conventions =
+          full.layout_conventions;
         break;
       case 'methodology':
         (subset as { methodology: MethodologyEntry }).methodology = full.methodology;

@@ -14,7 +14,7 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 
 - `list_available_toolsets` — lists all toolsets and which are enabled in the current session.
 - `enable_toolset` — enables a non-default toolset (e.g., `author_specialists`).
-- `get_authoring_guide` — returns the FlowOtter **capability catalog**: Node-RED concepts, core node types (with `is_core: bool` distinguishing them from contrib packages), Dashboard 2.0 widgets (with `flow_otter_status: supported|missing|partial`), built-in templates, validators, ISA-101 design principles, and the 8-phase authoring methodology. Filter via `categories` to load only what you need.
+- `get_authoring_guide` — returns the FlowOtter **capability catalog**: Node-RED concepts, core node types (with `is_core: bool` distinguishing them from contrib packages), Dashboard 2.0 widgets (with `flow_otter_status: supported|missing|partial`), built-in templates, validators, ISA-101 design principles, the eight numeric **layout conventions** (`layout_conventions` — 20px grid, 140-220px column pitch, error lane ≥120px below the happy path, switch port 0 on top, ~1420px visible viewport; each entry names its frozen layout-lint rule id, scored from v1.5.0), and the 8-phase authoring methodology. Filter via `categories` to load only what you need.
 
 ## Read Tools
 

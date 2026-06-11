@@ -15,6 +15,7 @@ import type {
   ConceptEntry,
   DashboardWidgetEntry,
   DesignPrincipleEntry,
+  LayoutConventionEntry,
   MethodologyEntry,
   NodeTypeEntry,
   TemplateEntry,
@@ -847,6 +848,64 @@ export const DESIGN_PRINCIPLES: readonly DesignPrincipleEntry[] = [
   },
 ];
 
+/**
+ * The eight layout-readability criteria from the 2026-06-10 layout audit,
+ * with numbers. `lint_rule` ids are frozen by the fix plan (D-1/D-2) and
+ * register with the v1.5.0 layout lint — see LayoutConventionEntry.
+ */
+export const LAYOUT_CONVENTIONS: readonly LayoutConventionEntry[] = [
+  {
+    criterion: 'lifecycle_left_to_right',
+    convention:
+      'Signal lifecycle reads left-to-right: acquire → condition → decide → act → indicate. Stage columns advance at a 140-220px pitch.',
+    lint_rule: 'layout-stage-order',
+  },
+  {
+    criterion: 'stages_visually_grouped',
+    convention:
+      'Wrap each lifecycle stage in a group (add_group); sibling group boxes must not overlap.',
+    lint_rule: 'layout-group-overlap',
+  },
+  {
+    criterion: 'stage_headers',
+    convention:
+      'Every group of 3+ members carries a name or a header comment placed above the group box.',
+    lint_rule: 'layout-header-presence',
+  },
+  {
+    criterion: 'error_lane_below',
+    convention:
+      'Error handling (catch/status/complete chains) sits in a lane BELOW the happy path, at least 120px below it (the lane gap).',
+    lint_rule: 'layout-error-lane-below',
+  },
+  {
+    criterion: 'affirmative_output_on_top',
+    convention:
+      'Switch port 0 (the affirmative/first rule) wires to the topmost branch; port order top-to-bottom mirrors rule order.',
+    lint_rule: 'layout-affirmative-on-top',
+  },
+  {
+    criterion: 'minimal_wire_crossings',
+    convention:
+      'Minimize wire crossings; reroute long or crossing wires through junctions or link nodes.',
+    lint_rule: 'layout-wire-crossings',
+  },
+  {
+    criterion: 'no_backward_wires',
+    convention:
+      'Wires flow left-to-right: a wire whose target sits left of its source port (20px tolerance) is a backward wire.',
+    lint_rule: 'layout-backward-wires',
+  },
+  {
+    criterion: 'grid_aligned_within_viewport',
+    convention:
+      'Positions snap to the 20px grid; keep the whole tab within the ~1420px visible viewport (1920px window − 180px palette − 320px sidebar).',
+    lint_rule: 'layout-viewport-overflow',
+    notes:
+      'Grid alignment and node overlap are already machine-checked today by the on-grid validator and the bbox-overlap lint rule.',
+  },
+];
+
 export const METHODOLOGY: MethodologyEntry = {
   phases: [
     {
@@ -885,13 +944,14 @@ export const METHODOLOGY: MethodologyEntry = {
     {
       name: 'layout',
       description:
-        'Explicit visual layout pass. Use node positions, move_node, add_group geometry, and render_flow_svg review; automatic layout is not exposed as an MCP tool yet.',
-      tools: ['move_node', 'add_group', 'render_flow_svg'],
+        'Explicit visual layout pass — automatic layout is not exposed as an MCP tool yet. Use node positions, move_node, and add_group geometry per the eight layout_conventions criteria: 20px grid, 140-220px column pitch left-to-right, error lane 120px BELOW the happy path, switch port 0 on top, ~1420px visible viewport.',
+      tools: ['move_node', 'add_group', 'render_flow_svg', 'render_flow_png'],
     },
     {
       name: 'review',
-      description: 'Render to SVG and show the user. Elicit confirmation before deploy.',
-      tools: ['render_flow_svg', 'analyze_flow', 'explain_flow'],
+      description:
+        'Render (render_flow_png returns png_path — read the file) and show the user. Elicit confirmation before deploy.',
+      tools: ['render_flow_svg', 'render_flow_png', 'analyze_flow', 'explain_flow'],
     },
     {
       name: 'validate',

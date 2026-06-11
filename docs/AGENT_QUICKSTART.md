@@ -25,7 +25,7 @@ Every author tool returns a `staged_hash` and a `diff_summary`. Every deploy ret
 
 ## Discovery (first thing to do in a session)
 
-Call `get_authoring_guide` once per session for the capability catalog (node types, Dashboard 2.0 widgets, templates, validators, ISA-101 design principles, methodology). The catalog tells you what's possible without trial-and-error against tool descriptions. Filter via `categories` to load only what you need.
+Call `get_authoring_guide` once per session for the capability catalog (node types, Dashboard 2.0 widgets, templates, validators, ISA-101 design principles, the eight numeric layout conventions, methodology). The catalog tells you what's possible without trial-and-error against tool descriptions. Filter via `categories` to load only what you need — `layout_conventions` carries the layout numbers (20px grid, 140-220px column pitch, error lane ≥120px below, switch port 0 on top, ~1420px visible viewport).
 
 Call `list_available_toolsets` to see which toolsets are currently visible. The default surface includes the most common authoring tools; load `author_specialists` to access typed `add_<type>_node` conveniences:
 

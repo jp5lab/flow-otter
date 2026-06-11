@@ -91,20 +91,22 @@ export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for 
 - Stage is independent → new tab
 
 3. STRUCTURE → WIRE → LAYOUT:
-- Add nodes (no wires), then wire_nodes/set_wires. Layout is explicit: set positions, group geometry, and move_node as needed; render_flow_svg for review.
+- Add nodes (no wires), then wire_nodes/set_wires; stage_changes batches many ops into ONE staged change. Layout is explicit: positions, group geometry, move_node.
+
+LAYOUT CONVENTIONS: 20px grid; stages left-to-right at 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport); minimize wire crossings; no backward wires. validate_flow returns layout scores.
 
 4. REVIEW → VALIDATE → DEPLOY:
-- render_flow_svg, show user, validate_flow must pass, preview_flow_diff before deploy_staged_change. Never deploy without explicit user confirmation.
+- render_flow_png (against:'staged') returns png_path — Read the file; render_flow_svg for SVG. Show user; validate_flow must pass; preview_flow_diff before deploy_staged_change. Never deploy without explicit user confirmation.
 
-CAPABILITY DISCOVERY: get_authoring_guide returns the catalog (node types, Dashboard 2.0 widgets, templates, validators, ISA-101 principles). Use list_available_toolsets/enable_toolset for tools beyond the default surface.
+DISCOVERY: get_authoring_guide returns the catalog (node types, widgets, templates, validators, layout_conventions, ISA-101 principles); list_available_toolsets/enable_toolset unlock more tools.
 
-SPECIALISTS: prefer generic add_node({type, ...}) — handles contrib packages (Modbus, InfluxDB, OPC UA, etc.) and core types. Specialist tools (add_inject_node, etc.) live in author_specialists toolset; load only when type-specific schemas matter.
+SPECIALISTS: prefer generic add_node({type, ...}) for contrib + core types; enable author_specialists only when type-specific schemas matter.
 
-DASHBOARDS: Dashboard 2.0 UIs follow ISA-101 — grayscale background, color reserved for severity, trends > instantaneous, destructive controls require confirm.
+DASHBOARDS: Dashboard 2.0 follows ISA-101 — grayscale, color = severity, trends > instantaneous, destructive controls confirm.
 
-VERSIONING: FlowOtter detects Node-RED version on set_target. Version-gated features (function-node node.linkcall, per-instance subflow config) exposed via health_check.capabilities.
+VERSIONING: Node-RED version detected on set_target; gated features via health_check.capabilities.
 
-CREDENTIALS: FlowOtter does NOT author credentials. Deploy empty credential fields; user fills them in Node-RED editor. The credential-leak validator catches secrets stuffed into wrong fields.`;
+CREDENTIALS: never authored — deploy empty credential fields; the user fills them in the editor. The credential-leak validator catches misplaced secrets.`;
 
 export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   healthCheckTool as unknown as Tool<unknown, unknown>,
