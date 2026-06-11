@@ -10,6 +10,7 @@ import {
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -56,6 +57,7 @@ const OutputSchema = z.object({
   widget_id: z.string().optional(),
   appended_config_node: z.boolean(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -220,6 +222,7 @@ export const addDashboardWidgetTool: Tool<Input, Output> = {
           widget_type: input.widget_type,
           appended_config_node: extras.appendedConfigNode,
           diagnostics: [...base.diagnostics],
+          render: base.render,
           ...(newWidgetId !== undefined ? { widget_id: newWidgetId } : {}),
         };
       },

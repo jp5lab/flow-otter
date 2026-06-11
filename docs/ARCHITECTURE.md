@@ -57,9 +57,11 @@ Author tools follow the same explicit sequence:
 4. Compile with prior flows so existing IDs are preserved.
 5. Validate and lint.
 6. Diff prior vs next.
-7. Render before/after SVG.
-8. Write the staged change.
-9. Return staged hash, diagnostics, diff, and previews — plus `_guidance` from the nudge system when applicable.
+7. Write the staged change (single slot).
+8. Render before/after previews for every touched tab (output-only enrichment, strictly after the staged write): SVG always, PNG when the optional `@resvg/resvg-js` rasterizer is installed — PNG absence is loud (`before_png`/`after_png: null` plus `rasterizer_available: false`), never a silent SVG substitution. Files land under `RENDER_DIR` (`stage-<tab>-before/after.svg/.png`, overwritten per stage); a `stage-render.json` sidecar keyed by `staged_hash` lets `get_staged_change` re-surface the same paths for exactly the pending stage. A render failure can never fail the stage — the output carries `render: null`.
+9. Return staged hash, diagnostics, diff, and the `render` path block — plus `_guidance` from the nudge system when applicable.
+
+Steps 1–7 are the safety spine and are pinned by hash byte-identity tests: the staged bytes, `staged_hash`, and `based_on_snapshot_hash` are identical whether step 8 succeeds, degrades (no rasterizer), or fails outright.
 
 Deploy tools then **elicit user confirmation** (unless `force:true`), snapshot current runtime, verify drift by hash, save via the Admin API, clear staging, and audit the operation. The pre-deploy `preview_flow_diff` call is tracked per-session so `deploy_staged_change` can nudge agents who skipped it.
 

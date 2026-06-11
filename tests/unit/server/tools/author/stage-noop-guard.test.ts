@@ -85,6 +85,7 @@ beforeEach(async () => {
     SNAPSHOT_DIR: path.join(root, 'snapshots'),
     STAGING_DIR: path.join(root, 'staging'),
     AUDIT_LOG_PATH: path.join(root, 'audit.jsonl'),
+    RENDER_DIR: path.join(root, 'renders'),
     LOG_LEVEL: 'silent',
     ENVIRONMENT_NAME: 'unit',
     ACTOR_NAME: 'unit-test',

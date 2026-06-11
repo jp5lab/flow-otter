@@ -4,6 +4,7 @@ import { setLinks } from '../../../toolkit/authoring/operations/set-links.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveAuthoringKey, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -36,6 +37,7 @@ const OutputSchema = z.object({
   }),
   paired_count: z.number(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -93,6 +95,7 @@ export const setLinksTool: Tool<Input, Output> = {
         diff_summary: base.diff_summary,
         paired_count: extras.paired,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };

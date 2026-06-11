@@ -5,6 +5,7 @@ import { addGroup } from '../../../toolkit/authoring/operations/add-group.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
   .object({
@@ -57,6 +58,7 @@ const OutputSchema = z.object({
   }),
   added_group_id: z.string().optional(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -129,6 +131,7 @@ export const addGroupTool: Tool<Input, Output> = {
           based_on_rev: base.based_on_rev,
           diff_summary: base.diff_summary,
           diagnostics: [...base.diagnostics],
+          render: base.render,
           ...(newGroupId !== undefined ? { added_group_id: newGroupId } : {}),
         };
       },

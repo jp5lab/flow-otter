@@ -4,6 +4,7 @@ import { wireNodes } from '../../../toolkit/authoring/operations/wire.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -38,6 +39,7 @@ const OutputSchema = z.object({
   }),
   wire_added: z.boolean(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -87,6 +89,7 @@ export const wireNodesTool: Tool<Input, Output> = {
         diff_summary: base.diff_summary,
         wire_added: extras.added,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };

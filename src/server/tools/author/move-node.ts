@@ -4,6 +4,7 @@ import { moveNode } from '../../../toolkit/authoring/operations/move-node.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
   .object({
@@ -75,6 +76,7 @@ const OutputSchema = z.object({
   source_tab_id: z.string(),
   dest_tab_id: z.string(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -160,6 +162,7 @@ export const moveNodeTool: Tool<Input, Output> = {
         source_tab_id: extras.sourceTabId,
         dest_tab_id: extras.destTabId,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };

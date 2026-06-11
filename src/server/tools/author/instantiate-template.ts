@@ -4,6 +4,7 @@ import { instantiateTemplate } from '../../../toolkit/templates/index.js';
 import { type Tool } from '../_tool.js';
 
 import { runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -36,6 +37,7 @@ const OutputSchema = z.object({
     wires_removed: z.number(),
   }),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -71,6 +73,7 @@ export const instantiateTemplateTool: Tool<Input, Output> = {
         based_on_rev: base.based_on_rev,
         diff_summary: base.diff_summary,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };

@@ -9,6 +9,8 @@ import { runValidators } from '../../../toolkit/validate/index.js';
 import { enforceMaxFlowSize, enforceNodeTypePolicy } from '../../policy/flow-policy.js';
 import { ToolBlockedError, ValidationFailedError, type ToolContext } from '../_tool.js';
 
+import { buildStageRenderEnrichment, type StageRender } from './_stage-render.js';
+
 export interface AuthorOpInput {
   /** Tool name — used in the audit `reason` and error messages. */
   readonly toolName: string;
@@ -41,6 +43,13 @@ export interface StageBase {
     tabId?: string;
     context?: Record<string, unknown>;
   }>;
+  /**
+   * REND-8 before/after render paths for every touched tab (SVG always, PNG
+   * when the rasterizer imports), or null when render enrichment failed.
+   * Output-only — produced strictly after `staging.write`, never part of the
+   * staged bytes.
+   */
+  readonly render: StageRender | null;
   /** The compiled flows.json after the op was applied. Tools can use it for op-specific output enrichment (e.g. findNewNodeId). */
   readonly compiledFlows: FlowsJson;
 }
@@ -152,7 +161,8 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
 
 /**
  * The shared pipeline tail: ONE compile → no-op refusal → policy → validate →
- * lint → diff → ONE staging.write → audit-enrich → StageBase.
+ * lint → diff → ONE staging.write → render enrichment (REND-8, output-only) →
+ * audit-enrich → StageBase.
  *
  * Extracted (WSB-5-PR1) so per-op tools (via `runStagedAuthorOp`) and the
  * `stage_changes` atomic batch (WSB-5 PR-2/3, which folds its ops into one
@@ -254,11 +264,12 @@ export async function compileValidateAndStage(
     reason: meta.reason ?? meta.toolName,
   });
 
-  // ── REND-8 SEAM: stage-output enrichment ──────────────────────────────────
-  // Output-only enrichment (before/after render paths) goes HERE — strictly
-  // AFTER staging.write so it can never change the staged bytes, staged_hash,
+  // ── REND-8: stage-output enrichment ───────────────────────────────────────
+  // Output-only enrichment (before/after render paths) — strictly AFTER
+  // staging.write so it can never change the staged bytes, staged_hash,
   // based_on_snapshot_hash, the single-slot contract, or drift refusal.
-  // Enrichment failures must never fail the stage (try/catch → null fields).
+  // Enrichment failures never fail the stage (`render: null` on the output).
+  const render = await buildStageRenderEnrichment(ctx, priorFlows, compiled.flows, compiled.hash);
 
   const diffSummaryOut = {
     nodes_added: diffSummary.nodes_added,
@@ -287,6 +298,7 @@ export async function compileValidateAndStage(
       ...(d.tabId !== undefined ? { tabId: d.tabId } : {}),
       ...(d.context !== undefined ? { context: d.context } : {}),
     })),
+    render,
     compiledFlows: compiled.flows,
   };
 }

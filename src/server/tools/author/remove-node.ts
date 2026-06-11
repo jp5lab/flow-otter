@@ -4,6 +4,7 @@ import { removeNode } from '../../../toolkit/authoring/operations/remove-node.js
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -36,6 +37,7 @@ const OutputSchema = z.object({
   }),
   removed: z.boolean(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -75,6 +77,7 @@ export const removeNodeTool: Tool<Input, Output> = {
         diff_summary: base.diff_summary,
         removed: extras.removed,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };

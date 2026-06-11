@@ -6,6 +6,7 @@ import type { AuthoringSpec, NodeSpec, TabSpec } from '../../../toolkit/authorin
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
   .object({
@@ -69,6 +70,7 @@ const OutputSchema = z.object({
   updated: z.boolean(),
   patches_applied: z.number().int().nonnegative(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -188,6 +190,7 @@ export const updateNodeTool: Tool<Input, Output> = {
         updated: extras.updated,
         patches_applied: extras.patchesApplied,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };

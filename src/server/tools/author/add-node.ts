@@ -10,6 +10,7 @@ import {
   resolveTabId,
   runStagedAuthorOp,
 } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -56,6 +57,7 @@ const OutputSchema = z.object({
   added_wire: z.object({ from: z.string(), output_port: z.number(), to: z.string() }).optional(),
   type_had_schema: z.boolean(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -177,6 +179,7 @@ export const addNodeTool: Tool<Input, Output> = {
           diff_summary: base.diff_summary,
           type_had_schema: extras.typeHadSchema,
           diagnostics: [...base.diagnostics],
+          render: base.render,
           ...(newNodeId !== undefined ? { added_node_id: newNodeId } : {}),
           ...(extras.wired && newNodeId !== undefined && input.opts?.source_node_id !== undefined
             ? {

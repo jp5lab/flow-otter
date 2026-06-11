@@ -5,6 +5,7 @@ import { createSubflowDefinition } from '../../../toolkit/authoring/operations/c
 import { type Tool } from '../_tool.js';
 
 import { runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
   .object({
@@ -66,6 +67,7 @@ const OutputSchema = z.object({
   }),
   new_def_id: z.string().optional(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -160,6 +162,7 @@ export const createSubflowDefinitionTool: Tool<Input, Output> = {
           based_on_rev: base.based_on_rev,
           diff_summary: base.diff_summary,
           diagnostics: [...base.diagnostics],
+          render: base.render,
           ...(compiledDefId !== undefined ? { new_def_id: compiledDefId } : {}),
         };
       },

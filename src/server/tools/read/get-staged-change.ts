@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { canonicalHash } from '../../../shared/hash.js';
+import { readStageRenderSidecar, StageRenderOutputSchema } from '../author/_stage-render.js';
 import type { Tool } from '../_tool.js';
 
 const InputSchema = z.object({}).strict();
@@ -45,6 +46,12 @@ const OutputSchema = z.object({
        * runtime could not be read (unreachable or no target configured).
        */
       stale: z.boolean().nullable(),
+      /**
+       * REND-8 before/after render paths emitted when this change was staged
+       * (re-surfaced from the RENDER_DIR sidecar only when its staged_hash
+       * matches this stage byte-for-byte). Null when no render is available.
+       */
+      render: StageRenderOutputSchema,
       // ---- legacy camelCase dual-emit (DEPRECATED, removal v2.0.0) ----
       stagedHash: z.string(),
       basedOnSnapshotHash: z.string(),
@@ -58,7 +65,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const getStagedChangeTool: Tool<Input, Output> = {
   name: 'get_staged_change',
   description:
-    'Returns metadata for the current staged change (or null if none). Canonical fields are snake_case — `staged_hash` feeds deploy_staged_change without renaming. Also reports `agent_id`, `owned_by_current_session` (false means deploy/discard needs force_takeover), and `stale` (staged bytes already match the runtime; the next author op auto-clears it). The camelCase duplicates (stagedHash, …) are deprecated and slated for removal in v2.0.0. Read-only.',
+    'Returns metadata for the current staged change (or null if none). Canonical fields are snake_case — `staged_hash` feeds deploy_staged_change without renaming. Also reports `agent_id`, `owned_by_current_session` (false means deploy/discard needs force_takeover), `stale` (staged bytes already match the runtime; the next author op auto-clears it), and `render` (the before/after SVG/PNG file paths emitted when this change was staged, or null). The camelCase duplicates (stagedHash, …) are deprecated and slated for removal in v2.0.0. Read-only.',
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -76,6 +83,7 @@ export const getStagedChangeTool: Tool<Input, Output> = {
       // undeterminable. The staging slot itself is local, so the rest of
       // the payload is still served; stale stays null.
     }
+    const render = await readStageRenderSidecar(ctx.config.RENDER_DIR, staged.stagedHash);
     return {
       staged: {
         staged_hash: staged.stagedHash,
@@ -87,6 +95,7 @@ export const getStagedChangeTool: Tool<Input, Output> = {
         agent_id: staged.agent_id ?? null,
         owned_by_current_session: staged.agent_id === undefined || staged.agent_id === ctx.agentId,
         stale,
+        render,
         stagedHash: staged.stagedHash,
         basedOnSnapshotHash: staged.basedOnSnapshotHash,
         basedOnRev: staged.basedOnRev,

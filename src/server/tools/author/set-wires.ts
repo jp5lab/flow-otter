@@ -4,6 +4,7 @@ import { setWires } from '../../../toolkit/authoring/operations/set-wires.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import { resolveAuthoringKey, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
   .object({
@@ -39,6 +40,7 @@ const OutputSchema = z.object({
   wires_removed_count: z.number(),
   wires_added_count: z.number(),
   diagnostics: z.array(DiagnosticSchema),
+  render: StageRenderOutputSchema,
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -108,6 +110,7 @@ export const setWiresTool: Tool<Input, Output> = {
         wires_removed_count: extras.removed,
         wires_added_count: extras.added,
         diagnostics: [...base.diagnostics],
+        render: base.render,
       }),
     ),
 };
