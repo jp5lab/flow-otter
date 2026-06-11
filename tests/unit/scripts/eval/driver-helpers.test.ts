@@ -241,6 +241,63 @@ describe('createPrevTracker — $PREV poisoning hard-errors (audit 79-call-casca
   });
 });
 
+describe('createPrevTracker.substCommand — exec-step $PREV interpolation (EVAL-2 S5 loop)', () => {
+  it("interpolates REND-8's after_png path into the Read command (the S5 loop shape)", () => {
+    const prev = createPrevTracker();
+    prev.record('move_node', {
+      ok: true,
+      data: { render: { tabs: [{ tab_id: 't1', after_png: '/tmp/renders/stage-t1-after.png' }] } },
+    });
+    expect(prev.substCommand('od -An -tx1 -N 8 "$PREV.render.tabs.0.after_png"', 'exec:od')).toBe(
+      'od -An -tx1 -N 8 "/tmp/renders/stage-t1-after.png"',
+    );
+  });
+
+  it('interpolates multiple tokens, numbers, and booleans; commands without tokens pass through', () => {
+    const prev = createPrevTracker();
+    prev.record('t', { ok: true, data: { n: 3, flag: true, name: 'probe' } });
+    expect(prev.substCommand('echo $PREV.name $PREV.n $PREV.flag', 'x')).toBe('echo probe 3 true');
+    expect(prev.substCommand('echo plain', 'x')).toBe('echo plain');
+    // A hyphen ends a token (shell-word ambiguity): '$PREV.name-suffix'
+    // resolves '.name' and keeps '-suffix' literal.
+    expect(prev.substCommand('echo $PREV.name-suffix', 'x')).toBe('echo probe-suffix');
+  });
+
+  it('does NOT half-match $PREV-prefixed identifiers', () => {
+    const prev = createPrevTracker();
+    prev.record('t', { ok: true, data: { x: 1 } });
+    expect(prev.substCommand('echo $PREVENTED', 'x')).toBe('echo $PREVENTED');
+  });
+
+  it('poisons exactly like tool-arg substitution: no prior call, failed prior call, undefined path', () => {
+    const fresh = createPrevTracker();
+    expect(() => fresh.substCommand('cat "$PREV.path"', 'x')).toThrow(PrevPoisonedError);
+
+    const failed = createPrevTracker();
+    failed.record('move_node', { ok: false, reason: 'failed (isError)' });
+    expect(() => failed.substCommand('cat "$PREV.path"', 'x')).toThrow(/'move_node' failed/);
+
+    const missing = createPrevTracker();
+    missing.record('t', { ok: true, data: { render: {} } });
+    expect(() => missing.substCommand('cat "$PREV.render.tabs.0.after_png"', 'x')).toThrow(
+      /resolves to undefined/,
+    );
+  });
+
+  it('poisons on non-scalar resolutions — null after_png (rasterizer absent) and objects abort loudly', () => {
+    const prev = createPrevTracker();
+    prev.record('move_node', { ok: true, data: { render: { tabs: [{ after_png: null }] } } });
+    expect(() => prev.substCommand('cat "$PREV.render.tabs.0.after_png"', 'x')).toThrow(
+      PrevPoisonedError,
+    );
+    expect(() => prev.substCommand('cat "$PREV.render.tabs.0.after_png"', 'x')).toThrow(
+      /resolved to null/,
+    );
+    expect(() => prev.substCommand('cat "$PREV.render"', 'x')).toThrow(/resolved to object/);
+    expect(() => prev.substCommand('cat "$PREV"', 'x')).toThrow(PrevPoisonedError);
+  });
+});
+
 describe('parseFlowOtterCmd — FLOW_OTTER_CMD env', () => {
   it('defaults to the built server', () => {
     expect(parseFlowOtterCmd({})).toEqual({

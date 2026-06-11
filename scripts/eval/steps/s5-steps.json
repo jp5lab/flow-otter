@@ -1,0 +1,92 @@
+{
+  "version": 2,
+  "env": {},
+  "sections": [
+    {
+      "name": "setup",
+      "budget": {
+        "max_deploy_confirmations": 1,
+        "max_failed": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "debug",
+            "opts": {
+              "key": "s5-status-banner",
+              "label": "S5 status banner",
+              "position": { "x": 110, "y": 95 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        }
+      ]
+    },
+    {
+      "name": "loop",
+      "budget": { "max_total_invocations": 6, "max_failed": 0 },
+      "calls": [
+        {
+          "tool": "move_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "node_key": "s5-status-banner",
+            "position": { "x": 100, "y": 60 }
+          },
+          "expect": { "error": false, "match": "\"after_png\": \"" }
+        },
+        {
+          "exec": "od -An -tx1 -N 8 \"$PREV.render.tabs.0.after_png\"",
+          "expect": { "match": "89\\s+50\\s+4e\\s+47" }
+        },
+        {
+          "tool": "discard_staged_change",
+          "args": {},
+          "expect": { "error": false, "match": "\"discarded\": true" }
+        },
+        {
+          "tool": "move_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "node_key": "s5-status-banner",
+            "position": { "x": 280, "y": 100 }
+          },
+          "expect": { "error": false, "match": "\"after_png\": \"" }
+        },
+        {
+          "exec": "od -An -tx1 -N 8 \"$PREV.render.tabs.0.after_png\"",
+          "expect": { "match": "89\\s+50\\s+4e\\s+47" }
+        }
+      ]
+    },
+    {
+      "name": "verify",
+      "budget": {
+        "max_deploy_confirmations": 1,
+        "max_failed": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        }
+      ]
+    }
+  ]
+}

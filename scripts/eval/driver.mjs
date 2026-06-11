@@ -30,6 +30,8 @@
  *             "expect": { "error": false, "match": "staged_hash" } },
  *           { "exec": "shasum out.json", "mutates": false,
  *             "expect": { "match": "..." } },
+ *           { "exec": "od -An -tx1 \"$PREV.render.tabs.0.after_png\"",
+ *             "expect": { "match": "89 50 4e 47" } },
  *           { "sleep": 500 }
  *         ]
  *       }
@@ -41,6 +43,11 @@
  *   of the immediately preceding tool call, and that call must have
  *   succeeded and returned JSON; any path segment resolving to undefined
  *   aborts the run (exit 2). Pins the audit's 79-call-cascade class.
+ * - `exec` command strings interpolate embedded `$PREV.path.to.field` tokens
+ *   (EVAL-2 — the S5 loop Reads REND-8's `$PREV.render.tabs.0.after_png`).
+ *   The same poisoning rules apply, plus: a token resolving to anything but
+ *   a string/number/boolean aborts (objects can't be spliced into a shell
+ *   command). Interpolation happens BEFORE the step is counted or run.
  * - Anti-gaming lint: any tool-call payload containing position fields
  *   (`position` keys, numeric `x`/`y`) inside a section flagged
  *   `layout_computed: true` fails the run before any call is made (exit 2).
@@ -321,6 +328,16 @@ export function lintSteps(normalized) {
 }
 
 /**
+ * Embedded `$PREV` tokens inside exec command strings (EVAL-2). Segments are
+ * dot-separated `[A-Za-z0-9_]` runs (array indices are plain digits, e.g.
+ * `$PREV.render.tabs.0.after_png`); the lookahead stops `$PREVENTED`-style
+ * identifiers from being half-matched. Deliberately NO hyphens in the
+ * charset — a hyphen inside a shell word ('$PREV.x-foo') is ambiguous;
+ * hyphenated keys remain reachable via tool-arg substitution only.
+ */
+const EXEC_PREV_TOKEN_RE = /\$PREV(?![A-Za-z0-9_])(?:\.[A-Za-z0-9_]+)*/g;
+
+/**
  * $PREV tracker. `$PREV` / `$PREV.path.to.field` resolve against the parsed
  * JSON of the immediately preceding tool call. Poisoned references — no
  * prior call, prior call failed or returned non-JSON, or a path segment
@@ -375,12 +392,33 @@ export function createPrevTracker() {
     return value;
   };
 
+  /**
+   * Interpolate embedded `$PREV...` tokens into an exec command string
+   * (EVAL-2 — lets the S5 loop Read REND-8's after_png path:
+   * `od -An -tx1 "$PREV.render.tabs.0.after_png"`). Same poisoning rules as
+   * tool-arg substitution; a token resolving to a non-scalar additionally
+   * poisons the run — an object cannot be spliced into a shell command.
+   */
+  const substCommand = (command, stepName) =>
+    command.replace(EXEC_PREV_TOKEN_RE, (token) => {
+      const value = resolveToken(token, stepName);
+      const t = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+      if (t !== 'string' && t !== 'number' && t !== 'boolean') {
+        throw new PrevPoisonedError(
+          `step '${stepName}': '${token}' resolved to ${t} — only string/number/boolean values can be interpolated into an exec command.`,
+          { token, resolved_type: t },
+        );
+      }
+      return String(value);
+    });
+
   return {
     /** outcome: {ok: true, data} | {ok: false, reason} */
     record(step, outcome) {
       state = { step, ...outcome };
     },
     subst,
+    substCommand,
   };
 }
 
@@ -534,11 +572,30 @@ async function main() {
       }
 
       if (s.exec !== undefined) {
+        // Interpolate embedded $PREV tokens BEFORE counting or running —
+        // a poisoned reference aborts exactly like a tool-arg one would.
+        let execCmd;
+        try {
+          execCmd = prev.substCommand(s.exec, `exec:${s.exec.slice(0, 60)}`);
+        } catch (e) {
+          if (e instanceof PrevPoisonedError) {
+            abortedReason = `$PREV poisoned: ${e.message}`;
+            out({
+              step: `exec:${s.exec.slice(0, 60)}`,
+              section: section.name,
+              aborted: true,
+              error: abortedReason,
+              info: e.info,
+            });
+            break;
+          }
+          throw e;
+        }
         countExecStep(counters, { mutates: s.mutates === true });
         let execOut = '';
         let execFailed = false;
         try {
-          execOut = execSync(s.exec, { encoding: 'utf8' });
+          execOut = execSync(execCmd, { encoding: 'utf8' });
         } catch (e) {
           execFailed = true;
           execOut = `EXEC FAIL: ${e.message}`;
@@ -549,12 +606,12 @@ async function main() {
           expectFailures.push({
             section: section.name,
             step_index: i,
-            exec: s.exec.slice(0, 60),
+            exec: execCmd.slice(0, 60),
             ...issue,
           });
         }
         out({
-          step: `exec:${s.exec.slice(0, 60)}`,
+          step: `exec:${execCmd.slice(0, 60)}`,
           section: section.name,
           ...(s.mutates === true ? { mutates: true } : {}),
           result: execOut.slice(0, s.maxLen ?? 800),

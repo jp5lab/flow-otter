@@ -52,16 +52,16 @@ npm install && npm run build                        # MCP client runs dist/
 
 ## Scenario suite
 
-| ID  | Name                  | What it proves                                       | Tiers        | Pass criteria                                                                                                                                                                                                                                |
-| --- | --------------------- | ---------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S0  | Smoke                 | Server boots, targets the stack, detects version     | read         | `health_check` reports runtime version + capability matrix correctly for the matrix leg under test                                                                                                                                           |
-| S1  | Author loop           | README Tab-1 claim: full common-author-tools tab     | write+deploy | Deploys clean; `validate_flow` clean; re-running the same session prompt produces byte-identical `flows.json` (idempotency); budget recorded                                                                                                 |
-| S2  | Dashboard composition | README Tab-2 claim: 6 templates, one shared skeleton | write+deploy | `/dashboard` renders; ISA-101 + hierarchy validators clean; runtime accepts every widget (no editor crash, no runtime reject)                                                                                                                |
-| S3  | Topology              | README Tab-3 claim: subflow + cross-tab links        | write+deploy | Links resolve; subflow instance consistent after redeploy                                                                                                                                                                                    |
-| S4  | Safety drills         | The differentiator never regresses                   | all          | Out-of-band runtime mutation → staged deploy **refuses** (drift); `rollback_last_change` restores byte-identical snapshot; elicitation decline aborts deploy; read-only blocks writes; dangerous tools absent without env flag               |
-| S5  | Visual loop           | Phase-0 gate of the strategy                         | write        | Agent stages a change, renders, _sees_ the result (PNG), adjusts, re-renders — in ≤ 6 tool calls, and its visual judgment matches what the editor shows. **Prerequisite: `npm run fidelity:editor` green** (see "Renderer-fidelity harness") |
-| S6  | Layout benchmark      | Phase-2 gate of the strategy                         | toolkit      | 10–20 exemplar community flows, positions stripped, re-laid-out: layout-lint score vs. originals + human eyeball verdict per flow                                                                                                            |
-| S7  | Cold-agent discovery  | Server is self-teaching                              | read         | A fresh agent with no priming (only server instructions + prompts) finds `get_authoring_guide`/`plan_flow` and follows the methodology unprompted                                                                                            |
+| ID  | Name                  | What it proves                                       | Tiers        | Pass criteria                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | --------------------- | ---------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S0  | Smoke                 | Server boots, targets the stack, detects version     | read         | `health_check` reports runtime version + capability matrix correctly for the matrix leg under test                                                                                                                                                                                                                                                                                                                |
+| S1  | Author loop           | README Tab-1 claim: full common-author-tools tab     | write+deploy | Deploys clean; `validate_flow` clean; re-running the same session prompt produces byte-identical `flows.json` (idempotency); budget recorded                                                                                                                                                                                                                                                                      |
+| S2  | Dashboard composition | README Tab-2 claim: 6 templates, one shared skeleton | write+deploy | `/dashboard` renders; ISA-101 + hierarchy validators clean; runtime accepts every widget (no editor crash, no runtime reject)                                                                                                                                                                                                                                                                                     |
+| S3  | Topology              | README Tab-3 claim: subflow + cross-tab links        | write+deploy | Links resolve; subflow instance consistent after redeploy                                                                                                                                                                                                                                                                                                                                                         |
+| S4  | Safety drills         | The differentiator never regresses                   | all          | Out-of-band runtime mutation → staged deploy **refuses** (drift); `rollback_last_change` restores byte-identical snapshot; elicitation decline aborts deploy; read-only blocks writes; dangerous tools absent without env flag                                                                                                                                                                                    |
+| S5  | Visual loop           | Phase-0 gate of the strategy                         | write+deploy | Agent stages a change, _sees_ the result (the stage output's `after_png`), adjusts, re-sees — within **≤ 6 TOTAL invocations (MCP + Read/exec), 0 failed** — and the deployed result matches the live editor within ±2px. Gate: `npm run eval:s5` (see "The S5 gate"), twice consecutively, plus one live unscripted session. **Prerequisite: `npm run fidelity:editor` green** (see "Renderer-fidelity harness") |
+| S6  | Layout benchmark      | Phase-2 gate of the strategy                         | toolkit      | 10–20 exemplar community flows, positions stripped, re-laid-out: layout-lint score vs. originals + human eyeball verdict per flow                                                                                                                                                                                                                                                                                 |
+| S7  | Cold-agent discovery  | Server is self-teaching                              | read         | A fresh agent with no priming (only server instructions + prompts) finds `get_authoring_guide`/`plan_flow` and follows the methodology unprompted                                                                                                                                                                                                                                                                 |
 
 Scenario prompts are written down verbatim in the run record so runs are
 comparable across versions. S1–S3 reuse the README showcase prompts — every
@@ -116,6 +116,14 @@ describe?, sections: [...]}`. Each section is
   call failed, returned non-JSON, or the path resolves to `undefined`, the
   run ABORTS (exit 2) instead of substituting a stale value — the failure
   class behind the audit's two 79-call cascades is structurally dead.
+- **`exec` steps interpolate embedded `$PREV` tokens** (EVAL-2): tokens of
+  the form `$PREV.path.to.field` (segments `[A-Za-z0-9_]`, array indices as
+  plain digits) inside the command string are substituted before the step is
+  counted or run — the S5 loop's Read is
+  `od -An -tx1 -N 8 "$PREV.render.tabs.0.after_png"`. The same poisoning
+  rules apply, plus: a token resolving to anything but a string/number/
+  boolean (e.g. a `null` `after_png` because the rasterizer is absent)
+  aborts the run.
 - **EPIPE guard:** a downstream pipe closing (e.g. `| head`) ends the run
   quietly instead of crashing it mid-flight.
 - **Anti-gaming steps-file lint:** in any section flagged
@@ -286,6 +294,47 @@ pinned editor profile, before any release that claims support for it):
 "its visual judgment matches what the editor shows" is only meaningful
 while the renderer is proven editor-true.
 
+## The S5 gate (`npm run eval:s5`, EVAL-2)
+
+S5 re-specified (2026-06-10 fix plan): the see-judge-adjust loop must fit in
+**≤ 6 TOTAL invocations (MCP + Read/exec) with `max_failed: 0`**, rendering
+STAGED state — achievable only because every stage output carries REND-8's
+`render.tabs[].after_png` (an explicit-render loop with the mandatory
+discard costs 7). `npm run eval:s5` (`scripts/eval/run-s5.mjs`) runs two
+legs against the local sterile stack and is the gate's committed,
+falsifiable form:
+
+1. **Driver leg** — the ONE canonical steps file,
+   `scripts/eval/steps/s5-steps.json` (replay scenarios delegate to it,
+   never copy it), through the eval driver:
+   - `setup` (unbudgeted; safety-pinned to 1 confirmation, 0 force/OOB):
+     seed a deliberately mis-placed node, deploy with consent;
+   - `loop` (**budget `{max_total_invocations: 6, max_failed: 0}`** — the
+     audit-F1/e3 regression pin): `move_node` → exec-Read `after_png` →
+     `discard_staged_change` → `move_node` adjust → exec-Read `after_png`
+     (5 invocations, one spare);
+   - `verify` (unbudgeted; same safety pins): deploy the adjustment with
+     consent.
+2. **Fidelity leg** — opens the real editor headless over CDP
+   (`scripts/eval/cdp.mjs`), captures the deployed result, and compares
+   against `renderGeometry` with the single shared ±2px comparator
+   (`scripts/eval/fidelity.mjs`) on the same basis as `fidelity:editor`
+   (fixture-freshness guard included; duplicate comparators are banned).
+
+Exit codes mirror the driver: 0 = budget AND fidelity pass; 1 = gate fail;
+2 = abort. Prior flows are restored afterwards (`--keep-flows` to inspect);
+all server state lives in a per-run temp dir under a fresh
+`ENVIRONMENT_NAME`. The driver leg also runs as a standing integration test
+(`tests/integration/eval-s5.test.ts`); the full gate (Chrome) is env-gated
+there behind `FLOWOTTER_LIVE_EDITOR=true`. The steps-file structure and its
+budget block are pinned by `tests/unit/scripts/eval/s5-steps.test.ts` —
+loosening the file is loud.
+
+**Gate declaration rule:** a scripted `eval:s5` pass is the standing
+regression; declaring the S5 gate additionally requires **two consecutive
+passes** plus **one live unscripted agent session** whose transcript shows
+the stage→see→adjust→re-see loop within budget, recorded in the run file.
+
 ## Iteration protocol
 
 1. Run a scenario → score it.
@@ -299,7 +348,8 @@ while the renderer is proven editor-true.
 
 ## Phase gates (strategy linkage)
 
-- **Phase 0 exit:** S5 passes — the PNG loop is ergonomically real, not asserted.
+- **Phase 0 exit:** S5 passes (`npm run eval:s5` twice consecutively + the
+  live unscripted session) — the PNG loop is ergonomically real, not asserted.
 - **Phase 1 exit:** S1 passes within the spec-authoring budget (target: ≤ 3
   authoring calls + 1 deploy confirmation for a ~15-node flow via `stage_spec`)
   and S4 stays green.

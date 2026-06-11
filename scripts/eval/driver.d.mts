@@ -47,6 +47,8 @@ export interface LintViolation {
 export interface PrevTracker {
   record(step: string, outcome: { ok: true; data: unknown } | { ok: false; reason: string }): void;
   subst(value: unknown, stepName: string): unknown;
+  /** EVAL-2: interpolate embedded `$PREV...` tokens into an exec command string. */
+  substCommand(command: string, stepName: string): string;
 }
 
 export declare function parseFlowOtterCmd(env?: Record<string, string | undefined>): {
