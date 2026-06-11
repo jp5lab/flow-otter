@@ -10,7 +10,7 @@ import {
 } from '../../shared/flows-json.js';
 import { canonicalHash } from '../../shared/hash.js';
 import { generateNodeId } from '../../shared/ids.js';
-import { nodeWidthFor } from '../render/metrics.js';
+import { nodeDimensionsFor } from '../render/metrics.js';
 
 import { byCanonicalOrder } from './ordering.js';
 import {
@@ -23,7 +23,9 @@ import {
   type NodeSpec,
   type SubflowDefSpec,
   type TabSpec,
+  getInputPortCount,
   getOutputPortCount,
+  isNodeLabelHidden,
 } from './types.js';
 
 export const AUTHORING_KEY_FIELD = '_authoringKey';
@@ -278,10 +280,7 @@ function emitGroup(
 const GROUP_FIT_PAD_X = 20;
 const GROUP_FIT_PAD_TOP = 40; // headroom for the group name bar
 const GROUP_FIT_PAD_BOTTOM = 20;
-const NODE_BODY_HEIGHT = 30;
 const JUNCTION_SIZE = 10;
-const COMMENT_DEFAULT_W = 160;
-const COMMENT_DEFAULT_H = 30;
 const GRID = 20;
 
 /**
@@ -291,6 +290,13 @@ const GRID = 20;
  * against 4.1.11; eval campaign 2026-06-10). So groups authored without
  * explicit geometry get a deterministic, grid-snapped fit here instead.
  *
+ * Member dimensions are editor-true (REND-2): widths/heights come from
+ * `nodeDimensionsFor` (the pinned 4.1 GeometryProvider profile — permanent
+ * regardless of target runtime, keeping compile() pure), with per-node
+ * input/output counts and label-hidden link pills honored. Comments without
+ * an explicit size measure like the editor does (label-derived width, 30px
+ * tall).
+ *
  * Members are matched by groupKey/nodeKeys over nodes, junctions, and
  * comments. Child groups (nested via parentKey) are not folded into the
  * fit — a parent group containing only child groups keeps legacy omit
@@ -299,6 +305,7 @@ const GRID = 20;
 function autoFitGroupGeometry(
   tabSpec: TabSpec,
   groupSpec: GroupSpec,
+  subflowDefOutCount: ReadonlyMap<string, number>,
 ): { x: number; y: number; w: number; h: number } | undefined {
   const member = new Set(groupSpec.nodeKeys);
   let minX = Infinity;
@@ -315,8 +322,12 @@ function autoFitGroupGeometry(
   };
   for (const n of tabSpec.nodes) {
     if (!member.has(n.key)) continue;
-    const w = nodeWidthFor(n.label ?? n.type, false, 1);
-    include(n.position.x, n.position.y, w, NODE_BODY_HEIGHT);
+    const { w, h } = nodeDimensionsFor(n.label ?? n.type, {
+      inputs: getInputPortCount(n.type, n.passthrough),
+      outputs: portCountForNode(n, subflowDefOutCount),
+      hideLabel: isNodeLabelHidden(n.type, n.passthrough),
+    });
+    include(n.position.x, n.position.y, w, h);
   }
   for (const j of tabSpec.junctions ?? []) {
     if (!member.has(j.key)) continue;
@@ -324,12 +335,8 @@ function autoFitGroupGeometry(
   }
   for (const c of tabSpec.comments) {
     if (!member.has(c.key)) continue;
-    include(
-      c.position.x,
-      c.position.y,
-      c.size?.w ?? COMMENT_DEFAULT_W,
-      c.size?.h ?? COMMENT_DEFAULT_H,
-    );
+    const { w, h } = c.size ?? nodeDimensionsFor(c.text, { inputs: 0, outputs: 0 });
+    include(c.position.x, c.position.y, w, h);
   }
   if (!found) return undefined;
   const x = Math.floor((minX - GROUP_FIT_PAD_X) / GRID) * GRID;
@@ -616,7 +623,7 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
       }
       const autoFit =
         groupSpec.position === undefined && groupSpec.size === undefined
-          ? autoFitGroupGeometry(tabSpec, groupSpec)
+          ? autoFitGroupGeometry(tabSpec, groupSpec, subflowDefOutCount)
           : undefined;
       flows.push(emitGroup(groupSpec, id, tabId, containedIds, parentId, autoFit));
     }

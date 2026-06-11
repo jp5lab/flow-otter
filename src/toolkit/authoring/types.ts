@@ -209,3 +209,56 @@ export function getOutputPortCount(
   const known = DEFAULT_OUTPUT_PORT_COUNT[type];
   return known ?? 1;
 }
+
+/**
+ * Default input-port count by node type (REND-2). Mirrors the editor's
+ * `_def.inputs` for the core catalog — only presence (`inputs > 0`) matters
+ * for geometry (it adds the 7px input handle to the node width). Unknown
+ * types default to 1 (almost every processing node has an input).
+ */
+export const DEFAULT_INPUT_PORT_COUNT: Readonly<Record<string, number>> = {
+  inject: 0,
+  debug: 1,
+  function: 1,
+  switch: 1,
+  change: 1,
+  template: 1,
+  link_in: 0,
+  'link in': 0,
+  link_out: 1,
+  'link out': 1,
+  'link call': 1,
+  'mqtt in': 0,
+  'mqtt out': 1,
+  catch: 0,
+  status: 0,
+  complete: 0,
+  comment: 0,
+};
+
+export function getInputPortCount(
+  type: string,
+  passthrough?: Readonly<Record<string, unknown>>,
+): number {
+  // Some node shapes (e.g. subflow instances) carry an explicit numeric
+  // `inputs` field; honor it when present.
+  if (typeof passthrough?.['inputs'] === 'number') {
+    return passthrough['inputs'];
+  }
+  const known = DEFAULT_INPUT_PORT_COUNT[type];
+  return known ?? 1;
+}
+
+/**
+ * Whether the editor hides this node's label (rendering a 30×30 pill):
+ * an explicit boolean `l` field wins; link in/out nodes hide by default
+ * (editor: `hideLabel = d.hasOwnProperty('l') ? !d.l : isLink`).
+ */
+export function isNodeLabelHidden(
+  type: string,
+  passthrough?: Readonly<Record<string, unknown>>,
+): boolean {
+  const l = passthrough?.['l'];
+  if (typeof l === 'boolean') return !l;
+  return type === 'link in' || type === 'link_in' || type === 'link out' || type === 'link_out';
+}

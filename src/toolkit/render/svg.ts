@@ -9,9 +9,9 @@ import {
   type RegularNode,
   type TabNode,
 } from '../../shared/flows-json.js';
-import { getOutputPortCount } from '../authoring/types.js';
+import { getInputPortCount, getOutputPortCount } from '../authoring/types.js';
 
-import { fitLabel, nodeWidthFor } from './metrics.js';
+import { fitLabel, nodeDimensionsFor } from './metrics.js';
 
 export interface RenderSvgOptions {
   /** Render only this tab. If omitted, renders the first tab. */
@@ -191,7 +191,12 @@ function renderTab(tab: TabNode, flows: FlowsJson, opts: RequiredOpts): Rendered
     const passthrough = (n as { passthrough?: Record<string, unknown> }).passthrough;
     const outputs = isRegularNode(n) ? getOutputPortCount(n.type, passthrough) : 0;
     const label = rawName !== '' ? rawName : n.type;
-    const w = nodeWidthFor(label, false, outputs);
+    // Editor-true width (REND-2). Heights, anchors, ports and label-hidden
+    // link pills are REND-3's renderer-geometry pass.
+    const { w } = nodeDimensionsFor(label, {
+      inputs: getInputPortCount(n.type, passthrough),
+      outputs,
+    });
     const fitted = fitLabelToBox(label, w);
     const box: NodeBox = {
       id: n.id,

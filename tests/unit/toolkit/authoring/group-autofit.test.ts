@@ -2,6 +2,17 @@
  * Group geometry auto-fit (eval campaign 2026-06-10, finding #3): groups
  * authored without explicit geometry must compile to a visible bounding box —
  * Node-RED does not auto-fit dimension-less groups on import.
+ *
+ * REVIEW NOTE — REND-2 deliberate re-bless (2026-06-10 fix plan, F11):
+ * auto-fit member dimensions moved from the old approximate model (12px
+ * glyphs, min 80, 240 cap, fixed 30px height, 160px comment default) to the
+ * editor-true `nodeDimensionsFor` profile (14px Helvetica Neue regular
+ * advances, min 100, no cap, h = max(30, outputs·15), label-derived comment
+ * widths, 30×30 hidden-label link pills). Compile output changes ONLY for
+ * auto-fit-path groups — explicit geometry is untouched (pinned by
+ * e1-byte-identity.test.ts, verified green at HEAD before this change). The
+ * 'editor-true member dimensions' block below pins the new boxes exactly;
+ * derivations are spelled out inline so a future re-bless is a conscious act.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -154,6 +165,93 @@ describe('group geometry auto-fit', () => {
     expect('x' in parent).toBe(false);
     // Child fits around its node member.
     expect(typeof child['x']).toBe('number');
+  });
+
+  describe('editor-true member dimensions (REND-2 exact pins)', () => {
+    it('fits the canonical two-node group with editor-true widths', () => {
+      // Tick (inject, 0 in): labelPx('Tick') = 26 → 26+50 = 76 → w 100, h 30.
+      // Sink (debug, 1 in): labelPx('Sink') = 27 → 27+57 = 84 → w 100, h 30.
+      // Extents: x 90..590, y 185..215; pads 20/40/20, grid-snapped:
+      //   x = floor(70/20)·20 = 60,  y = floor(145/20)·20 = 140
+      //   w = ceil((610−60)/20)·20 = 560,  h = ceil((235−140)/20)·20 = 100.
+      const { flows } = compile(specWithGroup());
+      const g = groupNode(flows);
+      expect({ x: g['x'], y: g['y'], w: g['w'], h: g['h'] }).toEqual({
+        x: 60,
+        y: 140,
+        w: 560,
+        h: 100,
+      });
+    });
+
+    it('multi-output members contribute their editor-true height (h = outputs·15)', () => {
+      const spec = {
+        tabs: [
+          {
+            id: 'main',
+            label: 'Main',
+            nodes: [
+              {
+                key: 'sw',
+                type: 'switch',
+                label: 'Switch four rules',
+                position: { x: 300, y: 200 },
+                groupKey: 'g1',
+                passthrough: { rules: [{}, {}, {}, {}] },
+              },
+            ],
+            connections: [],
+            groups: [{ key: 'g1', name: 'Tall', nodeKeys: ['sw'] }],
+            comments: [],
+          },
+        ],
+      } as unknown as AuthoringSpec;
+      const { flows } = compile(spec);
+      const g = groupNode(flows);
+      // 'Switch four rules' (1 in, 4 outs): w 180 (fixture-pinned), h 60.
+      // Extents: x 210..390, y 170..230 → box x 180, y 120, w 240, h 140.
+      expect({ x: g['x'], y: g['y'], w: g['w'], h: g['h'] }).toEqual({
+        x: 180,
+        y: 120,
+        w: 240,
+        h: 140,
+      });
+    });
+
+    it('label-hidden link members are 30×30 pills, and comments measure by label', () => {
+      const spec = {
+        tabs: [
+          {
+            id: 'main',
+            label: 'Main',
+            nodes: [
+              {
+                key: 'lnk',
+                type: 'link in',
+                label: 'ignored when hidden',
+                position: { x: 200, y: 200 },
+                groupKey: 'g1',
+                passthrough: { l: false },
+              },
+            ],
+            connections: [],
+            groups: [{ key: 'g1', name: 'Pills', nodeKeys: ['lnk', 'c1'] }],
+            comments: [{ key: 'c1', text: 'Short note', position: { x: 200, y: 120 } }],
+          },
+        ],
+      } as unknown as AuthoringSpec;
+      const { flows } = compile(spec);
+      const g = groupNode(flows);
+      // link pill 30×30 at (200,200): x 185..215, y 185..215.
+      // 'Short note' comment (0 in): w 120 (fixture-pinned), h 30 → x 140..260, y 105..135.
+      // Extents: x 140..260, y 105..215 → box x 120, y 60, w 160, h 180.
+      expect({ x: g['x'], y: g['y'], w: g['w'], h: g['h'] }).toEqual({
+        x: 120,
+        y: 60,
+        w: 160,
+        h: 180,
+      });
+    });
   });
 
   it('omits geometry for a group with no positioned members (legacy behavior)', () => {
