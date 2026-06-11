@@ -46,7 +46,7 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 - `list_snapshots`
 - `get_snapshot`
 - `list_templates`
-- `get_staged_change`
+- `get_staged_change` — metadata for the pending staged change (or `staged: null`). Canonical fields are snake_case: `staged_hash` (feeds `deploy_staged_change` without renaming), `based_on_snapshot_hash`, `based_on_rev`, `staged_at`, `actor`, `reason`, plus `agent_id` (session that staged it; null pre-v0.6.0), `owned_by_current_session` (false ⇒ deploy/discard needs `force_takeover:true`), and `stale` (true ⇒ staged bytes already match the runtime, so the next author op auto-clears it; null when the runtime is unreachable). The camelCase duplicates (`stagedHash`, `basedOnSnapshotHash`, `basedOnRev`, `stagedAt`) are deprecated dual-emits slated for removal in v2.0.0. See `CLIENT_CONFIG.md` § Staging ownership.
 - `get_audit_log_recent`
 - `get_recent_debug_messages` — recent debug-node frames captured from the active Node-RED target's `/comms` WebSocket (topic `debug` only). Lazy-connects on first call. Filters: `node_id` (exact), `flow_id` (exact), `topic_filter` (substring), `since_ms`, `limit` (most recent). Returns `{ok, connected, buffer_size, dropped_count, last_event_at, messages[]}`. Ring buffer size via `DEBUG_BUFFER_SIZE` env var (default 500, max 10 000). Returns `connected:false` and empty messages if no admin-api target is configured.
 
@@ -69,7 +69,7 @@ Author tools stage a change. They do not deploy.
 - `set_wires` — atomic bulk wire management. Input: `{tab_id, source_node_id, output_port?, target_node_ids:[]}`. Replaces all wires originating from `(source, output_port)` with new connections to the target keys on the same tab. Pass `target_node_ids:[]` to clear the port. Same-tab only; cross-tab wiring uses link nodes. Deduplicates targets; rejects self-wire and out-of-range output ports.
 - `remove_node`
 - `update_node` — full-property `passthrough` merge + **line-based `patches[]`** for token-efficient edits to string properties (function-node `func`, ui-template `format`, template `template`). Patches are `{property, op:'replace'|'insert'|'delete', start, end?, content?}` with 1-indexed line numbers on the ORIGINAL content; non-overlapping.
-- `move_node`
+- `move_node` — repositions a node and/or moves it to another tab. Takes `tab_id` (the tab currently holding the node — the same parameter vocabulary as every other author tool) plus optional `dest_tab_id` and `position`. `source_tab_id` is a DEPRECATED alias of `tab_id` (kept for back-compat, removal slated for v2.0.0); using it triggers the `param-vocabulary` soft nudge.
 - `create_subflow_definition`
 - `instantiate_template`
 - `discard_staged_change` — clears the pending staged change WITHOUT deploying. Author tools refuse to stage over an undeployed change (staging is single-slot; a second op would silently discard the first), so the loop is: stage → deploy (or discard) → stage. Optional `staged_hash` asserts which stage you're discarding; `force_takeover:true` discards a stage authored by a different agent process.

@@ -122,6 +122,42 @@ node dist/bin/flow-otter.js
 
 Keep dangerous tools disabled for normal agent sessions.
 
+## Staging ownership (`FLOWOTTER_SESSION_ID`)
+
+Staging is **single-slot per environment**: each `~/.flow-otter/<env_name>/staging/` directory
+holds at most one pending change. Every staged change is tagged with the session id of the agent
+process that staged it (`staged.agent_id`).
+
+- **Session identity.** At boot, each FlowOtter process derives a stable session id from the
+  `FLOWOTTER_SESSION_ID` environment variable; when unset it falls back to `pid-<process id>`.
+  The pid fallback changes on every restart, which makes a restarted client a "different agent"
+  to its own leftover stage. Set `FLOWOTTER_SESSION_ID` to a stable value in the MCP
+  registration `env` block when you want staging ownership to survive client restarts:
+
+  ```json
+  "env": {
+    "FLOWOTTER_SESSION_ID": "claude-desktop-main"
+  }
+  ```
+
+- **Ownership enforcement.** `deploy_staged_change` and `discard_staged_change` refuse to act on
+  a stage whose `agent_id` differs from the current session, unless `force_takeover:true` is
+  passed. Author tools refuse to stage over any pending change (deploy it or discard it first);
+  when the pending stage belongs to a different session, the refusal message names
+  `force_takeover` so the recovery path (`discard_staged_change` with `force_takeover:true`) is
+  explicit. Stages written before v0.6.0 carry no `agent_id` and are treated as owned by
+  everyone (back-compat).
+
+- **Stale-stage auto-clear.** A pending stage whose `staged_hash` is byte-identical to the
+  current runtime flows carries no undeployed work, so the next author op auto-clears it —
+  regardless of which session staged it (byte-equality makes clearing information-lossless) —
+  and proceeds, surfacing an info diagnostic `staging/auto-cleared-stale-stage`. A pending stage
+  whose hash differs from the runtime always blocks; it is never auto-cleared.
+
+- **Inspecting ownership.** `get_staged_change` reports `agent_id`, `owned_by_current_session`
+  (false means deploy/discard needs `force_takeover:true`), and `stale` (true means the next
+  author op will auto-clear it; null when the runtime is unreachable).
+
 ## Troubleshooting
 
 - Run `health_check` first. It reports the configured target and whether `/flows` is reachable.

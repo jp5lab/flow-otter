@@ -2,6 +2,13 @@
 
 ## Unreleased (v1.4.0)
 
+### WSB-6 — Casing/ownership/vocabulary reconciliation (SD6)
+
+- `get_staged_change` now emits canonical **snake_case** fields — `staged_hash`, `based_on_snapshot_hash`, `based_on_rev`, `staged_at` — so its `staged_hash` feeds `deploy_staged_change` without renaming (fixes the 2026-06-10 audit e2#7 casing mismatch). The legacy camelCase duplicates (`stagedHash`, `basedOnSnapshotHash`, `basedOnRev`, `stagedAt`) are dual-emitted for this one minor release, deprecated, and **slated for removal in v2.0.0** (supersession recorded here).
+- `get_staged_change` additionally reports `agent_id` (session that staged the change; null for pre-v0.6.0 stages), `owned_by_current_session` (false means deploy/discard needs `force_takeover:true` — mirrors `deploy_staged_change`'s ownership check, including the no-agent_id back-compat path), and `stale` (true when the staged bytes are byte-identical to the current runtime, i.e. the next author op will auto-clear the slot per WSB-3; null when the runtime is unreachable).
+- `move_node` gains `tab_id` as the canonical tab parameter — the same vocabulary as every other author tool. `source_tab_id` stays accepted as a deprecated alias (strictly additive; removal slated for v2.0.0); supplying both requires agreement. Owns audit ledger e3#2 together with the new `param-vocabulary` soft nudge (`src/server/nudges/rules/param-vocabulary.ts`), which fires when a successful `move_node` call still used the deprecated alias.
+- Docs: `FLOWOTTER_SESSION_ID` (shipped v0.6.0, undocumented since) is now documented in a new `docs/CLIENT_CONFIG.md` "Staging ownership" section covering the session-identity model, `force_takeover` recovery, and WSB-3's hash-equal auto-clear; `TOOL_REFERENCE.md` / `AGENT_QUICKSTART.md` updated to match. The docs presence is pinned by a new unit test (`tests/unit/docs/client-config-coverage.test.ts`) replacing the fix plan's "CHANGELOG review" fallback.
+
 ### WSB-3 — Stage-time no-op refusal + auto-clear of hash-equal stale stages (SD3 pipeline half, SD6 half)
 
 - Author tools now REFUSE at stage time when the compiled result is byte-identical to the current runtime flows (`ValidationFailedError`, "produced no change"; nothing is written to the staging slot). This tightens `REQUIRE_DIFF_BEFORE_DEPLOY` from deploy time to stage time and kills the 2026-06-10 audit e1 poison cascade where node tools addressed at junctions/comments silently staged no-change stages. The refusal message points at the object-kind confusion (node vs junction vs comment vs group). The op-layer silent-false return shapes are untouched (their flip to throwing is owned by WSB-4, v1.5.0).

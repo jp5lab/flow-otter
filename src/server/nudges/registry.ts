@@ -11,10 +11,15 @@ import type { Container } from '../container.js';
 
 import { makeDeployWithoutPreviewNudge } from './rules/deploy-without-preview.js';
 import { noPlanForLargeFlowNudge } from './rules/no-plan-for-large-flow.js';
+import { paramVocabularyNudge } from './rules/param-vocabulary.js';
 import type { Nudge, NudgeContext } from './types.js';
 
 export function buildNudgeRegistry(container: Container): readonly Nudge[] {
-  return [noPlanForLargeFlowNudge, makeDeployWithoutPreviewNudge(() => container)];
+  return [
+    noPlanForLargeFlowNudge,
+    makeDeployWithoutPreviewNudge(() => container),
+    paramVocabularyNudge,
+  ];
 }
 
 /**

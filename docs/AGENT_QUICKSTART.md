@@ -120,8 +120,13 @@ Preview before committing:
 
 ```jsonc
 { "tool": "preview_flow_diff" }   // semantic diff of staged vs runtime
-{ "tool": "get_staged_change" }   // raw staged payload
+{ "tool": "get_staged_change" }   // staged metadata: staged_hash, agent_id, ownership, staleness
 ```
+
+`get_staged_change` returns snake_case fields — its `staged_hash` feeds `deploy_staged_change`
+directly. It also reports `owned_by_current_session` (false means deploy/discard needs
+`force_takeover:true`) and `stale` (true means the staged bytes already match the runtime, so
+the next author op will auto-clear the slot). See `CLIENT_CONFIG.md` § Staging ownership.
 
 ### 4. Deploy
 
@@ -251,7 +256,7 @@ Empirical finding from real use:
 ## Common failure modes
 
 - **`DriftError` on deploy**: runtime changed since you staged. Preferred: discard the stage (`discard_staged_change`) and re-stage against the new baseline. `confirm:true` does NOT bypass this (consent ≠ drift override); pass `force:true` only to deliberately overwrite the concurrent changes.
-- **"A staged change is already pending deploy"**: author tools refuse to stage over an undeployed change (single-slot staging). Deploy it (`deploy_staged_change`) or drop it (`discard_staged_change`), then re-stage.
+- **"A staged change is already pending deploy"**: author tools refuse to stage over an undeployed change (single-slot staging). Deploy it (`deploy_staged_change`) or drop it (`discard_staged_change`), then re-stage. If the pending stage was authored by a different agent session, the refusal names `force_takeover` — pass `force_takeover:true` to `discard_staged_change` to take it over. A pending stage whose bytes already match the runtime is auto-cleared by the next author op (info diagnostic `staging/auto-cleared-stale-stage`); `get_staged_change` shows `stale:true` for those. See `CLIENT_CONFIG.md` § Staging ownership (including `FLOWOTTER_SESSION_ID` for stable session identity across restarts).
 - **`Invalid confirmation_token`**: token scope mismatch. Re-request via `prepare_dangerous_operation` with the EXACT same target/hash.
 - **`No Node-RED target configured`**: server booted without a target. Call `set_target` first.
 - **`connected: false` in `get_recent_debug_messages`**: target is file-source (no admin-api), or initial connect failed. Buffer may still have frames from a prior session.
