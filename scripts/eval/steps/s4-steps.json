@@ -1,0 +1,152 @@
+{
+  "version": 2,
+  "env": {},
+  "sections": [
+    {
+      "name": "seed-snapshot",
+      "budget": {
+        "max_mcp_calls": 2,
+        "max_deploy_confirmations": 1,
+        "max_failed": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "add_comment",
+          "args": {
+            "tab_id": "1111111111111111",
+            "text": "S4 safety-drill marker",
+            "position": { "x": 500, "y": 40 }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"snapshot_before\": \"" }
+        }
+      ]
+    },
+    {
+      "name": "drift-drill",
+      "budget": {
+        "max_mcp_calls": 2,
+        "max_exec_steps": 1,
+        "max_failed": 1,
+        "max_deploy_confirmations": 1,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 1
+      },
+      "calls": [
+        {
+          "tool": "move_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "node_key": "2222222222222222",
+            "position": { "x": 140, "y": 140 }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "exec": "node -e \"const u=process.env.NODE_RED_BASE_URL??'http://localhost:1880';fetch(u+'/flows').then((r)=>r.json()).then((f)=>fetch(u+'/flows',{method:'POST',headers:{'Content-Type':'application/json','Node-RED-Deployment-Type':'full'},body:JSON.stringify(f.concat({id:'00b00b00b00b00b0',type:'comment',z:'1111111111111111',name:'OOB drift',info:'',x:620,y:40,wires:[]}))})).then((r)=>{if(!r.ok)throw new Error('HTTP '+r.status);console.log('oob-mutation-applied')})\"",
+          "mutates": true,
+          "expect": { "match": "oob-mutation-applied" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash", "confirm": true },
+          "expect": { "error": true, "match": "has drifted[\\s\\S]*\"expected_hash\"" }
+        }
+      ]
+    },
+    {
+      "name": "rollback-restore",
+      "budget": {
+        "max_mcp_calls": 2,
+        "max_exec_steps": 1,
+        "max_failed": 0,
+        "max_deploy_confirmations": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "rollback_last_change",
+          "args": {},
+          "expect": { "error": false, "match": "\"restored_hash\": \"[0-9a-f]{64}\"" }
+        },
+        {
+          "exec": "node scripts/eval/compare-runtime-hash.mjs $PREV.restored_hash",
+          "expect": { "match": "restore-byte-identical" }
+        },
+        {
+          "tool": "discard_staged_change",
+          "args": {},
+          "expect": { "error": false, "match": "\"discarded\": true" }
+        }
+      ]
+    },
+    {
+      "name": "decline-drill",
+      "budget": {
+        "max_mcp_calls": 4,
+        "max_failed": 1,
+        "max_elicitation_declines": 1,
+        "max_deploy_confirmations": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "move_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "node_key": "2222222222222222",
+            "position": { "x": 200, "y": 200 }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "decline",
+          "expect": { "error": true, "match": "Deploy decline" }
+        },
+        {
+          "tool": "get_staged_change",
+          "args": {},
+          "expect": { "error": false, "match": "\"staged_hash\": \"[0-9a-f]{64}\"" }
+        },
+        {
+          "tool": "discard_staged_change",
+          "args": {},
+          "expect": { "error": false, "match": "\"discarded\": true" }
+        }
+      ]
+    },
+    {
+      "name": "dangerous-absent",
+      "budget": {
+        "max_mcp_calls": 1,
+        "max_failed": 1,
+        "max_deploy_confirmations": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "delete_flow",
+          "args": { "tab_id": "1111111111111111" },
+          "expect": { "error": true, "match": "Unknown tool: delete_flow" }
+        }
+      ]
+    }
+  ]
+}

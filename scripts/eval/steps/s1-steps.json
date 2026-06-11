@@ -1,0 +1,305 @@
+{
+  "version": 2,
+  "env": {},
+  "sections": [
+    {
+      "name": "author-loop",
+      "budget": {
+        "max_mcp_calls": 30,
+        "max_total_invocations": 30,
+        "max_deploy_confirmations": 15,
+        "max_failed": 0,
+        "max_elicitation_declines": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "function",
+            "opts": {
+              "key": "s1-function",
+              "label": "add_node function",
+              "position": { "x": 300, "y": 100 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "debug",
+            "opts": {
+              "key": "s1-debug",
+              "label": "add_node debug",
+              "position": { "x": 520, "y": 100 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "mqtt in",
+            "opts": {
+              "key": "s1-mqtt-in",
+              "label": "add_node mqtt in",
+              "position": { "x": 100, "y": 180 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "mqtt out",
+            "opts": {
+              "key": "s1-mqtt-out",
+              "label": "add_node mqtt out",
+              "position": { "x": 520, "y": 180 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "catch",
+            "opts": {
+              "key": "s1-catch",
+              "label": "add_node catch",
+              "position": { "x": 100, "y": 260 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "status",
+            "opts": {
+              "key": "s1-status",
+              "label": "add_node status",
+              "position": { "x": 260, "y": 260 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "complete",
+            "opts": {
+              "key": "s1-complete",
+              "label": "add_node complete",
+              "position": { "x": 420, "y": 260 },
+              "passthrough": { "scope": ["481c63df86f7ea0e"] }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "link in",
+            "opts": {
+              "key": "s1-link-in",
+              "label": "add_node link in",
+              "position": { "x": 100, "y": 340 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "link out",
+            "opts": {
+              "key": "s1-link-out",
+              "label": "add_node link out",
+              "position": { "x": 260, "y": 340 }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_node",
+          "args": {
+            "tab_id": "1111111111111111",
+            "type": "link call",
+            "opts": {
+              "key": "s1-link-call",
+              "label": "add_node link call",
+              "position": { "x": 420, "y": 340 },
+              "passthrough": { "linkType": "dynamic" }
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "wire_nodes",
+          "args": {
+            "tab_id": "1111111111111111",
+            "from_key": "2222222222222222",
+            "to_key": "s1-function"
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "set_wires",
+          "args": {
+            "tab_id": "1111111111111111",
+            "source_node_id": "481c63df86f7ea0e",
+            "target_node_ids": ["3cc4aa88c51826c6", "241c383682ad7370"]
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "set_links",
+          "args": {
+            "source_node_id": "c6c73fd24549807e",
+            "target_node_ids": ["5852163a418e4c3d"]
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_group",
+          "args": {
+            "tab_id": "1111111111111111",
+            "name": "Idempotent compile",
+            "node_keys": ["s1-function", "s1-debug"]
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        },
+        {
+          "tool": "add_comment",
+          "args": {
+            "tab_id": "1111111111111111",
+            "text": "Staging contract: every author op stages; deploy ships exactly the staged hash",
+            "position": { "x": 100, "y": 40 }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": { "error": false, "match": "\"ok\": true" }
+        }
+      ]
+    },
+    {
+      "name": "verify",
+      "budget": {
+        "max_mcp_calls": 1,
+        "max_failed": 0,
+        "max_deploy_confirmations": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "validate_flow",
+          "args": { "tab_id": "1111111111111111" },
+          "expect": { "error": false, "match": "\"has_errors\": false" }
+        }
+      ]
+    }
+  ]
+}

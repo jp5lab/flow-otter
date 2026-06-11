@@ -55,10 +55,10 @@ npm install && npm run build                        # MCP client runs dist/
 | ID  | Name                  | What it proves                                       | Tiers        | Pass criteria                                                                                                                                                                                                                                                                                                                                                                                                     |
 | --- | --------------------- | ---------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | S0  | Smoke                 | Server boots, targets the stack, detects version     | read         | `health_check` reports runtime version + capability matrix correctly for the matrix leg under test                                                                                                                                                                                                                                                                                                                |
-| S1  | Author loop           | README Tab-1 claim: full common-author-tools tab     | write+deploy | Deploys clean; `validate_flow` clean; re-running the same session prompt produces byte-identical `flows.json` (idempotency); budget recorded                                                                                                                                                                                                                                                                      |
+| S1  | Author loop           | README Tab-1 claim: full common-author-tools tab     | write+deploy | Deploys clean; `validate_flow` clean; re-running the same session prompt produces byte-identical `flows.json` (idempotency); budget recorded. Gate: `npm run eval:canary` S1 legs (see "The canary gate")                                                                                                                                                                                                         |
 | S2  | Dashboard composition | README Tab-2 claim: 6 templates, one shared skeleton | write+deploy | `/dashboard` renders; ISA-101 + hierarchy validators clean; runtime accepts every widget (no editor crash, no runtime reject)                                                                                                                                                                                                                                                                                     |
 | S3  | Topology              | README Tab-3 claim: subflow + cross-tab links        | write+deploy | Links resolve; subflow instance consistent after redeploy                                                                                                                                                                                                                                                                                                                                                         |
-| S4  | Safety drills         | The differentiator never regresses                   | all          | Out-of-band runtime mutation → staged deploy **refuses** (drift); `rollback_last_change` restores byte-identical snapshot; elicitation decline aborts deploy; read-only blocks writes; dangerous tools absent without env flag                                                                                                                                                                                    |
+| S4  | Safety drills         | The differentiator never regresses                   | all          | Out-of-band runtime mutation → staged deploy **refuses** (drift); `rollback_last_change` restores byte-identical snapshot; elicitation decline aborts deploy; read-only blocks writes; dangerous tools absent without env flag. Gate: `npm run eval:canary` S4 legs (see "The canary gate")                                                                                                                       |
 | S5  | Visual loop           | Phase-0 gate of the strategy                         | write+deploy | Agent stages a change, _sees_ the result (the stage output's `after_png`), adjusts, re-sees — within **≤ 6 TOTAL invocations (MCP + Read/exec), 0 failed** — and the deployed result matches the live editor within ±2px. Gate: `npm run eval:s5` (see "The S5 gate"), twice consecutively, plus one live unscripted session. **Prerequisite: `npm run fidelity:editor` green** (see "Renderer-fidelity harness") |
 | S6  | Layout benchmark      | Phase-2 gate of the strategy                         | toolkit      | 10–20 exemplar community flows, positions stripped, re-laid-out: layout-lint score vs. originals + human eyeball verdict per flow                                                                                                                                                                                                                                                                                 |
 | S7  | Cold-agent discovery  | Server is self-teaching                              | read         | A fresh agent with no priming (only server instructions + prompts) finds `get_authoring_guide`/`plan_flow` and follows the methodology unprompted                                                                                                                                                                                                                                                                 |
@@ -335,14 +335,76 @@ regression; declaring the S5 gate additionally requires **two consecutive
 passes** plus **one live unscripted agent session** whose transcript shows
 the stage→see→adjust→re-see loop within budget, recorded in the run file.
 
+## The canary gate (`npm run eval:canary`, EVAL-6)
+
+The safety spine is the product's differentiator and the audit's one
+unqualified credit — the canary keeps it that way mechanically. `npm run
+eval:canary` (`scripts/eval/run-canary.mjs`) runs four legs through the eval
+driver against the local sterile stack, each from a freshly seeded committed
+baseline (`tests/fixtures/inject-to-debug.flows.json`):
+
+1. **S4 main** (`scripts/eval/steps/s4-steps.json`) — the safety drills:
+   stage → out-of-band Admin-API mutation (`mutates: true`, the run's one
+   budgeted OOB) → `deploy_staged_change` **refuses on drift** (consent given
+   via `confirm: true` — drift protection must hold anyway, and the error
+   transport must carry `expected_hash`/`actual_hash`) →
+   `rollback_last_change` → **byte-identical restore**, proven by re-hashing
+   the live runtime with the shared comparator
+   (`scripts/eval/compare-runtime-hash.mjs`, importing `compare.mjs`)
+   against rollback's own `restored_hash` → elicitation **decline** aborts a
+   fresh deploy with the staging slot intact → dangerous tools are absent
+   without their env flag.
+2. **S4 read-only** (`scripts/eval/steps/s4-readonly-steps.json`) — boots
+   the server with `READ_ONLY_MODE=true` (pinned in the steps file's own
+   `env`; the sandbox dirs stay runner-supplied): reads work, `health_check`
+   reports `read_only_mode: true`, and author/deploy/dangerous tools are
+   unregistered ("Unknown tool").
+3. **S1, twice** (`scripts/eval/steps/s1-steps.json`) — the README Tab-1
+   author loop (every common author node type plus
+   `wire_nodes`/`set_wires`/`set_links`/`add_group`/`add_comment`, one
+   consented deploy per op — the per-op staging cost at HEAD), run twice
+   from identically seeded baselines. The runner asserts the two deployed
+   results are **byte-identical** (`canonicalFlowsHash` + wiring
+   fingerprint) — the README idempotency claim, stable ids included.
+
+Cross-leg post-conditions the runner asserts itself: each S4 leg leaves the
+runtime byte-identical to its seeded baseline (the drills leave no trace),
+and each S1 run actually changed the flows. Exit codes mirror the driver
+(0 pass / 1 gate fail / 2 abort); prior flows are restored afterwards
+(`--keep-flows` to inspect); all server state lives in a per-run temp dir
+under a fresh `ENVIRONMENT_NAME` per leg. The whole gate also runs as a
+standing integration test (`tests/integration/eval-canary.test.ts`), and
+the steps files are structure-pinned by
+`tests/unit/scripts/eval/s4-steps.test.ts` / `s1-steps.test.ts` — loosening
+a drill or a budget is loud.
+
+**Protocol (normative):**
+
+- **After every fix batch**, run `npm run eval:canary` before calling the
+  batch done — safety regressions block everything else. The S4 legs are
+  pinned **credits**: they pass at HEAD because the spine held in the
+  audit; any future failure is a stop-the-line event.
+- **Twice-consecutive rule:** every gate declaration (canary included)
+  requires two consecutive passes — one green run is luck, two is a state.
+- **Committed numbers, not the author's head:** budgets live in the
+  committed steps files and the recorded run verdicts (`--json`). A claim
+  like "S1 costs 30 calls / 15 confirmations" cites
+  `scripts/eval/steps/s1-steps.json`, never memory. When a number
+  legitimately changes, the steps file changes in the same commit — and the
+  unit pins make that loud.
+
+The full audit re-run protocol (the FULLY FIXED declaration) lives in
+`scripts/eval/replay/AUDIT-RERUN.md`.
+
 ## Iteration protocol
 
 1. Run a scenario → score it.
 2. File each finding (public-safe wording) as an issue/work item with severity.
 3. Fix.
 4. Re-run the scenario until it passes **twice consecutively** (flake guard).
-5. After any fix batch, re-run S4 (safety) and S1 (regression canary) before
-   calling the batch done — safety regressions block everything else.
+5. After any fix batch, re-run S4 (safety) and S1 (regression canary) —
+   `npm run eval:canary` (see "The canary gate") — before calling the batch
+   done. Safety regressions block everything else.
 6. Run the standard verification gates before commit, plus the hygiene gate
    below if the change touched docs, fixtures, examples, or screenshots.
 

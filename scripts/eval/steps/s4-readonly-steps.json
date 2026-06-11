@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "env": { "READ_ONLY_MODE": "true" },
+  "sections": [
+    {
+      "name": "read-only",
+      "budget": {
+        "max_mcp_calls": 5,
+        "max_failed": 3,
+        "max_deploy_confirmations": 0,
+        "max_elicitation_declines": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "health_check",
+          "args": {},
+          "expect": { "error": false, "match": "\"read_only_mode\": true" }
+        },
+        {
+          "tool": "list_flows",
+          "args": {},
+          "expect": { "error": false }
+        },
+        {
+          "tool": "add_node",
+          "args": { "tab_id": "1111111111111111", "type": "debug" },
+          "expect": { "error": true, "match": "Unknown tool: add_node" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": {
+            "staged_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "expect": { "error": true, "match": "Unknown tool: deploy_staged_change" }
+        },
+        {
+          "tool": "delete_flow",
+          "args": { "tab_id": "1111111111111111" },
+          "expect": { "error": true, "match": "Unknown tool: delete_flow" }
+        }
+      ]
+    }
+  ]
+}
