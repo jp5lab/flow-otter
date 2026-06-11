@@ -75,6 +75,7 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
       'validate_flow',
       'validate_all_flows',
       'render_flow_svg',
+      'render_flow_png',
     ],
   },
   snapshots: {

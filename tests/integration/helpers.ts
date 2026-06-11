@@ -26,6 +26,9 @@ export async function buildIntegrationRig(extraEnv: Record<string, string> = {})
     SNAPSHOT_DIR: path.join(tmpRoot, 'snapshots'),
     STAGING_DIR: path.join(tmpRoot, 'staging'),
     AUDIT_LOG_PATH: path.join(tmpRoot, 'audit.jsonl'),
+    // Keep render_flow_png's default output sandboxed in the test tmp root
+    // (the schema default would write under ~/.flow-otter/renders).
+    RENDER_DIR: path.join(tmpRoot, 'renders'),
     LOG_LEVEL: 'warn',
     ENVIRONMENT_NAME: 'integration',
     ACTOR_NAME: 'integration-test',

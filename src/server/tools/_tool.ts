@@ -100,6 +100,15 @@ export function resolveAnnotations(tier: ToolTier, override?: ToolAnnotations): 
   return { ...defaults, ...override };
 }
 
+/**
+ * MCP content blocks a tool's `buildContent` hook may emit. Text blocks are
+ * the default; image blocks carry base64 data (e.g. render_flow_png with
+ * `return_image: true`).
+ */
+export type ToolContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
+
 export interface Tool<TIn = unknown, TOut = unknown> {
   readonly name: string;
   readonly description: string;
@@ -114,6 +123,18 @@ export interface Tool<TIn = unknown, TOut = unknown> {
    * on the per-tier defaults.
    */
   readonly annotations?: ToolAnnotations;
+  /**
+   * Optional success-path content builder (REND-5). When present, the stdio
+   * transport calls it with the tool's (possibly nudge-enriched) output and
+   * the validated input to produce the MCP content array. When absent the
+   * transport emits the default single pretty-JSON text block — that default
+   * path is pinned byte-identical by regression tests. Error paths never
+   * reach this hook.
+   */
+  readonly buildContent?: (
+    output: TOut,
+    input: TIn,
+  ) => Promise<ToolContentBlock[]> | ToolContentBlock[];
 }
 
 export interface InvokableTool {
@@ -124,6 +145,11 @@ export interface InvokableTool {
   readonly inputJsonSchema: Readonly<Record<string, unknown>>;
   /** Resolved annotations (tier defaults merged with per-tool overrides). */
   readonly annotations: ToolAnnotations;
+  /** Success-path content builder pass-through; see Tool.buildContent. */
+  readonly buildContent?: (
+    output: unknown,
+    input: unknown,
+  ) => Promise<ToolContentBlock[]> | ToolContentBlock[];
   invoke(input: unknown, container: Container): Promise<unknown>;
 }
 
@@ -170,6 +196,14 @@ export function makeInvokable<TIn, TOut>(tool: Tool<TIn, TOut>): InvokableTool {
     inputZod: tool.inputZod,
     inputJsonSchema: tool.inputJsonSchema,
     annotations: resolveAnnotations(tool.tier, tool.annotations),
+    ...(tool.buildContent !== undefined
+      ? {
+          buildContent: tool.buildContent as (
+            output: unknown,
+            input: unknown,
+          ) => Promise<ToolContentBlock[]> | ToolContentBlock[],
+        }
+      : {}),
     invoke: async (rawInput: unknown, container: Container): Promise<unknown> => {
       const startedAt = container.clock();
       const argsHash = canonicalHash(rawInput ?? null);

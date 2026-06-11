@@ -1,0 +1,16 @@
+FlowOtter — third-party notices
+
+This repository and the published @jp5lab/flow-otter package bundle the
+following third-party font:
+
+Inter Regular (latin subset)
+  Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
+  Licensed under the SIL Open Font License, Version 1.1 (OFL-1.1).
+  Embedded base64 in src/toolkit/render/fonts/inter-regular.ts (compiled
+  into dist/ for the npm tarball, with the full license text exported as
+  INTER_OFL_LICENSE so every distribution carries it). A plain-text copy of
+  the license lives at src/toolkit/render/fonts/OFL-Inter.txt.
+  Provenance and the regeneration pipeline are documented in
+  scripts/generate-font-module.mjs.
+
+FlowOtter itself is licensed under MPL-2.0 (see LICENSE).

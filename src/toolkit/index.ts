@@ -40,6 +40,14 @@ export {
   type RenderGeometryEntry,
   type RenderGeometryPort,
 } from './render/svg.js';
+export {
+  rasterizeSvg,
+  rasterizerAvailable,
+  RasterizerUnavailableError,
+  RASTERIZER_INSTALL_HINT,
+  type RasterizeOptions,
+  type RasterizedPng,
+} from './render/png.js';
 export { diffFlows, summarizeDiff, type SemanticDiff } from './diff/semantic.js';
 export { normalize } from './diff/normalize.js';
 export { snapToGrid, isOnGrid, DEFAULT_GRID } from './layout/grid.js';

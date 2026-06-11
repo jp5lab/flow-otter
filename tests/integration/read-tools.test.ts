@@ -218,6 +218,7 @@ describe('read tools against seeded Node-RED', () => {
       'validate_flow',
       'validate_all_flows',
       'render_flow_svg',
+      'render_flow_png',
       'preview_flow_diff',
       'export_snapshot',
       'list_snapshots',

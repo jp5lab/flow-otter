@@ -9,9 +9,29 @@ import {
 
 import type { Container } from '../container.js';
 import { findPrompt, PROMPTS } from '../prompts/registry.js';
+import type { InvokableTool, ToolContentBlock } from '../tools/_tool.js';
 import type { ToolRegistry } from '../tools/register.js';
 
 import { toolErrorContent } from './tool-error.js';
+
+/**
+ * Success-path content for a tool result (REND-5). Tools without a
+ * `buildContent` hook get the legacy single pretty-JSON text block —
+ * byte-identical to the pre-REND-5 wire format (pinned by
+ * tests/unit/server/transport/stdio-content.test.ts). Tools with the hook
+ * (render_flow_png) control their own content array (e.g. an opt-in image
+ * block alongside the JSON text).
+ */
+export async function buildSuccessContent(
+  tool: Pick<InvokableTool, 'buildContent'>,
+  result: unknown,
+  input: unknown,
+): Promise<ToolContentBlock[]> {
+  if (tool.buildContent !== undefined) {
+    return await tool.buildContent(result, input);
+  }
+  return [{ type: 'text', text: JSON.stringify(result, null, 2) }];
+}
 
 export interface StartStdioOptions {
   container: Container;
@@ -95,7 +115,7 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
       const validated = tool.inputZod.parse(args ?? {});
       const result = await tool.invoke(validated, opts.container);
       return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        content: await buildSuccessContent(tool, result, validated),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

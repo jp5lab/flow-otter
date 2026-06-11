@@ -42,6 +42,7 @@ export const ConfigSchema = z.object({
   SNAPSHOT_RETENTION: intFromEnv.refine((n) => n > 0).default(50),
   STAGING_DIR: z.string().default(homeBased('staging')),
   AUDIT_LOG_PATH: z.string().default(homeBased('audit.jsonl')),
+  RENDER_DIR: z.string().default(homeBased('renders')),
 
   MAX_FLOW_SIZE_BYTES: intFromEnv.refine((n) => n > 0).default(10_485_760),
   ALLOWED_DEPLOYMENT_MODES: z.string().default('nodes,flows'),
@@ -85,6 +86,7 @@ export const ALL_CONFIG_KEYS: readonly (keyof Config)[] = [
   'SNAPSHOT_RETENTION',
   'STAGING_DIR',
   'AUDIT_LOG_PATH',
+  'RENDER_DIR',
   'MAX_FLOW_SIZE_BYTES',
   'ALLOWED_DEPLOYMENT_MODES',
   'ALLOWED_NODE_TYPES',

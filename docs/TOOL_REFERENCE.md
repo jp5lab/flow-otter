@@ -1,6 +1,6 @@
 # Tool Reference
 
-Tool visibility depends on (a) tier flags and (b) **toolsets** (v1.3.0+). The default visible surface is ~47 tools; calling `enable_toolset('author_specialists')` reveals the 11 type-specific `add_*_node` conveniences (66 tools total). Dangerous tools require both `ENABLE_DANGEROUS_TOOLS=true` AND the `dangerous` toolset (auto-enabled when the env flag is set, +7 tools).
+Tool visibility depends on (a) tier flags and (b) **toolsets** (v1.3.0+). The default visible surface is ~48 tools; calling `enable_toolset('author_specialists')` reveals the 11 type-specific `add_*_node` conveniences (66 tools total). Dangerous tools require both `ENABLE_DANGEROUS_TOOLS=true` AND the `dangerous` toolset (auto-enabled when the env flag is set, +7 tools).
 
 Each tool surfaces MCP-spec annotation hints (`readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`) on `tools/list` for client UIs (Claude Desktop, Cursor) to communicate intent.
 
@@ -41,6 +41,7 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 - `validate_flow`
 - `validate_all_flows`
 - `render_flow_svg` — deterministic SVG of one tab. `against: 'staged' | 'runtime'` (default `'runtime'`) selects the source: `'staged'` renders the pending staged change (fails with a `staging/no-staged-change` diagnostic when the slot is empty); `'runtime'` renders the deployed flows, which never include a pending stage. Output carries `against`, `staged_hash`, and `based_on_snapshot_hash` (both null for runtime renders); for staged renders `rev` is the runtime rev the stage was computed against (= `get_staged_change`'s `based_on_rev`).
+- `render_flow_png` (v1.4.0+) — renders one tab to a PNG **file on disk** and returns `png_path` + `width_px`/`height_px`: read the file to actually SEE the flow (no external SVG→PNG converter recipe needed — that workflow is dead). Mirrors `render_flow_svg`'s `against` contract exactly (same default, same `staging/no-staged-change` empty-slot diagnostic, same `staged_hash`/`based_on_snapshot_hash`/`rev` provenance). Extras: `scale` (≤4) zooms the render; `include_geometry: true` adds the `renderGeometry` per-object `{id, kind, x, y, w, h, ports[]}` array; `output_path` (absolute, inside home or tmp) overrides the default `RENDER_DIR/render-<tab_id>-<against>.png` (atomic overwrite per render); `return_image: true` appends an inline base64 `image/png` content block (opt-in — file-reading clients like Claude Code should use `png_path` instead). Text rasterizes with a bundled OFL Inter subset (never system fonts), so output is byte-stable across machines. Requires the optional `@resvg/resvg-js` dependency: when it is missing the tool fails loudly with `RasterizerUnavailableError` (never silently returns SVG); probe `health_check.rasterizer_available` first.
 - `preview_flow_diff`
 - `export_snapshot`
 - `list_snapshots`
@@ -53,6 +54,8 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 ### Health output (v1.3.0+)
 
 `health_check` returns an optional `runtime: { name, version, is_prerelease, node_js_version?, detected_at, capabilities: Record<string,boolean> }` block when the target is admin-api and the `/settings` probe succeeded. Capability keys gate version-specific features (e.g., `functionLinkCall` is 5.0+, `subflowPerInstanceConfig` is 4.0+, `adminCorsDefault` is pre-5.0). The probe is lazy-cached and invalidated on `set_target`.
+
+Since v1.4.0 `health_check` also returns `rasterizer_available: boolean` — whether the optional `@resvg/resvg-js` dependency is loadable, i.e. whether `render_flow_png` will work (when false, PNG tools hard-fail with `RasterizerUnavailableError`; there is no silent SVG fallback).
 
 ## Author Tools
 

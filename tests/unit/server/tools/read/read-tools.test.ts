@@ -133,8 +133,15 @@ afterEach(async () => {
 
 describe('read tools (file flow source)', () => {
   it('health_check returns ok=true', async () => {
-    const out = (await healthCheckTool.handler({}, ctx)) as { ok: boolean };
+    const out = (await healthCheckTool.handler({}, ctx)) as {
+      ok: boolean;
+      rasterizer_available: boolean;
+    };
     expect(out.ok).toBe(true);
+    // REND-5: @resvg/resvg-js is installed in the dev environment, so the
+    // PNG channel must report available (false-path pinned in
+    // tests/unit/toolkit/render/png-unavailable.test.ts).
+    expect(out.rasterizer_available).toBe(true);
   });
 
   it('get_server_config_summary returns redacted config', async () => {

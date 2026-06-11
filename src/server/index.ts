@@ -59,6 +59,7 @@ import { listInstalledNodeTypesTool } from './tools/read/list-installed-node-typ
 import { listSnapshotsTool } from './tools/read/list-snapshots.js';
 import { listTemplatesTool } from './tools/read/list-templates.js';
 import { previewFlowDiffTool } from './tools/read/preview-flow-diff.js';
+import { renderFlowPngTool } from './tools/read/render-flow-png.js';
 import { renderFlowSvgTool } from './tools/read/render-flow-svg.js';
 import { searchNodesTool } from './tools/read/search-nodes.js';
 import { setTargetTool } from './tools/read/set-target.js';
@@ -124,6 +125,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   validateFlowTool as unknown as Tool<unknown, unknown>,
   validateAllFlowsTool as unknown as Tool<unknown, unknown>,
   renderFlowSvgTool as unknown as Tool<unknown, unknown>,
+  renderFlowPngTool as unknown as Tool<unknown, unknown>,
   previewFlowDiffTool as unknown as Tool<unknown, unknown>,
   exportSnapshotTool as unknown as Tool<unknown, unknown>,
   listSnapshotsTool as unknown as Tool<unknown, unknown>,

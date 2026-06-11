@@ -346,6 +346,9 @@ function applyAdminApiTarget(
     SNAPSHOT_DIR: snapshotDir,
     STAGING_DIR: stagingDir,
     AUDIT_LOG_PATH: auditLogPath,
+    // Default PNG render output (render_flow_png) is env-scoped like the
+    // other state dirs so concurrent targets never clobber each other.
+    RENDER_DIR: path.join(stateRoot, 'renders'),
     ENVIRONMENT_NAME: envName,
   });
 
@@ -436,6 +439,8 @@ function applyFileTarget(
     SNAPSHOT_DIR: snapshotDir,
     STAGING_DIR: stagingDir,
     AUDIT_LOG_PATH: auditLogPath,
+    // See applyAdminApiTarget: render output is env-scoped state.
+    RENDER_DIR: path.join(stateRoot, 'renders'),
     ENVIRONMENT_NAME: envName,
   });
 

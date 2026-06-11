@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { rasterizerAvailable } from '../../../toolkit/render/png.js';
 import { getOrProbeRuntimeInfo } from '../../runtime-info.js';
 import { persistedTargetAgeSeconds, persistedTargetPath } from '../../state/persisted-target.js';
 import type { Tool } from '../_tool.js';
@@ -39,6 +40,12 @@ const OutputSchema = z.object({
    * that case).
    */
   runtime: RuntimeInfoSchema.optional(),
+  /**
+   * True when the optional `@resvg/resvg-js` rasterizer is loadable, i.e.
+   * `render_flow_png` will work. When false, PNG tools HARD-FAIL with
+   * RasterizerUnavailableError (REND-5) — there is no silent SVG fallback.
+   */
+  rasterizer_available: z.boolean(),
   warnings: z.array(WarningSchema),
 });
 type Output = z.infer<typeof OutputSchema>;
@@ -46,7 +53,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const healthCheckTool: Tool<Input, Output> = {
   name: 'health_check',
   description:
-    'Reports server liveness, version, configured flow source, reachability, env_name + persisted-target.json status, and any environment-shape warnings (e.g. project-mode flowFile mismatches, no-target-configured). Read-only.',
+    'Reports server liveness, version, configured flow source, reachability, env_name + persisted-target.json status, rasterizer_available (whether render_flow_png can work), and any environment-shape warnings (e.g. project-mode flowFile mismatches, no-target-configured). Read-only.',
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: {
@@ -107,6 +114,7 @@ export const healthCheckTool: Tool<Input, Output> = {
       persisted_target_path: persistedTargetPath(envName),
       persisted_target_age_seconds: ageSeconds,
       ...(runtime !== undefined ? { runtime } : {}),
+      rasterizer_available: await rasterizerAvailable(),
       warnings: allWarnings,
     };
   },
