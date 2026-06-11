@@ -2,6 +2,12 @@
 
 ## Unreleased (v1.4.0)
 
+### WSB-5-PR1 — Extract `compileValidateAndStage` + async-op widening (pure refactor)
+
+- The shared staging-pipeline tail (ONE compile → no-op refusal → policy → validate → lint → diff → ONE `staging.write` → audit-enrich) is extracted from `runStagedAuthorOp` into an exported `compileValidateAndStage(ctx, prior, nextSpec, meta)` in `src/server/tools/author/_stage-pipeline.ts`, so per-op author tools and the upcoming `stage_changes` atomic batch (WSB-5 PR-2/3, v1.5.0) share a single safety choke point. The pending-stage guard + WSB-3 auto-clear stay at pipeline start (batch start, for batches); the auto-clear diagnostic threads through `meta.autoClearDiagnostic`. Zero behavior change — pinned by the existing stage-pipeline suites plus a new explicit `staged_hash` byte-identity regression (`tests/unit/server/tools/author/compile-validate-and-stage.test.ts`).
+- `runStagedAuthorOp`'s `op` callback is widened to accept async functions (`AuthorOpResult | Promise<AuthorOpResult>`) — owned here per the fix plan's binding `_stage-pipeline.ts` merge order, deleted from LAYO-6's scope. All existing sync callers are unchanged.
+- A clearly marked REND-8 seam comment sits strictly after `staging.write` inside the extracted tail: stage-output enrichment (before/after render paths) lands there, output-only, never affecting staged bytes or hashes.
+
 ### WSB-6 — Casing/ownership/vocabulary reconciliation (SD6)
 
 - `get_staged_change` now emits canonical **snake_case** fields — `staged_hash`, `based_on_snapshot_hash`, `based_on_rev`, `staged_at` — so its `staged_hash` feeds `deploy_staged_change` without renaming (fixes the 2026-06-10 audit e2#7 casing mismatch). The legacy camelCase duplicates (`stagedHash`, `basedOnSnapshotHash`, `basedOnRev`, `stagedAt`) are dual-emitted for this one minor release, deprecated, and **slated for removal in v2.0.0** (supersession recorded here).

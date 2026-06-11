@@ -46,15 +46,40 @@ export interface StageBase {
 }
 
 /**
+ * The runtime baseline a stage is computed against: the flows loaded by the
+ * pipeline's SINGLE `flowSource.load()`, their canonical hash, and the
+ * Node-RED revision. `based_on_snapshot_hash` is always `hash` — the drift
+ * check at deploy time compares against exactly this load.
+ */
+export interface StagePrior {
+  readonly flows: FlowsJson;
+  readonly hash: string;
+  readonly rev: string | null;
+}
+
+export interface StageMeta {
+  /** Tool name — used in the audit `reason` and error messages. */
+  readonly toolName: string;
+  /** Audit `reason` string. Defaults to `toolName`. */
+  readonly reason?: string;
+  /**
+   * WSB-3's `staging/auto-cleared-stale-stage` info diagnostic, produced by
+   * the pending-stage guard at pipeline start. Threaded here so it is
+   * PREPENDED to the assembled stage-output diagnostics.
+   */
+  readonly autoClearDiagnostic?: StageBase['diagnostics'][number];
+}
+
+/**
  * Shared staging pipeline for author-tier tools.
  *
  * Handles the boilerplate every author tool repeats:
- *   load → decompile → op → compile → validate → lint → diff → stage → audit-enrich
+ *   load → pending-guard → decompile → op → [compileValidateAndStage tail]
  *
  * Caller supplies:
- * - `op`: a pure function taking the prior spec + prior flows and returning
- *   the next spec plus any op-specific `extras` the caller wants to surface
- *   in the final tool result.
+ * - `op`: a function (sync or async) taking the prior spec + prior flows and
+ *   returning the next spec plus any op-specific `extras` the caller wants
+ *   to surface in the final tool result.
  * - `buildOutput`: combines the common `StageBase` with `extras` into the
  *   tool's typed output.
  *
@@ -63,7 +88,10 @@ export interface StageBase {
 export async function runStagedAuthorOp<TExtras, TOutput>(
   ctx: ToolContext,
   input: AuthorOpInput,
-  op: (priorSpec: AuthoringSpec, priorFlows: FlowsJson) => AuthorOpResult<TExtras>,
+  op: (
+    priorSpec: AuthoringSpec,
+    priorFlows: FlowsJson,
+  ) => AuthorOpResult<TExtras> | Promise<AuthorOpResult<TExtras>>,
   buildOutput: (base: StageBase, extras: TExtras) => TOutput,
 ): Promise<TOutput> {
   // Single runtime load, hoisted above the pending-stage check so the
@@ -106,7 +134,47 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   }
 
   const priorSpec = decompile(priorFlows);
-  const { nextSpec, extras } = op(priorSpec, priorFlows);
+  const { nextSpec, extras } = await op(priorSpec, priorFlows);
+
+  const base = await compileValidateAndStage(
+    ctx,
+    { flows: priorFlows, hash: priorHash, rev: priorRev },
+    nextSpec,
+    {
+      toolName: input.toolName,
+      ...(input.reason !== undefined ? { reason: input.reason } : {}),
+      ...(autoClearDiagnostic !== undefined ? { autoClearDiagnostic } : {}),
+    },
+  );
+
+  return buildOutput(base, extras);
+}
+
+/**
+ * The shared pipeline tail: ONE compile → no-op refusal → policy → validate →
+ * lint → diff → ONE staging.write → audit-enrich → StageBase.
+ *
+ * Extracted (WSB-5-PR1) so per-op tools (via `runStagedAuthorOp`) and the
+ * `stage_changes` atomic batch (WSB-5 PR-2/3, which folds its ops into one
+ * `nextSpec` first) share a single safety choke point. Callers own the steps
+ * BEFORE this tail: the single `flowSource.load()` that produced `prior`, the
+ * pending-stage guard + auto-clear, and decompile/op application.
+ *
+ * Invariants (pinned by the stage-pipeline suites):
+ * - `staged_hash` is the canonical hash of the compiled flows — byte-identity
+ *   holds for identical (prior, nextSpec) inputs.
+ * - `based_on_snapshot_hash` = `prior.hash` (the single-load runtime baseline).
+ * - The no-op refusal is the FIRST check after compile; nothing is written.
+ * - Lint errors abort before anything is written (single-slot untouched).
+ */
+export async function compileValidateAndStage(
+  ctx: ToolContext,
+  prior: StagePrior,
+  nextSpec: AuthoringSpec,
+  meta: StageMeta,
+): Promise<StageBase> {
+  const { flows: priorFlows, hash: priorHash, rev: priorRev } = prior;
+  const autoClearDiagnostic = meta.autoClearDiagnostic;
 
   const compiled = compile(nextSpec, { prior: priorFlows });
 
@@ -116,7 +184,7 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   // stage time instead; nothing is written to the staging slot.
   if (compiled.hash === priorHash) {
     throw new ValidationFailedError(
-      `${input.toolName} produced no change — the compiled flows are byte-identical to the current runtime flows, so nothing was staged. ` +
+      `${meta.toolName} produced no change — the compiled flows are byte-identical to the current runtime flows, so nothing was staged. ` +
         `Check the kind of object you addressed: node tools only match regular nodes, not junctions, comments, or groups ` +
         `(a key of another kind is silently ignored at the op layer), and check that the new values actually differ from the current ones.`,
       [],
@@ -142,7 +210,7 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   });
   if (lintReport.hasErrors) {
     throw new ValidationFailedError(
-      `${input.toolName} produced flows with ${lintReport.errors.length} validation error(s).`,
+      `${meta.toolName} produced flows with ${lintReport.errors.length} validation error(s).`,
       lintReport.errors,
     );
   }
@@ -183,8 +251,14 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
     stagedAt,
     actor: ctx.config.ACTOR_NAME,
     agent_id: ctx.agentId,
-    reason: input.reason ?? input.toolName,
+    reason: meta.reason ?? meta.toolName,
   });
+
+  // ── REND-8 SEAM: stage-output enrichment ──────────────────────────────────
+  // Output-only enrichment (before/after render paths) goes HERE — strictly
+  // AFTER staging.write so it can never change the staged bytes, staged_hash,
+  // based_on_snapshot_hash, the single-slot contract, or drift refusal.
+  // Enrichment failures must never fail the stage (try/catch → null fields).
 
   const diffSummaryOut = {
     nodes_added: diffSummary.nodes_added,
@@ -199,7 +273,7 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
     diff_summary: diffSummaryOut,
   });
 
-  const base: StageBase = {
+  return {
     ok: true,
     staged_hash: compiled.hash,
     based_on_snapshot_hash: priorHash,
@@ -215,8 +289,6 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
     })),
     compiledFlows: compiled.flows,
   };
-
-  return buildOutput(base, extras);
 }
 
 /**
