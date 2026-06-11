@@ -11,6 +11,8 @@ import type { Container } from '../container.js';
 import { findPrompt, PROMPTS } from '../prompts/registry.js';
 import type { ToolRegistry } from '../tools/register.js';
 
+import { toolErrorContent } from './tool-error.js';
+
 export interface StartStdioOptions {
   container: Container;
   registry: ToolRegistry;
@@ -98,9 +100,13 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       opts.container.logger.error({ tool: name, err: message }, 'tool invocation failed');
+      // WSB-1 (SD2): serialize the structured cause (diagnostics, drift
+      // hashes, …) through the transport instead of collapsing to the
+      // message string. The human-readable first line is byte-identical to
+      // the legacy format. See ./tool-error.ts for the payload contract.
       return {
         isError: true,
-        content: [{ type: 'text', text: `Tool '${name}' failed: ${message}` }],
+        content: toolErrorContent(name, err),
       };
     }
   });

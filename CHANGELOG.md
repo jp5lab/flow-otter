@@ -2,6 +2,12 @@
 
 ## Unreleased (v1.4.0)
 
+### WSB-1 — Structured error payloads through stdio (SD2)
+
+- Tool errors crossing the stdio transport now carry their machine-readable cause. The single text content block keeps the legacy human-readable first line (`Tool '<name>' failed: <message>`, byte-identical) and appends a JSON block `{"error": {"name", "message", ...}}` — `ValidationFailedError` contributes its `diagnostics` verbatim (capped at 50 with a `diagnostics_truncated` marker), `DriftError` contributes `expected_hash`/`actual_hash`. Fixes the 2026-06-10 audit e2 defect where "add_node produced flows with 1 validation error(s)." reached the agent with the diagnostics dropped at the transport.
+- New `src/server/transport/tool-error.ts` documents the additive payload contract, including the reserved `failed_op_index`/`failed_op` fields the `BatchOpError` branch (WSB-5, v1.5.0) will populate without reshaping.
+- Success-path serialization is untouched and now pinned byte-identical by an over-the-wire integration regression (`tests/integration/tool-error-transport.test.ts`).
+
 ### EVAL-7 — Ratify the rollout spine in DESIGN.md + sanitized audit record
 
 - `docs/DESIGN.md` Part I is now **ratified as amended** by the 2026-06-10 layout-audit fix plan: a ratification record binds the fix-plan phases (Phase 1 → v1.4.0, Phase 2 → v1.5.0, Phase 3 → v2.0.0, Phase 4 FULLY FIXED) to their work-item ids, names the five frozen cross-stream contracts, and records deferrals (e1#13 debug-buffer laziness with owner on record; e2#12 and e2#13 wontfixes). Amendments recorded: the stage-over-stage refusal already exists at HEAD (Phase-0 item 2 corrected — the remaining Phase-1 staging guards are WSB-1/WSB-3/WSB-6); the Phase-0 live half-day spike is restored as the binding Phase-1 live-session exit requirement; `stage_spec` moves to fix-plan Phase 3 so the flagship never ships with naive placement; fix-plan D-3's output-schema growth is versioned v1.5.0 additive.

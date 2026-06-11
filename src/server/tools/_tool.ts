@@ -134,6 +134,12 @@ export class ToolBlockedError extends Error {
   }
 }
 
+/**
+ * Validation/lint failure carrying its diagnostics. The stdio transport
+ * serializes `name` and `diagnostics` into the structured error payload
+ * (src/server/transport/tool-error.ts) — renaming either breaks that
+ * contract.
+ */
 export class ValidationFailedError extends Error {
   constructor(
     message: string,

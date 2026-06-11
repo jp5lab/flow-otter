@@ -62,6 +62,13 @@ export class NodeRedHttpError extends NodeRedError {
   }
 }
 
+/**
+ * Runtime flows changed out from under a staged change (`based_on_snapshot_hash`
+ * no longer matches). The stdio transport serializes `name`, `expectedHash` and
+ * `actualHash` into the structured error payload
+ * (src/server/transport/tool-error.ts) — renaming any of them breaks that
+ * contract.
+ */
 export class DriftError extends Error {
   constructor(
     public readonly expectedHash: string,
