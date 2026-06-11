@@ -40,7 +40,7 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 - `analyze_all_flows`
 - `validate_flow`
 - `validate_all_flows`
-- `render_flow_svg`
+- `render_flow_svg` — deterministic SVG of one tab. `against: 'staged' | 'runtime'` (default `'runtime'`) selects the source: `'staged'` renders the pending staged change (fails with a `staging/no-staged-change` diagnostic when the slot is empty); `'runtime'` renders the deployed flows, which never include a pending stage. Output carries `against`, `staged_hash`, and `based_on_snapshot_hash` (both null for runtime renders); for staged renders `rev` is the runtime rev the stage was computed against (= `get_staged_change`'s `based_on_rev`).
 - `preview_flow_diff`
 - `export_snapshot`
 - `list_snapshots`

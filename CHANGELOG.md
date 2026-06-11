@@ -2,6 +2,12 @@
 
 ## Unreleased (v1.4.0)
 
+### REND-4 — `against:'staged'|'runtime'` on render_flow_svg (F7)
+
+- `render_flow_svg` gains an `against` input (`'staged' | 'runtime'`, default `'runtime'` for back-compat — pinned byte-identical to an explicit runtime render). `against:'staged'` renders the pending staged change from the staging slot, closing audit F7: the prescribed pre-deploy visual review previously could NOT show the change under review because the tool always read the runtime. An empty staging slot fails with `ValidationFailedError` carrying a `staging/no-staged-change` diagnostic.
+- Output gains `against`, snake_case `staged_hash`, and nullable `based_on_snapshot_hash` (both hashes null for runtime renders); for staged renders `rev` is the runtime rev the stage was computed against (= `get_staged_change`'s `based_on_rev`). REND-5 mirrors the same contract on `render_flow_png`.
+- Prompt-recipe truth edits: `new_flow`, `build_operator_dashboard`, and `refactor_to_subflow` now direct the pre-deploy render at `against:'staged'`; `explain_my_flow` states explicitly that the runtime default is correct for explaining deployed flows. `docs/TOOL_REFERENCE.md` documents the parameter.
+
 ### REND-3 — Renderer geometry correctness (F2, F3, F6, e2#11, e1#9 render-side)
 
 - The SVG renderer (`src/toolkit/render/svg.ts`) now draws **editor-true geometry**: node and comment `x`/`y` are treated as CENTER anchors (the editor convention — was top-left, audit F2; groups stay top-left, their flows.json `x/y/w/h` is a bbox); heights come from `nodeDimensionsFor` (multi-output nodes are `outputs·15` tall, link `l:false` pills 30×30); input ports render only when the type has inputs, output ports sit at the editor's per-port-count anchors (13px pitch, centered on the right edge) via the REND-2 `GeometryProvider`.

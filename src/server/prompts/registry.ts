@@ -61,7 +61,7 @@ const newFlowPrompt: FlowOtterPrompt = {
       `3. For each stage: add nodes (prefer add_node; enable_toolset('author_specialists') if you need typed conveniences).`,
       `4. Wire stages with wire_nodes / set_wires.`,
       `5. Refine layout explicitly with positions, move_node, and add_group geometry; do not assume auto-layout is available.`,
-      `6. render_flow_svg and show me the result before programming/deploying substantial flows.`,
+      `6. render_flow_svg with against:'staged' (the default renders the deployed runtime, which does not include your pending change) and show me the result before programming/deploying substantial flows.`,
       `7. validate_flow must pass.`,
       `8. preview_flow_diff, then deploy_staged_change — I will be elicited to confirm.`,
     ].join('\n');
@@ -102,7 +102,7 @@ const buildOperatorDashboardPrompt: FlowOtterPrompt = {
       `1. instantiate_template('${template}') with { title: '${title}' }.`,
       `2. Wire data sources (mqtt_in, http_in, function nodes) into the widget inputs the template creates.`,
       `3. Follow ISA-101: grayscale background, color reserved for alarm/severity, trends > instantaneous values, destructive controls require confirm. Run validate_flow — the ISA-101 rules (saturated-color-outside-alarm, screen-clutter, unbounded-chart-append) will flag deviations.`,
-      `4. render_flow_svg, then preview_flow_diff, then deploy_staged_change (elicits confirmation).`,
+      `4. render_flow_svg with against:'staged' (the dashboard is still staged at this point — the default would render the runtime without it), then preview_flow_diff, then deploy_staged_change (elicits confirmation).`,
     ].join('\n');
   },
 };
@@ -135,7 +135,7 @@ const refactorToSubflowPrompt: FlowOtterPrompt = {
       `3. create_subflow_definition with name='${name}', nodes/connections taken from the selection, declared in/out ports matching the boundary.`,
       `4. remove_node on each of the selected ids.`,
       `5. add_subflow_instance referencing the new definition, wired to the same upstream/downstream nodes.`,
-      `6. Re-run validate_flow and render_flow_svg.`,
+      `6. Re-run validate_flow and render_flow_svg with against:'staged' (the refactor is still staged, so the default runtime render would not show it).`,
       `7. preview_flow_diff to show me the before/after, then deploy_staged_change.`,
     ].join('\n');
   },
@@ -154,7 +154,7 @@ const explainMyFlowPrompt: FlowOtterPrompt = {
       `Explain the structure of ${tab ? `tab ${tab}` : 'the current first tab'}.`,
       ``,
       `1. ${tab ? `explain_flow('${tab}')` : 'list_flows then explain_flow on the first tab'}.`,
-      `2. render_flow_svg for the same tab.`,
+      `2. render_flow_svg for the same tab (default against:'runtime' is correct here — explain_flow reads the deployed flows).`,
       `3. Summarize: entrypoints, sinks, key transformations, any orphan nodes, dashboard structure (if any).`,
       `4. Flag anything notable: error handling gaps, missing catch nodes, unconfirmed destructive buttons, unbounded charts.`,
     ].join('\n');
