@@ -78,6 +78,13 @@ describe('stage-overwrite guard', () => {
     expect(staged?.stagedHash).toBe(first.staged_hash);
   });
 
+  it('the stage-overwrite refusal names force_takeover (WSB-3 recovery path)', async () => {
+    await addCommentTool.handler({ tab_id: 'tab1', text: 'first' }, ctx);
+    await expect(addCommentTool.handler({ tab_id: 'tab1', text: 'second' }, ctx)).rejects.toThrow(
+      /force_takeover/,
+    );
+  });
+
   it('discard_staged_change clears the stage and unblocks new ops', async () => {
     const first = (await addCommentTool.handler({ tab_id: 'tab1', text: 'first' }, ctx)) as {
       staged_hash: string;

@@ -66,28 +66,62 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   op: (priorSpec: AuthoringSpec, priorFlows: FlowsJson) => AuthorOpResult<TExtras>,
   buildOutput: (base: StageBase, extras: TExtras) => TOutput,
 ): Promise<TOutput> {
+  // Single runtime load, hoisted above the pending-stage check so the
+  // stale-stage auto-clear below can compare the pending hash against the
+  // live runtime.
+  const { flows: priorFlows, rev: priorRev } = await ctx.flowSource.load();
+  const priorHash = canonicalHash(priorFlows);
+
   // Each op stages against the RUNTIME, so staging over an undeployed change
   // would silently discard it (verified live in the 2026-06-10 eval campaign).
   // Refuse instead — the agent must deploy or discard the pending stage first.
+  // EXCEPTION (WSB-3, e2 restart friction): a pending stage byte-identical to
+  // the current runtime flows carries no undeployed work, so clearing it is
+  // information-lossless by construction — auto-clear it regardless of which
+  // agent process staged it and proceed. This can never mask drift: it fires
+  // only on byte-equality with the runtime the drift check compares against.
   const pending = await ctx.staging.read();
+  let autoClearDiagnostic: StageBase['diagnostics'][number] | undefined;
   if (pending !== null) {
     const otherAgent =
       pending.agent_id !== undefined && pending.agent_id !== ctx.agentId
         ? ` by a DIFFERENT agent process ('${pending.agent_id}')`
         : '';
-    throw new ToolBlockedError(
-      `A staged change is already pending deploy (reason '${pending.reason}', staged_hash ${pending.stagedHash.slice(0, 12)}…, staged at ${pending.stagedAt}${otherAgent}). ` +
-        `Staging '${input.toolName}' now would silently discard it. Deploy it first (deploy_staged_change) or discard it (discard_staged_change).`,
-    );
+    if (pending.stagedHash === priorHash) {
+      await ctx.staging.clear();
+      autoClearDiagnostic = {
+        severity: 'info',
+        rule: 'staging/auto-cleared-stale-stage',
+        message:
+          `Auto-cleared a stale staged change (reason '${pending.reason}', staged at ${pending.stagedAt}${otherAgent}): ` +
+          `its staged_hash ${pending.stagedHash.slice(0, 12)}… is byte-identical to the current runtime flows, so it contained no undeployed work.`,
+      };
+    } else {
+      throw new ToolBlockedError(
+        `A staged change is already pending deploy (reason '${pending.reason}', staged_hash ${pending.stagedHash.slice(0, 12)}…, staged at ${pending.stagedAt}${otherAgent}). ` +
+          `Staging '${input.toolName}' now would silently discard it. Deploy it first (deploy_staged_change) or discard it ` +
+          `(discard_staged_change — pass force_takeover: true if it was staged by a different agent process).`,
+      );
+    }
   }
-
-  const { flows: priorFlows, rev: priorRev } = await ctx.flowSource.load();
-  const priorHash = canonicalHash(priorFlows);
 
   const priorSpec = decompile(priorFlows);
   const { nextSpec, extras } = op(priorSpec, priorFlows);
 
   const compiled = compile(nextSpec, { prior: priorFlows });
+
+  // NO-OP REFUSAL (WSB-3, e1 poison cascade): a compiled result byte-identical
+  // to the runtime means the op changed nothing — staging it would only arm a
+  // no-change deploy for REQUIRE_DIFF_BEFORE_DEPLOY to refuse later. Refuse at
+  // stage time instead; nothing is written to the staging slot.
+  if (compiled.hash === priorHash) {
+    throw new ValidationFailedError(
+      `${input.toolName} produced no change — the compiled flows are byte-identical to the current runtime flows, so nothing was staged. ` +
+        `Check the kind of object you addressed: node tools only match regular nodes, not junctions, comments, or groups ` +
+        `(a key of another kind is silently ignored at the op layer), and check that the new values actually differ from the current ones.`,
+      [],
+    );
+  }
 
   enforceMaxFlowSize(compiled.flows, ctx.config.MAX_FLOW_SIZE_BYTES);
   enforceNodeTypePolicy(
@@ -119,6 +153,7 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   // diagnostics so the agent doesn't see the same finding twice.
   const seenDiagnostics = new Set<string>();
   const diagnostics = [
+    ...(autoClearDiagnostic !== undefined ? [autoClearDiagnostic] : []),
     ...compiled.diagnostics.map((d) => ({
       severity: d.severity,
       rule: d.rule,

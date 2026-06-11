@@ -2,6 +2,12 @@
 
 ## Unreleased (v1.4.0)
 
+### WSB-3 — Stage-time no-op refusal + auto-clear of hash-equal stale stages (SD3 pipeline half, SD6 half)
+
+- Author tools now REFUSE at stage time when the compiled result is byte-identical to the current runtime flows (`ValidationFailedError`, "produced no change"; nothing is written to the staging slot). This tightens `REQUIRE_DIFF_BEFORE_DEPLOY` from deploy time to stage time and kills the 2026-06-10 audit e1 poison cascade where node tools addressed at junctions/comments silently staged no-change stages. The refusal message points at the object-kind confusion (node vs junction vs comment vs group). The op-layer silent-false return shapes are untouched (their flip to throwing is owned by WSB-4, v1.5.0).
+- A pending staged change whose `staged_hash` is byte-identical to the current runtime flows is now auto-cleared — regardless of which agent process staged it (byte-equality means it carries no undeployed work, so clearing is information-lossless by construction) — and the new op proceeds, surfacing an info diagnostic `staging/auto-cleared-stale-stage`. Fixes the audit e2 restart friction where a stale leftover `staged.json` from a previous session blocked every author call. Auto-clear can never mask drift: it fires only on byte-equality with the live runtime.
+- A hash-UNEQUAL pending stage still blocks exactly as before, and the refusal message now names `force_takeover` so a foreign-agent stage is recoverable via `discard_staged_change` without spelunking.
+
 ### WSB-1 — Structured error payloads through stdio (SD2)
 
 - Tool errors crossing the stdio transport now carry their machine-readable cause. The single text content block keeps the legacy human-readable first line (`Tool '<name>' failed: <message>`, byte-identical) and appends a JSON block `{"error": {"name", "message", ...}}` — `ValidationFailedError` contributes its `diagnostics` verbatim (capped at 50 with a `diagnostics_truncated` marker), `DriftError` contributes `expected_hash`/`actual_hash`. Fixes the 2026-06-10 audit e2 defect where "add_node produced flows with 1 validation error(s)." reached the agent with the diagnostics dropped at the transport.
