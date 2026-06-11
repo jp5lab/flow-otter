@@ -58,6 +58,7 @@
     "test:unit": "vitest run tests/unit",
     "test:property": "vitest run tests/property",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "fidelity:editor": "tsx scripts/editor-fidelity-check.mjs",
     "privacy:scan": "node scripts/privacy-scan.mjs",
     "privacy:scan:staged": "node scripts/privacy-scan.mjs --staged",
     "privacy:scan:history": "node scripts/privacy-scan.mjs --history",

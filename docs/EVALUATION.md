@@ -52,16 +52,16 @@ npm install && npm run build                        # MCP client runs dist/
 
 ## Scenario suite
 
-| ID  | Name                  | What it proves                                       | Tiers        | Pass criteria                                                                                                                                                                                                                  |
-| --- | --------------------- | ---------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| S0  | Smoke                 | Server boots, targets the stack, detects version     | read         | `health_check` reports runtime version + capability matrix correctly for the matrix leg under test                                                                                                                             |
-| S1  | Author loop           | README Tab-1 claim: full common-author-tools tab     | write+deploy | Deploys clean; `validate_flow` clean; re-running the same session prompt produces byte-identical `flows.json` (idempotency); budget recorded                                                                                   |
-| S2  | Dashboard composition | README Tab-2 claim: 6 templates, one shared skeleton | write+deploy | `/dashboard` renders; ISA-101 + hierarchy validators clean; runtime accepts every widget (no editor crash, no runtime reject)                                                                                                  |
-| S3  | Topology              | README Tab-3 claim: subflow + cross-tab links        | write+deploy | Links resolve; subflow instance consistent after redeploy                                                                                                                                                                      |
-| S4  | Safety drills         | The differentiator never regresses                   | all          | Out-of-band runtime mutation → staged deploy **refuses** (drift); `rollback_last_change` restores byte-identical snapshot; elicitation decline aborts deploy; read-only blocks writes; dangerous tools absent without env flag |
-| S5  | Visual loop           | Phase-0 gate of the strategy                         | write        | Agent stages a change, renders, _sees_ the result (PNG), adjusts, re-renders — in ≤ 6 tool calls, and its visual judgment matches what the editor shows                                                                        |
-| S6  | Layout benchmark      | Phase-2 gate of the strategy                         | toolkit      | 10–20 exemplar community flows, positions stripped, re-laid-out: layout-lint score vs. originals + human eyeball verdict per flow                                                                                              |
-| S7  | Cold-agent discovery  | Server is self-teaching                              | read         | A fresh agent with no priming (only server instructions + prompts) finds `get_authoring_guide`/`plan_flow` and follows the methodology unprompted                                                                              |
+| ID  | Name                  | What it proves                                       | Tiers        | Pass criteria                                                                                                                                                                                                                                |
+| --- | --------------------- | ---------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S0  | Smoke                 | Server boots, targets the stack, detects version     | read         | `health_check` reports runtime version + capability matrix correctly for the matrix leg under test                                                                                                                                           |
+| S1  | Author loop           | README Tab-1 claim: full common-author-tools tab     | write+deploy | Deploys clean; `validate_flow` clean; re-running the same session prompt produces byte-identical `flows.json` (idempotency); budget recorded                                                                                                 |
+| S2  | Dashboard composition | README Tab-2 claim: 6 templates, one shared skeleton | write+deploy | `/dashboard` renders; ISA-101 + hierarchy validators clean; runtime accepts every widget (no editor crash, no runtime reject)                                                                                                                |
+| S3  | Topology              | README Tab-3 claim: subflow + cross-tab links        | write+deploy | Links resolve; subflow instance consistent after redeploy                                                                                                                                                                                    |
+| S4  | Safety drills         | The differentiator never regresses                   | all          | Out-of-band runtime mutation → staged deploy **refuses** (drift); `rollback_last_change` restores byte-identical snapshot; elicitation decline aborts deploy; read-only blocks writes; dangerous tools absent without env flag               |
+| S5  | Visual loop           | Phase-0 gate of the strategy                         | write        | Agent stages a change, renders, _sees_ the result (PNG), adjusts, re-renders — in ≤ 6 tool calls, and its visual judgment matches what the editor shows. **Prerequisite: `npm run fidelity:editor` green** (see "Renderer-fidelity harness") |
+| S6  | Layout benchmark      | Phase-2 gate of the strategy                         | toolkit      | 10–20 exemplar community flows, positions stripped, re-laid-out: layout-lint score vs. originals + human eyeball verdict per flow                                                                                                            |
+| S7  | Cold-agent discovery  | Server is self-teaching                              | read         | A fresh agent with no priming (only server instructions + prompts) finds `get_authoring_guide`/`plan_flow` and follows the methodology unprompted                                                                                            |
 
 Scenario prompts are written down verbatim in the run record so runs are
 comparable across versions. S1–S3 reuse the README showcase prompts — every
@@ -172,7 +172,7 @@ editor, not against constants in the repo. The fixtures under
 the capture — it only pins the captured values
 (`tests/unit/toolkit/render/editor-metrics-fixture.test.ts`). Re-capture on
 every Node-RED **minor** bump and whenever the renderer-fidelity check
-(REND-7) flags drift.
+(`npm run fidelity:editor`, "Renderer-fidelity harness" below) flags drift.
 
 The capture stack is `scripts/eval/cdp.mjs` — raw Chrome DevTools Protocol
 over the existing `ws` dependency (no playwright/puppeteer; `puppeteer-core`
@@ -226,6 +226,65 @@ prettier-normalized before committing.
   dimension-identical to 4.1.x — the appearance rework shipped in 5.0. An
   optional 4.0 capture leg is welcome if a 4.0 container is handy; commit it
   as a third fixture if it ever disagrees.
+
+## Renderer-fidelity harness (REND-7)
+
+Two layers prove `renderGeometry`/`renderSvg` (frozen contract #1) match
+what the real editor shows:
+
+- **Layer A — CI, always on:** the REND-3 named assertions + re-bless
+  protocol in `tests/unit/toolkit/render/svg.test.ts` (snapshots may only be
+  re-blessed alongside assertion tests naming the geometry change) and the
+  REND-2 editor-truth pins in
+  `tests/unit/toolkit/render/metrics-editor-truth.test.ts` against the
+  committed editor-metrics fixtures.
+- **Layer B — periodic/eval, live editor:** `npm run fidelity:editor`
+  (`scripts/editor-fidelity-check.mjs`) deploys the canonical e1 audit
+  fixture (`tests/fixtures/audit-2026-06-10/e1-flows.json`, or `--flow`) to
+  the local sterile stack, captures per-node geometry + port-box centers
+  from the headless editor over CDP (`scripts/eval/cdp.mjs`), and compares
+  against `renderGeometry` output. Exit codes: 0 pass / 1 fidelity fail /
+  2 abort (stale fixtures, unreachable stack). The same check runs as an
+  env-gated integration test:
+  `FLOWOTTER_LIVE_EDITOR=true KEEP_STACK=true npx vitest run --config vitest.integration.config.ts tests/integration/editor-fidelity.test.ts`
+  (skipped without the flag so the standard suite stays green without
+  Chrome).
+
+**The comparator is a single shared library** —
+`scripts/eval/fidelity.mjs`: ±2px tolerance applied **per-corner +
+per-port-center** (the stricter basis: a 5px-wider box with the same center
+fails), junctions paired **by coordinates** (their editor `<g>` carries no
+id attribute). `fidelity:editor` and the `eval:s5` fidelity leg (EVAL-2)
+both invoke this one comparator; duplicates are banned.
+
+**Basis = per-node geometry + ports; group rects are excluded by default**
+(`--include-groups` to inspect): verified live on 4.1.11 — the editor
+_recomputes_ every group rect from member bboxes + label padding on load
+and ignores the stored `x/y/w/h` (e1's autofit boxes diverge up to 46px),
+so stored group geometry is autofit output, not editor render ground truth.
+Group correctness stays pinned in CI by REND-3's containment assertion and
+REND-2's group-autofit pins; closing the autofit-vs-editor padding gap is
+the group-geometry owner's (D-1) call.
+
+**Fixture-freshness guard:** every layer-B run first checks the live editor
+version against the committed `tests/fixtures/editor-metrics/` captures
+(exact match, same-minor patch drift, or the recorded 4.0-equals-4.1
+assumption) and aborts on anything else — never compare against an
+uncalibrated editor.
+
+When this harness flags drift: re-run the capture recipe above, commit the
+new fixture, and re-bless renderer geometry only per the layer-A protocol.
+
+**Per-Node-RED-minor checklist** (run both on every minor bump of the
+pinned editor profile, before any release that claims support for it):
+
+1. `node scripts/editor-metrics-dump.mjs` against the new minor → commit or
+   diff the capture (see recipe above).
+2. `npm run fidelity:editor` against the new minor → must exit 0.
+
+`npm run fidelity:editor` green is an **S5 prerequisite**: the S5 claim
+"its visual judgment matches what the editor shows" is only meaningful
+while the renderer is proven editor-true.
 
 ## Iteration protocol
 
