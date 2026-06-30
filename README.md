@@ -26,13 +26,13 @@ Default visible tools are filtered by **toolsets** — named groups that progres
 
 ### User-facing slash commands
 
-FlowOtter ships 5 MCP **prompts** that surface as `/mcp__flow-otter__<name>` in Claude Code (and equivalent menus in other MCP clients) — they're how the _user_ discovers FlowOtter workflows:
+FlowOtter ships 5 MCP **prompts** that surface as `/mcp__FlowOtter__<name>` in Claude Code (and equivalent menus in other MCP clients) — they're how the _user_ discovers FlowOtter workflows:
 
-- `/mcp__flow-otter__new_flow` — full plan → wire → deploy walkthrough.
-- `/mcp__flow-otter__build_operator_dashboard` — composes an ISA-101 operator dashboard from the built-in operator-grade templates.
-- `/mcp__flow-otter__refactor_to_subflow` — fold selected nodes into a reusable subflow.
-- `/mcp__flow-otter__explain_my_flow` — structured walkthrough.
-- `/mcp__flow-otter__review_my_flow` — full review with ISA-101 explanations.
+- `/mcp__FlowOtter__new_flow` — full plan → wire → deploy walkthrough.
+- `/mcp__FlowOtter__build_operator_dashboard` — composes an ISA-101 operator dashboard from the built-in operator-grade templates.
+- `/mcp__FlowOtter__refactor_to_subflow` — fold selected nodes into a reusable subflow.
+- `/mcp__FlowOtter__explain_my_flow` — structured walkthrough.
+- `/mcp__FlowOtter__review_my_flow` — full review with ISA-101 explanations.
 
 ### Verification
 
