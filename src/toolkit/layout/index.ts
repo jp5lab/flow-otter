@@ -65,3 +65,13 @@ export {
   type Section,
   type SectionDerivation,
 } from './sections.js';
+export {
+  stackVertical,
+  translateRect,
+  unionRect,
+  unionRects,
+  type LayoutRect,
+  type StackItem,
+  type StackedItem,
+} from './stack.js';
+export { layoutTabWithTwoLevel } from './two-level.js';

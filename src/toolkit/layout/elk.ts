@@ -36,12 +36,12 @@ import {
   type GroupSpec,
   type JunctionSpec,
   type NodeSpec,
+  type Position,
   type TabSpec,
 } from '../authoring/types.js';
 import { editorGeometryProvider, type PortAnchor } from '../render/metrics.js';
 
 import {
-  applyPositions,
   dimensionsForJunction,
   dimensionsForNode,
   type LayoutDiagnosticHandler,
@@ -49,6 +49,7 @@ import {
 } from './apply-positions.js';
 import { defaultBounds, type Bounds } from './bounds.js';
 import { DEFAULT_GRID } from './grid.js';
+import { layoutTabWithTwoLevel } from './two-level.js';
 
 export interface ElkLayoutOpts {
   rankdir?: 'LR' | 'TB';
@@ -78,7 +79,7 @@ const GROUP_COMPOUND_PADDING = {
 } as const;
 const GROUP_PADDING_OPTION = `[top=${GROUP_COMPOUND_PADDING.top},left=${GROUP_COMPOUND_PADDING.left},bottom=${GROUP_COMPOUND_PADDING.bottom},right=${GROUP_COMPOUND_PADDING.right}]`;
 
-interface ResolvedOpts {
+export interface ElkResolvedLayoutOpts {
   rankdir: 'LR' | 'TB';
   nodesep: number;
   ranksep: number;
@@ -86,6 +87,22 @@ interface ResolvedOpts {
   bounds: Bounds;
   onDiagnostic?: LayoutDiagnosticHandler;
 }
+
+export interface ElkGroupBounds {
+  readonly position: Position;
+  readonly size: { readonly w: number; readonly h: number };
+}
+
+export interface ElkCoreLayoutResult {
+  readonly centerByKey: ReadonlyMap<string, Position>;
+  readonly dimensionsByKey: ReadonlyMap<string, LayoutParticipantDimensions>;
+  readonly groupBoundsByKey: ReadonlyMap<string, ElkGroupBounds>;
+}
+
+export type ElkLayoutCore = (
+  tab: TabSpec,
+  opts: ElkResolvedLayoutOpts,
+) => Promise<ElkCoreLayoutResult | undefined>;
 
 // The bundled file (`elkjs/lib/elk.bundled.js`) inlines the algorithm and
 // runs synchronously when no workerFactory is provided. On Node 22+/Bun
@@ -105,7 +122,7 @@ interface ParticipantRecord {
   readonly outputPortIds: ReadonlyMap<number, string>;
 }
 
-function elkDirection(rankdir: ResolvedOpts['rankdir']): 'RIGHT' | 'DOWN' {
+function elkDirection(rankdir: ElkResolvedLayoutOpts['rankdir']): 'RIGHT' | 'DOWN' {
   return rankdir === 'LR' ? 'RIGHT' : 'DOWN';
 }
 
@@ -201,6 +218,31 @@ function buildGroupCompounds(groups: readonly GroupSpec[]): {
   return { rootGroups, groupNodesByKey, groupKeys: new Set(groupNodesByKey.keys()) };
 }
 
+function groupMembershipByParticipantKey(
+  groups: readonly GroupSpec[],
+): ReadonlyMap<string, string> {
+  const memberGroupByKey = new Map<string, string>();
+  for (const group of sortedUniqueGroups(groups)) {
+    for (const memberKey of group.nodeKeys) {
+      if (!memberGroupByKey.has(memberKey)) memberGroupByKey.set(memberKey, group.key);
+    }
+  }
+  return memberGroupByKey;
+}
+
+function resolvedParticipantGroupKey(
+  participantKey: string,
+  explicitGroupKey: string | undefined,
+  memberGroupByKey: ReadonlyMap<string, string>,
+  groupKeys: ReadonlySet<string>,
+): string | undefined {
+  if (explicitGroupKey !== undefined && groupKeys.has(explicitGroupKey)) return explicitGroupKey;
+  const membershipGroupKey = memberGroupByKey.get(participantKey);
+  return membershipGroupKey !== undefined && groupKeys.has(membershipGroupKey)
+    ? membershipGroupKey
+    : undefined;
+}
+
 function sideForHorizontalAnchor(anchor: PortAnchor, width: number): 'WEST' | 'EAST' {
   return anchor.x <= width / 2 ? 'WEST' : 'EAST';
 }
@@ -214,7 +256,7 @@ function port(id: string, side: 'WEST' | 'EAST'): ElkPort {
   };
 }
 
-function buildNodeParticipant(node: NodeSpec): ParticipantRecord {
+function buildNodeParticipant(node: NodeSpec, groupKey: string | undefined): ParticipantRecord {
   const dims = dimensionsForNode(node);
   const elkId = nodeElkId(node.key);
   const inputCount = Math.max(0, getInputPortCount(node.type, node.passthrough));
@@ -252,7 +294,7 @@ function buildNodeParticipant(node: NodeSpec): ParticipantRecord {
   return {
     key: node.key,
     elkId,
-    ...(node.groupKey !== undefined ? { groupKey: node.groupKey } : {}),
+    ...(groupKey !== undefined ? { groupKey } : {}),
     dims,
     elkNode,
     ...(inputId !== undefined ? { inputPortId: inputId } : {}),
@@ -260,7 +302,10 @@ function buildNodeParticipant(node: NodeSpec): ParticipantRecord {
   };
 }
 
-function buildJunctionParticipant(junction: JunctionSpec): ParticipantRecord {
+function buildJunctionParticipant(
+  junction: JunctionSpec,
+  groupKey: string | undefined,
+): ParticipantRecord {
   const dims = dimensionsForJunction();
   const elkId = junctionElkId(junction.key);
   const inputId = inputPortId(elkId);
@@ -279,7 +324,7 @@ function buildJunctionParticipant(junction: JunctionSpec): ParticipantRecord {
   return {
     key: junction.key,
     elkId,
-    ...(junction.groupKey !== undefined ? { groupKey: junction.groupKey } : {}),
+    ...(groupKey !== undefined ? { groupKey } : {}),
     dims,
     elkNode,
     inputPortId: inputId,
@@ -328,12 +373,14 @@ function buildEdges(
   return edges;
 }
 
-function collectCenters(
+function collectLayoutResult(
   node: ElkNode,
   parentOffset: { readonly x: number; readonly y: number },
   participantKeyByElkId: ReadonlyMap<string, string>,
   dimensionsByKey: ReadonlyMap<string, LayoutParticipantDimensions>,
+  groupKeyByElkId: ReadonlyMap<string, string>,
   centerByKey: Map<string, { x: number; y: number }>,
+  groupBoundsByKey: Map<string, ElkGroupBounds>,
 ): void {
   const x = parentOffset.x + (node.x ?? 0);
   const y = parentOffset.y + (node.y ?? 0);
@@ -348,8 +395,30 @@ function collectCenters(
     }
   }
 
+  const groupKey = groupKeyByElkId.get(node.id);
+  if (
+    groupKey !== undefined &&
+    typeof node.x === 'number' &&
+    typeof node.y === 'number' &&
+    typeof node.width === 'number' &&
+    typeof node.height === 'number'
+  ) {
+    groupBoundsByKey.set(groupKey, {
+      position: { x, y },
+      size: { w: node.width, h: node.height },
+    });
+  }
+
   for (const child of node.children ?? []) {
-    collectCenters(child, { x, y }, participantKeyByElkId, dimensionsByKey, centerByKey);
+    collectLayoutResult(
+      child,
+      { x, y },
+      participantKeyByElkId,
+      dimensionsByKey,
+      groupKeyByElkId,
+      centerByKey,
+      groupBoundsByKey,
+    );
   }
 }
 
@@ -358,7 +427,10 @@ function diagnosticMessage(error: unknown): string {
   return String(error);
 }
 
-async function layoutTab(tab: TabSpec, opts: ResolvedOpts): Promise<TabSpec> {
+export async function layoutTabWithElkCore(
+  tab: TabSpec,
+  opts: ElkResolvedLayoutOpts,
+): Promise<ElkCoreLayoutResult | undefined> {
   // Deterministic input ordering: sort nodes by key, edges by from/port/to.
   // ELK's `considerModelOrder.strategy: NODES_AND_EDGES` honors this when
   // it doesn't add crossings — making layouts stable across small edits.
@@ -371,28 +443,47 @@ async function layoutTab(tab: TabSpec, opts: ResolvedOpts): Promise<TabSpec> {
     return a.toKey.localeCompare(b.toKey);
   });
 
+  const { rootGroups, groupNodesByKey, groupKeys } = buildGroupCompounds(sortedGroups);
+  const memberGroupByKey = groupMembershipByParticipantKey(sortedGroups);
   const dimensionsByKey = new Map<string, LayoutParticipantDimensions>();
   const participants: ParticipantRecord[] = [];
   const participantsByKey = new Map<string, ParticipantRecord>();
   const participantKeyByElkId = new Map<string, string>();
   for (const node of sortedNodes) {
-    const participant = buildNodeParticipant(node);
+    const groupKey = resolvedParticipantGroupKey(
+      node.key,
+      node.groupKey,
+      memberGroupByKey,
+      groupKeys,
+    );
+    const participant = buildNodeParticipant(node, groupKey);
     participants.push(participant);
     participantsByKey.set(node.key, participant);
     participantKeyByElkId.set(participant.elkId, node.key);
     dimensionsByKey.set(node.key, participant.dims);
   }
   for (const junction of sortedJunctions) {
-    const participant = buildJunctionParticipant(junction);
+    const groupKey = resolvedParticipantGroupKey(
+      junction.key,
+      junction.groupKey,
+      memberGroupByKey,
+      groupKeys,
+    );
+    const participant = buildJunctionParticipant(junction, groupKey);
     participants.push(participant);
     participantsByKey.set(junction.key, participant);
     participantKeyByElkId.set(participant.elkId, junction.key);
     dimensionsByKey.set(junction.key, participant.dims);
   }
 
-  if (participants.length === 0) return tab;
+  if (participants.length === 0) {
+    return {
+      centerByKey: new Map(),
+      dimensionsByKey,
+      groupBoundsByKey: new Map(),
+    };
+  }
 
-  const { rootGroups, groupNodesByKey, groupKeys } = buildGroupCompounds(sortedGroups);
   const rootChildren = [...rootGroups];
   for (const participant of participants) {
     attachParticipant(participant, rootChildren, groupNodesByKey, groupKeys);
@@ -424,21 +515,26 @@ async function layoutTab(tab: TabSpec, opts: ResolvedOpts): Promise<TabSpec> {
       tabId: tab.id,
       message: `ELK layout failed for tab '${tab.label}': ${diagnosticMessage(error)}`,
     });
-    return tab;
+    return undefined;
   }
 
   const centerByKey = new Map<string, { x: number; y: number }>();
+  const groupBoundsByKey = new Map<string, ElkGroupBounds>();
+  const groupKeyByElkId = new Map<string, string>();
+  for (const groupKey of groupKeys) groupKeyByElkId.set(groupElkId(groupKey), groupKey);
   for (const child of laid.children ?? []) {
-    collectCenters(
+    collectLayoutResult(
       child,
       { x: laid.x ?? 0, y: laid.y ?? 0 },
       participantKeyByElkId,
       dimensionsByKey,
+      groupKeyByElkId,
       centerByKey,
+      groupBoundsByKey,
     );
   }
 
-  return applyPositions(tab, centerByKey, dimensionsByKey, opts);
+  return { centerByKey, dimensionsByKey, groupBoundsByKey };
 }
 
 /**
@@ -449,7 +545,7 @@ export async function layoutFlowsWithElk(
   spec: AuthoringSpec,
   opts: ElkLayoutOpts = {},
 ): Promise<AuthoringSpec> {
-  const resolved: ResolvedOpts = {
+  const resolved: ElkResolvedLayoutOpts = {
     rankdir: opts.rankdir ?? DEFAULTS.rankdir,
     nodesep: opts.nodesep ?? DEFAULTS.nodesep,
     ranksep: opts.ranksep ?? DEFAULTS.ranksep,
@@ -460,6 +556,8 @@ export async function layoutFlowsWithElk(
   // Sort tabs for determinism, mirroring dagre.ts.
   const sortedTabs = [...spec.tabs].sort((a, b) => a.id.localeCompare(b.id));
   const newTabs: TabSpec[] = [];
-  for (const tab of sortedTabs) newTabs.push(await layoutTab(tab, resolved));
+  for (const tab of sortedTabs) {
+    newTabs.push(await layoutTabWithTwoLevel(tab, resolved, layoutTabWithElkCore));
+  }
   return { ...spec, tabs: newTabs };
 }
