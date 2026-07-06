@@ -10,7 +10,7 @@
 import { compile } from '../authoring/compile.js';
 import { decompile } from '../authoring/decompile.js';
 import type { AuthoringSpec, TabSpec } from '../authoring/types.js';
-import type { FlowsJson } from '../../shared/flows-json.js';
+import type { FlowsJson, FlowsJsonNode } from '../../shared/flows-json.js';
 
 import { layoutFlowsWithDagre, type LayoutOpts as DagreOpts } from './dagre.js';
 import { layoutTabWithElkCore, resolveElkLayoutOpts, type ElkLayoutOpts } from './elk.js';
@@ -42,6 +42,30 @@ function shouldLayoutTab(tab: TabSpec, scopedTabIds: ReadonlySet<string> | undef
   return scopedTabIds === undefined || scopedTabIds.has(tab.id);
 }
 
+const LAYOUT_GEOMETRY_FIELDS = ['x', 'y', 'w', 'h'] as const;
+
+function tabScopeOf(node: FlowsJsonNode): string | undefined {
+  if (node.type === 'tab') return node.id;
+  const z = (node as { z?: unknown }).z;
+  return typeof z === 'string' ? z : undefined;
+}
+
+function isInScope(node: FlowsJsonNode, scopedTabIds: ReadonlySet<string> | undefined): boolean {
+  if (scopedTabIds === undefined) return true;
+  const tabId = tabScopeOf(node);
+  return tabId !== undefined && scopedTabIds.has(tabId);
+}
+
+function mergeLayoutGeometry(prior: FlowsJsonNode, compiled: FlowsJsonNode): FlowsJsonNode {
+  const out = { ...prior } as Record<string, unknown>;
+  const compiledRecord = compiled as Record<string, unknown>;
+  for (const field of LAYOUT_GEOMETRY_FIELDS) {
+    if (field in compiledRecord) out[field] = compiledRecord[field];
+    else delete out[field];
+  }
+  return out as FlowsJsonNode;
+}
+
 export async function layoutTabs(
   spec: AuthoringSpec,
   opts: LayoutTabsOpts = {},
@@ -63,19 +87,44 @@ export async function layoutFlowsJson(
   flows: FlowsJson,
   opts: LayoutTabsOpts = {},
 ): Promise<FlowsJson> {
+  const scopedTabIds = opts.tabIds === undefined ? undefined : new Set(opts.tabIds);
   const spec = decompile(flows);
   const laidOut = await layoutTabs(spec, opts);
   const compiled = compile(laidOut, { prior: flows }).flows;
   const compiledById = new Map(compiled.map((node) => [node.id, node]));
   const priorIds = new Set(flows.map((node) => node.id));
   return [
-    ...flows.map((node) => compiledById.get(node.id) ?? node),
-    ...compiled.filter((node) => !priorIds.has(node.id)),
+    ...flows.map((node) => {
+      if (!isInScope(node, scopedTabIds)) return node;
+      const compiledNode = compiledById.get(node.id);
+      return compiledNode === undefined ? node : mergeLayoutGeometry(node, compiledNode);
+    }),
+    ...compiled.filter((node) => !priorIds.has(node.id) && isInScope(node, scopedTabIds)),
   ];
 }
 
 export { layoutFlowsWithDagre } from './dagre.js';
 export { layoutFlowsWithElk } from './elk.js';
+export {
+  flowEdges,
+  flowMetrics,
+  flowPositions,
+  horizontalOverlap,
+  layoutObjectBounds,
+  rectContains,
+  rectsDisjoint,
+  stripLayoutGeometry,
+  stripPositions,
+  tabBoundingExtent,
+  tabContentBounds,
+  tabLayoutObjects,
+  type FlowMetricEdge,
+  type FlowMetricExtent,
+  type FlowMetricObject,
+  type FlowMetricPosition,
+  type FlowMetricRect,
+  type FlowMetrics,
+} from './layout-metrics.js';
 export {
   deriveFlowsJsonSections,
   deriveTabSpecSections,

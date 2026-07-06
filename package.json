@@ -60,6 +60,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:nr5": "SKIP_DOCKER=true vitest run --config vitest.integration.config.ts tests/integration/runtime-capabilities.test.ts",
     "fidelity:editor": "tsx scripts/editor-fidelity-check.mjs",
+    "layout:bench": "node scripts/layout-bench.mjs",
     "eval:s5": "tsx scripts/eval/run-s5.mjs",
     "eval:s6": "node scripts/eval/benchmark/run-s6.mjs",
     "eval:canary": "node scripts/eval/run-canary.mjs",

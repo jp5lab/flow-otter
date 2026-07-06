@@ -10,6 +10,12 @@
 - **Capability requirements in health_check (NR5-15)**: `health_check` always returns `capability_requirements` — the static capability → Node-RED version-range map — alongside the probe-dependent `runtime.capabilities`. Docs: CLIENT_CONFIG notes the 5.0.0-beta.6 `httpAdminCors` default removal and the `runtimeState.enabled` settings gate; SECURITY documents the 5.0.0-beta.3 creds-alongside-flows behavior.
 - **`version-compat` lint family (NR5-2)**: validation now warns when a flow uses a feature the target Node-RED runtime lacks — delay burst mode (<5.0.0-beta.2), tls-config `pfx`/`env` cert modes, `node:`-prefixed function modules (<4.1), and `node.linkcall(...)` calls detected via AST (<5.0.0-beta.6). Messages state the required version range and the probed target version. File-source targets have no runtime to compare against, so the rule stays silent there — no false positives, reports unchanged.
 
+### LAYO-5 — E4 fixture acceptance suite
+
+- Added the stack-free E4 fixture acceptance suite for the hash-pinned 2026-06-10 audit fixtures. The suite drives `layoutFlowsJson` directly and pins semantic properties only: lane separation, affirmative-on-top switches, header/group relationships, group containment, wire metrics, scoped tab isolation, geometry-only diffs, strict viewport fit on reachable e2, and enforced-or-diagnosed viewport overflow on topologically-bound e1.
+- Added `layout-metrics.ts`, exported from the layout barrel, with typed FlowJson position, edge, backward-wire, crossing, stripped-geometry, and geometry-backed extent helpers used by the acceptance checks and the new bench path.
+- Added `npm run layout:bench` (`scripts/layout-bench.mjs`) to run the built `dist/` layout engine against the same hash-pinned fixtures and report per-fixture metrics plus pass/fail status.
+
 ### D-6 — plan_flow spatial scaffold and PlanRecord v2
 
 - `plan_flow` now emits a deterministic spatial scaffold (20px grid, 200px pitch, 1920/1420 viewport, monotonic per-stage x-centers, lane y-bands with the error band ≥120px below main) and accepts an optional per-stage `lane` hint (`main`/`indicate`/`error`); the plan sidecar is upgraded to PlanRecord schema v2 (v1 sidecars still read back-compatibly, `layout_strategy` remains `manual`).

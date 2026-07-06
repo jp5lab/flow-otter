@@ -472,7 +472,7 @@ describe('layoutFlowsWithElk two-level stacking', () => {
   });
 
   it('F10 grep-guard: new two-level files keep geometry provider ownership and import LANE_GAP', () => {
-    const files = ['two-level.ts', 'stack.ts'];
+    const files = ['two-level.ts', 'stack.ts', 'layout-metrics.ts'];
     const sources = files.map((file) =>
       readFileSync(new URL(`../../../../src/toolkit/layout/${file}`, import.meta.url), 'utf8'),
     );
