@@ -2,6 +2,7 @@ import {
   hasCanvasPosition,
   isComment,
   isGroup,
+  isJunction,
   isRegularNode,
   isTab,
   type FlowsJson,
@@ -77,6 +78,12 @@ function toExplainNode(node: FlowsJsonNode): ExplainNode {
   };
 }
 
+function wiresOf(node: FlowsJsonNode): readonly (readonly string[])[] {
+  if (isRegularNode(node)) return node.wires ?? [];
+  if (isJunction(node)) return node.wires;
+  return [];
+}
+
 export function explainFlow(flows: FlowsJson, tabId: string): ExplainReport {
   const tab = flows.find((n) => isTab(n) && n.id === tabId);
   if (!tab || !isTab(tab)) {
@@ -95,8 +102,7 @@ export function explainFlow(flows: FlowsJson, tabId: string): ExplainReport {
   for (const n of tabNodes) incoming.set(n.id, 0);
   const edges: ExplainEdge[] = [];
   for (const n of tabNodes) {
-    if (!isRegularNode(n)) continue;
-    const wires = n.wires ?? [];
+    const wires = wiresOf(n);
     for (let port = 0; port < wires.length; port++) {
       const targets = wires[port] ?? [];
       for (const toId of targets) {
@@ -146,7 +152,5 @@ export function explainFlow(flows: FlowsJson, tabId: string): ExplainReport {
 }
 
 function hasOutgoing(node: FlowsJsonNode): boolean {
-  if (!isRegularNode(node)) return false;
-  const wires = node.wires ?? [];
-  return wires.some((arr) => arr.length > 0);
+  return wiresOf(node).some((arr) => arr.length > 0);
 }

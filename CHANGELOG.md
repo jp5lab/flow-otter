@@ -2,6 +2,11 @@
 
 ## 1.5.0 (unreleased)
 
+### WSB-7 — `explain_flow` walks junction edges
+
+- `explain_flow` now walks junction nodes through the same wire helper used by structural analysis, so junctions appear as real hop-by-hop nodes in the report (`node → junction`, `junction → node`) instead of being collapsed or skipped. Entrypoint/sink/orphan classification now counts junction-mediated reachability, fixing the canonical e2 `e2spag001`/`e2n12` regression where the downstream alarm chain was split off and the junction was treated as a terminal sink. Read-only analysis only; no staging/deploy path touched.
+- Added `explain-junctions.test.ts` against the sterile audit e2 fixture plus a minimal inverse regression: junction-fed chains no longer create disconnected entrypoints, and the surfaced edge list preserves the ratified hop-by-hop junction shape without synthetic direct edges.
+
 ### WSB-5-PR3 — e2 budget acceptance pin
 
 - Added the named F5 regression pin `e2-reorg-budget.test.ts`: the audit's canonical e2 spaghetti tab is reorganized through ONE `stage_changes` call, then previewed and deployed with `confirm:true`, with an explicit section account citing the EVAL-1 glossary boundary and asserting the authoring section stays within ≤5 MCP calls and exactly 1 deploy confirmation.
