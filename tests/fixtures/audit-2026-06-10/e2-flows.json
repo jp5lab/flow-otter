@@ -1,0 +1,232 @@
+{
+  "flows": [
+    {
+      "id": "e2spag001",
+      "type": "tab",
+      "label": "Spaghetti line B",
+      "disabled": false,
+      "info": ""
+    },
+    {
+      "id": "e2n01",
+      "type": "inject",
+      "z": "e2spag001",
+      "name": "Sim temp",
+      "props": [
+        {
+          "p": "payload"
+        },
+        {
+          "p": "topic",
+          "vt": "str"
+        }
+      ],
+      "repeat": "",
+      "crontab": "",
+      "once": false,
+      "onceDelay": 0.1,
+      "topic": "lineB/temp",
+      "payload": "85",
+      "payloadType": "num",
+      "x": 1250,
+      "y": 120,
+      "wires": [["e2n03"]]
+    },
+    {
+      "id": "e2n02",
+      "type": "inject",
+      "z": "e2spag001",
+      "name": "Test pulse",
+      "props": [
+        {
+          "p": "payload"
+        },
+        {
+          "p": "topic",
+          "vt": "str"
+        }
+      ],
+      "repeat": "",
+      "crontab": "",
+      "once": false,
+      "onceDelay": 0.1,
+      "topic": "lineB/test",
+      "payload": "42",
+      "payloadType": "num",
+      "x": 1250,
+      "y": 300,
+      "wires": [["e2n03"]]
+    },
+    {
+      "id": "e2n03",
+      "type": "function",
+      "z": "e2spag001",
+      "name": "scale raw",
+      "outputs": 1,
+      "timeout": 0,
+      "noerr": 0,
+      "initialize": "",
+      "finalize": "",
+      "libs": [],
+      "func": "msg.payload = Number(msg.payload) * 1.0;\nreturn msg;",
+      "x": 1020,
+      "y": 160,
+      "wires": [["e2n04"]]
+    },
+    {
+      "id": "e2n04",
+      "type": "function",
+      "z": "e2spag001",
+      "name": "smooth",
+      "outputs": 1,
+      "timeout": 0,
+      "noerr": 0,
+      "initialize": "",
+      "finalize": "",
+      "libs": [],
+      "func": "var last = context.get('last');\nif (last === undefined) { last = msg.payload; }\nlast = 0.7 * last + 0.3 * msg.payload;\ncontext.set('last', last);\nmsg.payload = Math.round(last * 10) / 10;\nreturn msg;",
+      "x": 800,
+      "y": 100,
+      "wires": [["e2n05", "e2n10"]]
+    },
+    {
+      "id": "e2n10",
+      "type": "debug",
+      "z": "e2spag001",
+      "name": "tap",
+      "active": true,
+      "tosidebar": true,
+      "console": false,
+      "tostatus": false,
+      "complete": "payload",
+      "targetType": "msg",
+      "statusVal": "",
+      "statusType": "auto",
+      "x": 700,
+      "y": 240,
+      "wires": []
+    },
+    {
+      "id": "e2n05",
+      "type": "switch",
+      "z": "e2spag001",
+      "name": "",
+      "property": "payload",
+      "propertyType": "msg",
+      "rules": [
+        {
+          "t": "gt",
+          "v": "80",
+          "vt": "num"
+        },
+        {
+          "t": "else"
+        }
+      ],
+      "checkall": "true",
+      "repair": false,
+      "outputs": 2,
+      "x": 560,
+      "y": 180,
+      "wires": [["e2n12"], ["e2n07"]]
+    },
+    {
+      "id": "e2n12",
+      "type": "junction",
+      "z": "e2spag001",
+      "x": 650,
+      "y": 330,
+      "wires": [["e2n06"]]
+    },
+    {
+      "id": "e2n06",
+      "type": "change",
+      "z": "e2spag001",
+      "name": "set alarm flag",
+      "rules": [
+        {
+          "t": "set",
+          "p": "alarm",
+          "pt": "msg",
+          "to": "true",
+          "tot": "bool"
+        }
+      ],
+      "action": "",
+      "property": "",
+      "from": "",
+      "to": "",
+      "reg": false,
+      "x": 340,
+      "y": 120,
+      "wires": [["e2n08"]]
+    },
+    {
+      "id": "e2n08",
+      "type": "function",
+      "z": "e2spag001",
+      "name": "format alarm",
+      "outputs": 1,
+      "timeout": 0,
+      "noerr": 0,
+      "initialize": "",
+      "finalize": "",
+      "libs": [],
+      "func": "msg.payload = 'ALARM: ' + msg.payload;\nreturn msg;",
+      "x": 345,
+      "y": 125,
+      "wires": [["e2n09"]]
+    },
+    {
+      "id": "e2n09",
+      "type": "debug",
+      "z": "e2spag001",
+      "name": "alarm out",
+      "active": true,
+      "tosidebar": true,
+      "console": false,
+      "tostatus": false,
+      "complete": "payload",
+      "targetType": "msg",
+      "statusVal": "",
+      "statusType": "auto",
+      "x": 60,
+      "y": 100,
+      "wires": []
+    },
+    {
+      "id": "e2n07",
+      "type": "function",
+      "z": "e2spag001",
+      "name": "format normal",
+      "outputs": 1,
+      "timeout": 0,
+      "noerr": 0,
+      "initialize": "",
+      "finalize": "",
+      "libs": [],
+      "func": "msg.payload = 'OK: ' + msg.payload;\nreturn msg;",
+      "x": 900,
+      "y": 60,
+      "wires": [["e2n11"]]
+    },
+    {
+      "id": "e2n11",
+      "type": "debug",
+      "z": "e2spag001",
+      "name": "normal out",
+      "active": true,
+      "tosidebar": true,
+      "console": false,
+      "tostatus": false,
+      "complete": "payload",
+      "targetType": "msg",
+      "statusVal": "",
+      "statusType": "auto",
+      "x": 400,
+      "y": 1200,
+      "wires": []
+    }
+  ],
+  "rev": "f58f393baa8092f4ac72126834288f5b95da006144fe9423985cca49cc9c7842"
+}

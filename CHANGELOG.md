@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### WSB-5-PR3 — e2 budget acceptance pin
+
+- Added the named F5 regression pin `e2-reorg-budget.test.ts`: the audit's canonical e2 spaghetti tab is reorganized through ONE `stage_changes` call, then previewed and deployed with `confirm:true`, with an explicit section account citing the EVAL-1 glossary boundary and asserting the authoring section stays within ≤5 MCP calls and exactly 1 deploy confirmation.
+- Committed the sterile e2 audit fixture under `tests/fixtures/audit-2026-06-10/e2-flows.json`, extracted to only `e2spag001` plus member nodes `e2n01`..`e2n12` (switch `e2n05` with two outputs, junction `e2n12`; no broker/config/host material).
+- Added the PR-3 sabotage variant: the same e2 batch with one invalid switch-rule op inserted fails as `BatchOpError`, serializes `failed_op_index` / `failed_op`, names the bad rule, and leaves both runtime and staging untouched.
+
 ### WSB-5-PR2 — `stage_changes` atomic batch
 
 - New author tool **`stage_changes`** stages 1-200 ordered ops as ONE atomic staged change: single runtime load/decompile, left-to-right op fold, then the existing `compileValidateAndStage` choke point for one compile / no-op guard / policy / validate / lint / diff / staging write / render enrichment. The op union covers nodes, junctions, groups, comments, wires, and links; batch `move_node` uses the normalized `tab_id` + optional `dest_tab_id` vocabulary only. Reference fields resolve against keys already present in the evolving batch spec before falling back to runtime Node-RED ids, closing the authoring-key-vs-runtime-id gap for multi-op batches. `dry_run:true` validates/diffs without writing the slot.
