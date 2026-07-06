@@ -759,6 +759,13 @@ export const VALIDATORS: readonly ValidatorEntry[] = [
     checks:
       'Detects bare API keys / passwords / tokens stuffed into visible (non-credential) node fields.',
   },
+  {
+    rule: 'version-compat',
+    typical_severity: 'warning',
+    category: 'structure',
+    checks:
+      'Version-gated features (delay burst mode, tls-config pfx/env cert modes, node:-prefixed function libs, node.linkcall) are supported by the target Node-RED runtime; silent when no runtime info is available (file mode).',
+  },
   // ISA-101 enforcement validators (added v1.3.0):
   {
     rule: 'unbounded-chart-append',
