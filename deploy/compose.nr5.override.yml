@@ -1,0 +1,5 @@
+# Node-RED 5.0 integration leg.
+# Usage: docker compose -f deploy/docker-compose.yml -f deploy/compose.nr5.override.yml up -d
+services:
+  node-red:
+    image: nodered/node-red:5.0.0

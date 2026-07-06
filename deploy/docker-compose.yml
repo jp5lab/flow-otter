@@ -1,7 +1,7 @@
 services:
   node-red:
     # 4.1 is the recommended/maintenance line (FlowOtter minimum is 4.0).
-    # For a Node-RED 5.0 leg, override the image tag (e.g. nodered/node-red:5.0.0).
+    # For the Node-RED 5.0 leg, layer deploy/compose.nr5.override.yml.
     image: nodered/node-red:4.1
     container_name: node-red-mcp-test-nodered
     ports:

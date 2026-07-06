@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### NR5-13 — Node-RED 5.0 compose leg and live capability assertion
+
+- Promoted the Node-RED 5.0 sterile-stack leg into `deploy/compose.nr5.override.yml`, layering `nodered/node-red:5.0.0` over the default 4.1 compose stack with the documented `docker compose -f deploy/docker-compose.yml -f deploy/compose.nr5.override.yml up -d` command.
+- Added `npm run test:integration:nr5`, scoped to the live runtime-capability integration test with Docker setup skipped so it asserts whichever stack is already serving `localhost:1880`.
+- Added a live integration assertion that reads the actual Node-RED version through the admin-api/runtime-info path, verifies the detected capability matrix against that version, and pins `health_check.runtime.capabilities` to the same matrix for both 4.1 and 5.0 legs.
+
 ### NR5-1 — Runtime capabilities reach validation and authoring
 
 - Added a slim runtime capability context (`{version, capabilities}`) from the Node-RED capability matrix and threaded it through `ValidateOptions` / `LintOptions`, including the validator rule invocation context, without changing any current rule behavior or report bytes.

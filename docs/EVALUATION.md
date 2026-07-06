@@ -39,8 +39,10 @@ docker compose -f deploy/docker-compose.yml up -d   # Node-RED + Mosquitto
 npm install && npm run build                        # MCP client runs dist/
 ```
 
-- **Version matrix:** run the suite against Node-RED 4.1.x (maintenance line)
-  and 5.0.x (GA since 2026-06-09) by switching the compose image tag.
+- **Version matrix:** the base stack runs Node-RED 4.1.x (maintenance line).
+  Run the 5.0.x leg with
+  `docker compose -f deploy/docker-compose.yml -f deploy/compose.nr5.override.yml up -d`,
+  then `npm run test:integration:nr5` against that already-running stack.
 - **Fresh state per run:** use a distinct `ENVIRONMENT_NAME=eval-<scenario>-<n>`
   per run so snapshots/staging/audit don't cross-contaminate; delete
   `~/.flow-otter/eval-*` between campaigns.
@@ -205,16 +207,11 @@ deployed flows**. It also dismisses the telemetry/tour modals server-side
 (`POST /settings/user`) first — the compose stack's `/data` is ephemeral, so
 a fresh container always needs this.
 
-**5.0 leg** (temporary compose override; do not commit the override):
+**5.0 leg** (committed compose override):
 
 ```bash
-cat > /tmp/nr5-override.yml <<'EOF'
-services:
-  node-red:
-    image: nodered/node-red:5.0.0
-EOF
 docker compose -f deploy/docker-compose.yml down
-docker compose -f deploy/docker-compose.yml -f /tmp/nr5-override.yml up -d
+docker compose -f deploy/docker-compose.yml -f deploy/compose.nr5.override.yml up -d
 node scripts/editor-metrics-dump.mjs            # writes nodered-5.0.0.json
 # restore the 4.1 stack when done:
 docker compose -f deploy/docker-compose.yml down

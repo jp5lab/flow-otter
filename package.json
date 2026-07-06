@@ -58,6 +58,7 @@
     "test:unit": "vitest run tests/unit",
     "test:property": "vitest run tests/property",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:nr5": "SKIP_DOCKER=true vitest run --config vitest.integration.config.ts tests/integration/runtime-capabilities.test.ts",
     "fidelity:editor": "tsx scripts/editor-fidelity-check.mjs",
     "eval:s5": "tsx scripts/eval/run-s5.mjs",
     "eval:canary": "node scripts/eval/run-canary.mjs",
