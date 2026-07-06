@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { findLinkCallTargets } from '../../../../../src/toolkit/validate/rules/_function-ast.js';
+import {
+  findLinkCallTargets,
+  hasRedUtilGetSettingCall,
+} from '../../../../../src/toolkit/validate/rules/_function-ast.js';
 
 describe('findLinkCallTargets', () => {
   it('finds literal node.linkcall targets', () => {
@@ -48,5 +51,44 @@ describe('findLinkCallTargets', () => {
 
   it('returns empty results on parse failure', () => {
     expect(findLinkCallTargets('if (')).toEqual([]);
+  });
+});
+
+describe('hasRedUtilGetSettingCall', () => {
+  it('detects RED.util.getSetting calls', () => {
+    expect(hasRedUtilGetSettingCall("const value = RED.util.getSetting('API_KEY');")).toBe(true);
+  });
+
+  it('detects nested RED.util.getSetting calls', () => {
+    expect(
+      hasRedUtilGetSettingCall(`
+        function resolveName() {
+          return RED.util.getSetting('DISPLAY_NAME');
+        }
+      `),
+    ).toBe(true);
+  });
+
+  it('ignores computed members', () => {
+    expect(
+      hasRedUtilGetSettingCall(`
+        RED.util['getSetting']('A');
+        RED['util'].getSetting('B');
+      `),
+    ).toBe(false);
+  });
+
+  it('ignores non-call references and other member paths', () => {
+    expect(
+      hasRedUtilGetSettingCall(`
+        const f = RED.util.getSetting;
+        RED.settings.getSetting('A');
+        red.util.getSetting('B');
+      `),
+    ).toBe(false);
+  });
+
+  it('returns false on parse failure', () => {
+    expect(hasRedUtilGetSettingCall('if (')).toBe(false);
   });
 });

@@ -32,6 +32,32 @@ function isUnknownArray(value: unknown): value is readonly unknown[] {
   return Array.isArray(value);
 }
 
+function nonComputedMemberPath(node: AcornNode): readonly string[] | null {
+  if (node.type === 'Identifier') {
+    const name = node['name'];
+    return typeof name === 'string' ? [name] : null;
+  }
+
+  if (node.type !== 'MemberExpression') return null;
+  if (node['computed'] === true) return null;
+
+  const object = node['object'];
+  const property = node['property'];
+  if (!isAcornNode(object) || !isAcornNode(property)) return null;
+
+  const propertyName = property['name'];
+  if (property.type !== 'Identifier' || typeof propertyName !== 'string') return null;
+
+  const objectPath = nonComputedMemberPath(object);
+  return objectPath === null ? null : [...objectPath, propertyName];
+}
+
+function memberPathEquals(node: AcornNode, expected: readonly string[]): boolean {
+  const actual = nonComputedMemberPath(node);
+  if (actual === null || actual.length !== expected.length) return false;
+  return expected.every((part, index) => actual[index] === part);
+}
+
 function walk(node: AcornNode, visit: (n: AcornNode) => void): void {
   visit(node);
   for (const key of Object.keys(node)) {
@@ -48,19 +74,11 @@ function walk(node: AcornNode, visit: (n: AcornNode) => void): void {
 }
 
 function isNodeLinkCallCallee(node: AcornNode): boolean {
-  if (node.type !== 'MemberExpression') return false;
-  if (node['computed'] === true) return false;
+  return memberPathEquals(node, ['node', 'linkcall']);
+}
 
-  const object = node['object'];
-  const property = node['property'];
-  if (!isAcornNode(object) || !isAcornNode(property)) return false;
-
-  return (
-    object.type === 'Identifier' &&
-    object['name'] === 'node' &&
-    property.type === 'Identifier' &&
-    property['name'] === 'linkcall'
-  );
+function isRedUtilGetSettingCallee(node: AcornNode): boolean {
+  return memberPathEquals(node, ['RED', 'util', 'getSetting']);
 }
 
 function stringLiteralValue(node: AcornNode): string | undefined {
@@ -118,4 +136,19 @@ export function findLinkCallTargets(code: string): string[] {
   });
 
   return targets;
+}
+
+export function hasRedUtilGetSettingCall(code: string): boolean {
+  const parsed = parseFunctionNodeJs(code);
+  if (!parsed.ok) return false;
+
+  let found = false;
+  walk(parsed.program as unknown as AcornNode, (node) => {
+    if (found || node.type !== 'CallExpression') return;
+
+    const callee = node['callee'];
+    if (isAcornNode(callee) && isRedUtilGetSettingCallee(callee)) found = true;
+  });
+
+  return found;
 }
