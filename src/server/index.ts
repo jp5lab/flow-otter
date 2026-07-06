@@ -29,6 +29,7 @@ import { stageChangesTool } from './tools/author/stage-changes.js';
 import { updateCommentTool } from './tools/author/update-comment.js';
 import { updateGroupTool } from './tools/author/update-group.js';
 import { updateNodeTool } from './tools/author/update-node.js';
+import { updateTabTool } from './tools/author/update-tab.js';
 import { wireNodesTool } from './tools/author/wire-nodes.js';
 import { createFlowTool } from './tools/dangerous/create-flow.js';
 import { deleteFlowTool } from './tools/dangerous/delete-flow.js';
@@ -168,6 +169,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   stageChangesTool as unknown as Tool<unknown, unknown>,
   removeNodeTool as unknown as Tool<unknown, unknown>,
   updateNodeTool as unknown as Tool<unknown, unknown>,
+  updateTabTool as unknown as Tool<unknown, unknown>,
   moveNodeTool as unknown as Tool<unknown, unknown>,
   updateGroupTool as unknown as Tool<unknown, unknown>,
   removeGroupTool as unknown as Tool<unknown, unknown>,

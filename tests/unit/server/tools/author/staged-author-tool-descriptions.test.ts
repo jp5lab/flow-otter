@@ -33,6 +33,7 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'update_comment',
   'update_group',
   'update_node',
+  'update_tab',
   'wire_nodes',
 ] as const;
 

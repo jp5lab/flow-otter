@@ -27,7 +27,7 @@ export const NODE_RED_CONCEPTS: readonly ConceptEntry[] = [
     name: 'tab',
     purpose:
       'Top-level workspace organizational unit (also called "flow"). Holds nodes, groups, comments. Has optional info (Markdown) and per-tab env vars.',
-    flow_otter_tools: ['list_flows', 'get_flow', 'create_flow'],
+    flow_otter_tools: ['list_flows', 'get_flow', 'create_flow', 'update_tab'],
   },
   {
     name: 'node',

@@ -76,6 +76,7 @@ describe('capability catalog', () => {
       'add_config_node',
       'get_node',
       'update_node',
+      'update_tab',
       'remove_node',
       'move_node',
       'wire_nodes',

@@ -129,6 +129,15 @@ const AUTHOR_TOOL_CASES: readonly {
     input: { tab_id: TAB_1, node_key: 'source', label: 'Source Updated' },
   },
   {
+    name: 'update_tab',
+    input: {
+      tab_id: TAB_1,
+      label: 'Main Updated',
+      info: 'Updated tab info',
+      env: [{ name: 'MODE', type: 'str', value: 'test' }],
+    },
+  },
+  {
     name: 'move_node',
     input: {
       source_tab_id: TAB_1,
@@ -269,6 +278,30 @@ describe('author tools end-to-end', () => {
     for (const field of ['x', 'y', 'z', 'wires'] as const) {
       expect(configNode?.[field]).toBeUndefined();
     }
+
+    await callTool(rig.registry, rig.container, 'discard_staged_change', {
+      staged_hash: staged.staged_hash,
+    });
+  });
+
+  it('update_tab stages label info and env updates', async () => {
+    const staged = (await callTool(rig.registry, rig.container, 'update_tab', {
+      tab_id: TAB_1,
+      label: 'Main Explicit',
+      info: 'Explicit tab info',
+      env: [{ name: 'MODE', type: 'str', value: 'integration' }],
+    })) as StageResult & { updated: boolean; updated_tab_id: string };
+    expect(staged.ok).toBe(true);
+    expect(staged.updated).toBe(true);
+    expect(staged.updated_tab_id).toBe(TAB_1);
+
+    const pending = await rig.container.staging.read();
+    expect(pending?.flows.find((n) => n.id === TAB_1)).toMatchObject({
+      type: 'tab',
+      label: 'Main Explicit',
+      info: 'Explicit tab info',
+      env: [{ name: 'MODE', type: 'str', value: 'integration' }],
+    });
 
     await callTool(rig.registry, rig.container, 'discard_staged_change', {
       staged_hash: staged.staged_hash,
