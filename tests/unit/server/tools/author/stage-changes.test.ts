@@ -375,6 +375,31 @@ describe('stage_changes batch behavior', () => {
     expect(await staging.read()).toBeNull();
   });
 
+  it('net-zero DRY-RUN batches return the zero diff instead of refusing (LAYO-6)', async () => {
+    // A dry run never writes the slot, so the no-op guard has nothing to
+    // protect — the zero diff itself is the useful signal (idempotency probes
+    // like layout_flow dry_run rely on it). Non-dry-run no-ops still refuse.
+    const out = await stage({
+      dry_run: true,
+      ops: [
+        { op: 'move_node', tab_id: 'tab1', node_id: 'worker', position: { x: 320, y: 160 } },
+        { op: 'move_node', tab_id: 'tab1', node_id: 'worker', position: { x: 260, y: 100 } },
+      ],
+    });
+
+    expect(out.ok).toBe(true);
+    expect(out.dry_run).toBe(true);
+    expect(out.staged).toBe(false);
+    expect(out.diff_summary).toEqual({
+      nodes_added: 0,
+      nodes_removed: 0,
+      nodes_modified: 0,
+      wires_added: 0,
+      wires_removed: 0,
+    });
+    expect(await staging.read()).toBeNull();
+  });
+
   it('identical re-stage yields an identical staged_hash', async () => {
     const input = {
       ops: [{ op: 'add_comment' as const, tab_id: 'tab1', key: 'stable', text: 'stable' }],

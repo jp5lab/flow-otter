@@ -39,6 +39,7 @@ import {
   type Position,
   type TabSpec,
 } from '../authoring/types.js';
+import type { Lane } from '../lanes.js';
 import { editorGeometryProvider, type PortAnchor } from '../render/metrics.js';
 
 import {
@@ -60,6 +61,8 @@ export interface ElkLayoutOpts {
   bounds?: Bounds;
   targetWidth?: number;
   onDiagnostic?: LayoutDiagnosticHandler;
+  laneHints?: ReadonlyMap<string, Lane>;
+  sectionOrder?: readonly string[];
 }
 
 const DEFAULTS = {
@@ -89,6 +92,8 @@ export interface ElkResolvedLayoutOpts {
   bounds: Bounds;
   targetWidth: number;
   onDiagnostic?: LayoutDiagnosticHandler;
+  laneHints?: ReadonlyMap<string, Lane>;
+  sectionOrder?: readonly string[];
 }
 
 export interface ElkGroupBounds {
@@ -116,6 +121,8 @@ export function resolveElkLayoutOpts(opts: ElkLayoutOpts = {}): ElkResolvedLayou
     bounds: opts.bounds ?? defaultBounds,
     targetWidth: opts.targetWidth ?? SPATIAL_SCAFFOLD_VISIBLE_WIDTH,
     ...(opts.onDiagnostic !== undefined ? { onDiagnostic: opts.onDiagnostic } : {}),
+    ...(opts.laneHints !== undefined ? { laneHints: opts.laneHints } : {}),
+    ...(opts.sectionOrder !== undefined ? { sectionOrder: opts.sectionOrder } : {}),
   };
 }
 

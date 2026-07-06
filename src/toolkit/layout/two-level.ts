@@ -220,7 +220,10 @@ function buildPartitionPlan(
   sections: readonly Section[],
   opts: ElkResolvedLayoutOpts,
 ): PartitionPlan {
-  const laneDerivation = deriveTabSpecLanes(tab);
+  const laneDerivation = deriveTabSpecLanes(
+    tab,
+    opts.laneHints !== undefined ? { laneHints: opts.laneHints } : {},
+  );
   const sectionDerivation = deriveTabSpecSections(tab);
   const facts = buildGroupFacts(tab);
   const sectionOrderById = new Map(sections.map((section, index) => [section.id, index]));
@@ -957,6 +960,45 @@ function applyLayout(tab: TabSpec, layout: MutableLayout): TabSpec {
   };
 }
 
+function sectionOrderIndexes(
+  sectionDerivation: ReturnType<typeof deriveTabSpecSections>,
+  requestedOrder: readonly string[] | undefined,
+): ReadonlyMap<string, number> {
+  const indexes = new Map<string, number>();
+  if (requestedOrder === undefined) return indexes;
+
+  let nextIndex = 0;
+  for (const key of requestedOrder) {
+    const sectionIds =
+      sectionDerivation.sectionIdsByGroupId.get(key) ??
+      (sectionDerivation.sections.some((section) => section.id === key) ? [key] : []);
+    for (const sectionId of sectionIds) {
+      if (!indexes.has(sectionId)) indexes.set(sectionId, nextIndex);
+    }
+    nextIndex++;
+  }
+  return indexes;
+}
+
+function applySectionOrder(
+  sections: readonly Section[],
+  sectionDerivation: ReturnType<typeof deriveTabSpecSections>,
+  requestedOrder: readonly string[] | undefined,
+): readonly Section[] {
+  if (requestedOrder === undefined || requestedOrder.length === 0) return sections;
+  const requested = sectionOrderIndexes(sectionDerivation, requestedOrder);
+  return [...sections].sort((a, b) => {
+    const aIndex = requested.get(a.id);
+    const bIndex = requested.get(b.id);
+    if (aIndex !== undefined && bIndex !== undefined && aIndex !== bIndex) {
+      return aIndex - bIndex;
+    }
+    if (aIndex !== undefined) return -1;
+    if (bIndex !== undefined) return 1;
+    return 0;
+  });
+}
+
 export async function layoutTabWithTwoLevel(
   tab: TabSpec,
   opts: ElkResolvedLayoutOpts,
@@ -964,11 +1006,16 @@ export async function layoutTabWithTwoLevel(
 ): Promise<TabSpec> {
   const sectionDerivation = deriveTabSpecSections(tab);
   if (sectionDerivation.sections.length === 0) return tab;
-  const plan = buildPartitionPlan(tab, sectionDerivation.sections, opts);
+  const sections = applySectionOrder(
+    sectionDerivation.sections,
+    sectionDerivation,
+    opts.sectionOrder,
+  );
+  const plan = buildPartitionPlan(tab, sections, opts);
   emitCrossLaneDiagnostics(tab, plan, opts);
 
   const sectionLayouts: PartialLayout[] = [];
-  for (const section of sectionDerivation.sections) {
+  for (const section of sections) {
     const layout = await layoutSection(tab, section, plan, sectionDerivation, opts, core);
     if (layout === 'engine-error') return tab;
     if (layout !== undefined) sectionLayouts.push(layout);

@@ -21,14 +21,16 @@ describe('toolsets', () => {
         'audit',
         'author',
         'author_specialists',
+        'layout',
         'deploy',
         'dangerous',
       ]),
     );
   });
 
-  it('default toolsets exclude author_specialists and dangerous', () => {
+  it('default toolsets exclude author_specialists, layout, and dangerous', () => {
     expect(DEFAULT_TOOLSETS).not.toContain('author_specialists');
+    expect(DEFAULT_TOOLSETS).not.toContain('layout');
     expect(DEFAULT_TOOLSETS).not.toContain('dangerous');
     expect(DEFAULT_TOOLSETS).toContain('core');
     expect(DEFAULT_TOOLSETS).toContain('author');
@@ -68,6 +70,12 @@ describe('toolsets', () => {
     expect(toolsetOf('replace_flows')).toBe('dangerous');
     expect(toolsetOf('reset_runtime')).toBe('dangerous');
     expect(toolsetOf('delete_tab')).toBe('dangerous');
+  });
+
+  it('layout_flow is in the default-off layout toolset', () => {
+    expect(toolsetOf('layout_flow')).toBe('layout');
+    expect(TOOLSETS.layout.default_enabled).toBe(false);
+    expect(TOOLSETS.layout.description).toContain('S6 evaluation gate');
   });
 
   it('no tool appears in more than one toolset', () => {

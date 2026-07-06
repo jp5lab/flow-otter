@@ -19,6 +19,7 @@ import { addSubflowInstanceTool } from './tools/author/add-subflow-instance.js';
 import { createSubflowDefinitionTool } from './tools/author/create-subflow-definition.js';
 import { discardStagedChangeTool } from './tools/author/discard-staged-change.js';
 import { instantiateTemplateTool } from './tools/author/instantiate-template.js';
+import { layoutFlowTool } from './tools/author/layout-flow.js';
 import { moveNodeTool } from './tools/author/move-node.js';
 import { planFlowTool } from './tools/author/plan-flow.js';
 import { removeGroupTool } from './tools/author/remove-group.js';
@@ -178,6 +179,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   discardStagedChangeTool as unknown as Tool<unknown, unknown>,
   instantiateTemplateTool as unknown as Tool<unknown, unknown>,
   planFlowTool as unknown as Tool<unknown, unknown>,
+  layoutFlowTool as unknown as Tool<unknown, unknown>,
   deployStagedChangeTool as unknown as Tool<unknown, unknown>,
   rollbackLastChangeTool as unknown as Tool<unknown, unknown>,
   setFlowsStateTool as unknown as Tool<unknown, unknown>,

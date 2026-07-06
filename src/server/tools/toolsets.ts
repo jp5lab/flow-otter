@@ -21,6 +21,7 @@ export type ToolsetName =
   | 'audit'
   | 'author'
   | 'author_specialists'
+  | 'layout'
   | 'deploy'
   | 'dangerous';
 
@@ -144,6 +145,13 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
       'add_link_out_node',
       'add_link_call_node',
     ],
+  },
+  layout: {
+    name: 'layout',
+    description:
+      'Opt-in layout authoring: layout_flow stages deterministic geometry-only changes. Default-off; flips to default-on when the S6 evaluation gate passes.',
+    default_enabled: false,
+    tool_names: ['layout_flow'],
   },
   deploy: {
     name: 'deploy',

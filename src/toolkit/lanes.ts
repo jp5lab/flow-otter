@@ -22,6 +22,10 @@ export interface LaneDerivation {
   readonly lanesById: ReadonlyMap<string, Lane>;
 }
 
+export interface TabLaneOptions {
+  readonly laneHints?: ReadonlyMap<string, Lane>;
+}
+
 interface LaneGraphNode {
   readonly id: string;
   readonly type: string;
@@ -280,27 +284,41 @@ export function deriveFlowsJsonLanes(flows: FlowsJson): ReadonlyMap<string, Lane
   return result;
 }
 
-function tabSpecGroupLanes(tab: TabSpec): Map<string, Lane> {
+function tabSpecGroupLanes(
+  tab: TabSpec,
+  hints: ReadonlyMap<string, Lane> | undefined,
+): Map<string, Lane> {
   const lanes = new Map<string, Lane>();
   for (const group of tab.groups) {
-    const lane = explicitLaneOf(group);
+    const lane = hints?.get(group.key) ?? explicitLaneOf(group);
     if (lane !== undefined) lanes.set(group.key, lane);
   }
   return lanes;
 }
 
-export function deriveTabSpecLanes(tab: TabSpec): LaneDerivation {
+export function deriveTabSpecLanes(tab: TabSpec, opts: TabLaneOptions = {}): LaneDerivation {
   const graph = emptyMutableGraph();
-  const groupLanes = tabSpecGroupLanes(tab);
+  const hints = opts.laneHints;
+  const groupLanes = tabSpecGroupLanes(tab, hints);
 
   for (const node of tab.nodes) {
     const groupLane = node.groupKey !== undefined ? groupLanes.get(node.groupKey) : undefined;
-    addGraphNode(graph, node.key, node.type, explicitLaneOf(node) ?? groupLane);
+    addGraphNode(
+      graph,
+      node.key,
+      node.type,
+      hints?.get(node.key) ?? explicitLaneOf(node) ?? groupLane,
+    );
   }
   for (const junction of tab.junctions ?? []) {
     const groupLane =
       junction.groupKey !== undefined ? groupLanes.get(junction.groupKey) : undefined;
-    addGraphNode(graph, junction.key, 'junction', explicitLaneOf(junction) ?? groupLane);
+    addGraphNode(
+      graph,
+      junction.key,
+      'junction',
+      hints?.get(junction.key) ?? explicitLaneOf(junction) ?? groupLane,
+    );
   }
   for (const connection of tab.connections) {
     if (graph.nodes.has(connection.fromKey) && graph.nodes.has(connection.toKey)) {

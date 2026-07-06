@@ -24,6 +24,7 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'add_subflow_instance',
   'create_subflow_definition',
   'instantiate_template',
+  'layout_flow',
   'move_node',
   'remove_group',
   'remove_node',

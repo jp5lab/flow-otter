@@ -21,6 +21,8 @@ export interface AuthorOpInput {
   readonly toolName: string;
   /** Audit `reason` string. Defaults to `toolName`. */
   readonly reason?: string;
+  /** Validate/diff without writing the staging slot or render sidecar. */
+  readonly dryRun?: boolean;
 }
 
 export interface AuthorOpResult<TExtras> {
@@ -206,6 +208,7 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
       toolName: input.toolName,
       ...(input.reason !== undefined ? { reason: input.reason } : {}),
       ...(autoClearDiagnostic !== undefined ? { autoClearDiagnostic } : {}),
+      ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
     },
   );
 
@@ -248,7 +251,11 @@ export async function compileValidateAndStage(
   // to the runtime means the op changed nothing — staging it would only arm a
   // no-change deploy for REQUIRE_DIFF_BEFORE_DEPLOY to refuse later. Refuse at
   // stage time instead; nothing is written to the staging slot.
-  if (compiled.hash === priorHash) {
+  // DRY-RUN EXEMPTION (LAYO-6): a dry run never writes the slot, so there is
+  // no no-change deploy to arm — returning the zero diff is more useful than
+  // refusing (e.g. layout_flow dry_run on an already-laid-out tab reports
+  // zero diff as its idempotency signal). Non-dry-run no-ops still refuse.
+  if (compiled.hash === priorHash && meta.dryRun !== true) {
     throw new ValidationFailedError(
       `${meta.toolName} produced no change — the compiled flows are byte-identical to the current runtime flows, so nothing was staged. ` +
         `Check the object kind and key you addressed (node vs junction vs comment vs group), and check that the new values actually differ from the current ones.`,
