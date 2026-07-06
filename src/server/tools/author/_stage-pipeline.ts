@@ -102,7 +102,7 @@ export function withStagedAuthorToolDescription(description: string): string {
 
 export async function guardPendingStageForAuthorOp(
   ctx: ToolContext,
-  input: AuthorOpInput & { readonly amendOf?: string },
+  input: AuthorOpInput & { readonly amendOf?: string; readonly forceTakeover?: boolean },
   priorHash: string,
 ): Promise<PendingStageGuardResult> {
   const pending = await ctx.staging.read();
@@ -121,6 +121,16 @@ export async function guardPendingStageForAuthorOp(
       : '';
 
   if (input.amendOf !== undefined && input.amendOf === pending.stagedHash) {
+    if (pending.agent_id !== undefined && pending.agent_id !== ctx.agentId) {
+      if (input.forceTakeover !== true) {
+        throw new ToolBlockedError(
+          `A staged change is already pending deploy (reason '${pending.reason}', staged_hash ${pending.stagedHash.slice(0, 12)}…, staged at ${pending.stagedAt}${otherAgent}). ` +
+            `Amending '${input.toolName}' now would silently discard another agent process's staged work. ` +
+            `Pass force_takeover:true with amend_of to replace it anyway, or discard it ` +
+            `(discard_staged_change — pass force_takeover: true if it was staged by a different agent process).`,
+        );
+      }
+    }
     return { amended: true };
   }
 

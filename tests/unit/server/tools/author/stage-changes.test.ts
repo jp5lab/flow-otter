@@ -10,8 +10,9 @@ import { JsonlAuditLogger } from '../../../../../src/server/audit/jsonl.js';
 import { loadConfig } from '../../../../../src/server/config/load.js';
 import { deployStagedChangeTool } from '../../../../../src/server/tools/deploy/deploy-staged-change.js';
 import { rollbackLastChangeTool } from '../../../../../src/server/tools/deploy/rollback-last-change.js';
-import type { ToolContext } from '../../../../../src/server/tools/_tool.js';
+import { ToolBlockedError, type ToolContext } from '../../../../../src/server/tools/_tool.js';
 import { addCommentTool } from '../../../../../src/server/tools/author/add-comment.js';
+import { discardStagedChangeTool } from '../../../../../src/server/tools/author/discard-staged-change.js';
 import { stageChangesTool } from '../../../../../src/server/tools/author/stage-changes.js';
 import { toolErrorPayload } from '../../../../../src/server/transport/tool-error.js';
 import { canonicalHash } from '../../../../../src/shared/hash.js';
@@ -370,6 +371,130 @@ describe('stage_changes amend_of', () => {
     expect(amended.amended).toBe(true);
     expect(amended.staged_hash).not.toBe(first.staged_hash);
     expect((await staging.read())?.stagedHash).toBe(amended.staged_hash);
+  });
+
+  it('refuses a foreign-agent amend without force_takeover and leaves the pending stage untouched', async () => {
+    const first = await stage({
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'first', text: 'first' }],
+    });
+    await staging.write({ ...(await staging.read())!, agent_id: 'pid-OTHER' });
+
+    const err = await stage({
+      amend_of: first.staged_hash,
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'second', text: 'second' }],
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ToolBlockedError);
+    expect((err as Error).message).toMatch(/force_takeover/);
+    const staged = await staging.read();
+    expect(staged?.stagedHash).toBe(first.staged_hash);
+    expect(staged?.agent_id).toBe('pid-OTHER');
+  });
+
+  it('allows a foreign-agent amend when force_takeover is true', async () => {
+    const first = await stage({
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'first', text: 'first' }],
+    });
+    await staging.write({ ...(await staging.read())!, agent_id: 'pid-OTHER' });
+
+    const amended = await stage({
+      amend_of: first.staged_hash,
+      force_takeover: true,
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'takeover', text: 'takeover' }],
+    });
+
+    expect(amended.amended).toBe(true);
+    expect(amended.staged_hash).not.toBe(first.staged_hash);
+    expect((await staging.read())?.agent_id).toBe('pid-test');
+  });
+
+  it('allows a same-agent amend without force_takeover', async () => {
+    const first = await stage({
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'first', text: 'first' }],
+    });
+    await staging.write({ ...(await staging.read())!, agent_id: 'pid-test' });
+
+    const amended = await stage({
+      amend_of: first.staged_hash,
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'same-agent', text: 'same-agent' }],
+    });
+
+    expect(amended.amended).toBe(true);
+    expect((await staging.read())?.agent_id).toBe('pid-test');
+  });
+
+  it('treats legacy stages without agent_id as owned for amend, matching discard back-compat', async () => {
+    const discardCandidate = await stage({
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'discard-legacy', text: 'legacy' }],
+    });
+    const stagedForDiscard = (await staging.read())!;
+    await staging.write({
+      flows: stagedForDiscard.flows,
+      basedOnSnapshotHash: stagedForDiscard.basedOnSnapshotHash,
+      basedOnRev: stagedForDiscard.basedOnRev,
+      stagedHash: stagedForDiscard.stagedHash,
+      stagedAt: stagedForDiscard.stagedAt,
+      actor: stagedForDiscard.actor,
+      reason: stagedForDiscard.reason,
+    });
+    const discarded = await discardStagedChangeTool.handler(
+      { staged_hash: discardCandidate.staged_hash },
+      ctx,
+    );
+    expect(discarded.discarded).toBe(true);
+
+    const amendCandidate = await stage({
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'amend-legacy', text: 'legacy' }],
+    });
+    const stagedForAmend = (await staging.read())!;
+    await staging.write({
+      flows: stagedForAmend.flows,
+      basedOnSnapshotHash: stagedForAmend.basedOnSnapshotHash,
+      basedOnRev: stagedForAmend.basedOnRev,
+      stagedHash: stagedForAmend.stagedHash,
+      stagedAt: stagedForAmend.stagedAt,
+      actor: stagedForAmend.actor,
+      reason: stagedForAmend.reason,
+    });
+
+    const amended = await stage({
+      amend_of: amendCandidate.staged_hash,
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'amended-legacy', text: 'legacy' }],
+    });
+
+    expect(amended.amended).toBe(true);
+    expect((await staging.read())?.agent_id).toBe('pid-test');
+  });
+
+  it('does not let force_takeover bypass non-amend pending-stage refusal', async () => {
+    const first = await stage({
+      ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'first', text: 'first' }],
+    });
+    await staging.write({ ...(await staging.read())!, agent_id: 'pid-OTHER' });
+
+    await expect(
+      stage({
+        force_takeover: true,
+        ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'second', text: 'second' }],
+      }),
+    ).rejects.toThrow(/pending deploy.*discard_staged_change/s);
+    expect((await staging.read())?.stagedHash).toBe(first.staged_hash);
+  });
+
+  it('accepts force_takeover only on stage_changes; single-op author tools reject it as unknown input', () => {
+    expect(
+      stageChangesTool.inputZod.safeParse({
+        force_takeover: true,
+        ops: [{ op: 'add_comment', tab_id: 'tab1', key: 'schema', text: 'schema' }],
+      }).success,
+    ).toBe(true);
+    expect(
+      addCommentTool.inputZod.safeParse({
+        tab_id: 'tab1',
+        text: 'single op',
+        force_takeover: true,
+      }).success,
+    ).toBe(false);
   });
 
   it('refuses stale or wrong amend_of hashes and leaves the pending stage untouched', async () => {

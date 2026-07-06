@@ -23,6 +23,7 @@ const InputSchema = z
     reason: z.string().min(1).optional(),
     dry_run: z.boolean().optional(),
     amend_of: z.string().min(1).optional(),
+    force_takeover: z.boolean().optional(),
   })
   .strict();
 type Input = z.infer<typeof InputSchema>;
@@ -60,7 +61,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const stageChangesTool: Tool<Input, Output> = {
   name: 'stage_changes',
   description: withStagedAuthorToolDescription(
-    'Stages an atomic ordered batch of authoring ops (1..200) as ONE staged change: add/update/move/remove nodes, junctions, groups, comments, wires, and links. References resolve against earlier ops in the same batch before falling back to current runtime ids. Pass amend_of with the exact pending staged_hash to replace that pending batch during an iterate loop. Does NOT deploy.',
+    'Stages an atomic ordered batch of authoring ops (1..200) as ONE staged change: add/update/move/remove nodes, junctions, groups, comments, wires, and links. References resolve against earlier ops in the same batch before falling back to current runtime ids. Pass amend_of with the exact pending staged_hash to replace that pending batch during an iterate loop; add force_takeover:true only when intentionally amending a stage authored by a different agent process. Does NOT deploy.',
   ),
   tier: 'author',
   inputZod: InputSchema,
@@ -86,6 +87,11 @@ export const stageChangesTool: Tool<Input, Output> = {
         description:
           'Exact staged_hash of the current pending stage. When it matches, stage_changes replaces that pending stage; when absent or mismatched, the normal pending-stage refusal applies.',
       },
+      force_takeover: {
+        type: 'boolean',
+        description:
+          'Amend a stage authored by a different agent process. Default false; only applies with amend_of.',
+      },
     },
   },
   outputZod: OutputSchema,
@@ -98,6 +104,7 @@ export const stageChangesTool: Tool<Input, Output> = {
         toolName: 'stage_changes',
         ...(input.reason !== undefined ? { reason: input.reason } : {}),
         ...(input.amend_of !== undefined ? { amendOf: input.amend_of } : {}),
+        ...(input.force_takeover !== undefined ? { forceTakeover: input.force_takeover } : {}),
       },
       priorHash,
     );
