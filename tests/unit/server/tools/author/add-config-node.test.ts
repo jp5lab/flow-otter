@@ -117,7 +117,7 @@ describe('add_config_node tool', () => {
     ).toThrow();
   });
 
-  it('rejects credentials in passthrough without staging', async () => {
+  it('rejects credentials in mqtt-broker passthrough without staging', async () => {
     await expect(
       addConfigNodeTool.handler(
         {
@@ -212,7 +212,16 @@ describe('add_config_node tool', () => {
         key: 'broker-main',
         type: 'mqtt-broker',
         label: 'Broker',
-        passthrough: { broker: 'localhost', port: '1883' },
+        passthrough: {
+          broker: 'localhost',
+          port: '1883',
+          protocolVersion: 5,
+          willTopic: 'status/offline',
+          willQos: '1',
+          willRetain: 'true',
+          willPayload: 'offline',
+          willMsg: { payloadType: 'str' },
+        },
       },
       ctx,
     )) as {
@@ -224,7 +233,7 @@ describe('add_config_node tool', () => {
 
     expect(out.ok).toBe(true);
     expect(out.added_config_node_id).toMatch(/^[0-9a-f]{16}$/);
-    expect(out.type_had_schema).toBe(false);
+    expect(out.type_had_schema).toBe(true);
     expect(out.diff_summary.nodes_added).toBe(1);
 
     const staged = await ctx.staging.read();
@@ -235,6 +244,12 @@ describe('add_config_node tool', () => {
       type: 'mqtt-broker',
       name: 'Broker',
       broker: 'localhost',
+      protocolVersion: 5,
+      willTopic: 'status/offline',
+      willQos: '1',
+      willRetain: 'true',
+      willPayload: 'offline',
+      willMsg: { payloadType: 'str' },
       _authoringKey: 'broker-main',
     });
     for (const field of ['x', 'y', 'z', 'wires'] as const) {
