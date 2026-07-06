@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### D-2 — Semantic layout lint rules and shared lanes
+
+- Added the shared lane module (`src/toolkit/lanes.ts`) with the ratified `main` / `indicate` / `error` vocabulary, `LANE_ORDER = ['main','indicate','error']`, `LANE_GAP = 120`, and one topology closure used by both `FlowsJson` and `TabSpec` adapters. The closure reads `_authoringLane` / future `lane` annotations when present, seeds catch/complete into the error lane and status into the indicate lane, traverses junctions, and conservatively keeps shared sinks reachable from a non-error root in the main lane.
+- Replaced the four D-2 abstaining stubs with real semantic rules: `layout-error-lane-below` uses median lane y values (pinning canonical e1 at main 260 / error 560), `layout-stage-order` scores inter-group DAG edges by group member centroids and abstains when stage groups cannot be inferred, `layout-affirmative-on-top` compares port-0 mean target y against later ports, and `layout-header-presence` requires groups with at least three members to have a name or explicit/header-position comment. All diagnostics remain warning/info only, preserving the D-1 stage-gate severity policy.
+- Added D-2 regressions for catch→function→debug error closure, dual-fed demotion to main, junction traversal, status→indicate closure, explicit lane annotations, TabSpec adapter parity, per-rule failing fixtures, semantic abstentions, and the e1 median pin.
+
 ### D-1 — Layout lint core and editor-true lint geometry
 
 - Added the v1.5 layout-lint registry with the eight frozen audit rule ids. The geometric rules now score wire crossings, backward wires, sibling group overlap, and viewport overflow from the shared editor `GeometryProvider`; the four semantic D-2 rules register as abstaining stubs with info diagnostics and do not affect the weighted overall score.

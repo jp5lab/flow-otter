@@ -1,4 +1,11 @@
-import type { FlowsJson } from '../../shared/flows-json.js';
+import {
+  isComment,
+  isGroup,
+  type FlowsJson,
+  type FlowsJsonNode,
+  type GroupNode,
+} from '../../shared/flows-json.js';
+import { deriveFlowsJsonLanes } from '../lanes.js';
 import type { GeometryProvider } from '../render/metrics.js';
 import type { Diagnostic } from '../validate/index.js';
 
@@ -65,7 +72,11 @@ interface RuleEvaluation extends LayoutLintRuleResult {
 interface RuleDefinition {
   readonly id: LayoutRuleId;
   readonly weight: number;
-  evaluate(geometry: LayoutGeometry, opts: RequiredLayoutLintOptions): RuleEvaluation;
+  evaluate(
+    flows: FlowsJson,
+    geometry: LayoutGeometry,
+    opts: RequiredLayoutLintOptions,
+  ): RuleEvaluation;
 }
 
 interface RequiredLayoutLintOptions {
@@ -83,25 +94,104 @@ function scoreFrom(offenderCount: number, opportunityCount: number): number {
   return Math.max(0, 1 - offenderCount / Math.max(1, opportunityCount));
 }
 
-function abstainingRule(id: LayoutRuleId, weight: number): RuleDefinition {
+function abstain(id: LayoutRuleId, weight: number, message: string): RuleEvaluation {
   return {
-    id,
+    rule: id,
+    score: 1,
     weight,
-    evaluate: () => ({
-      rule: id,
-      score: 1,
-      weight,
-      offenders: [],
-      diagnostics: [
-        {
-          severity: 'info',
-          rule: id,
-          message: 'Rule not yet implemented (D-2); excluded from weighted layout score.',
-        },
-      ],
-      abstain: true,
-    }),
+    offenders: [],
+    diagnostics: [
+      {
+        severity: 'info',
+        rule: id,
+        message,
+      },
+    ],
+    abstain: true,
   };
+}
+
+function mean(values: readonly number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid]!;
+  return (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+function authoringKeyOf(node: FlowsJsonNode): string | undefined {
+  const key = (node as { _authoringKey?: unknown })._authoringKey;
+  return typeof key === 'string' ? key : undefined;
+}
+
+function named(node: FlowsJsonNode): boolean {
+  const name = (node as { name?: unknown }).name;
+  return typeof name === 'string' && name.trim() !== '';
+}
+
+function headerTargetOf(node: FlowsJsonNode): string | undefined {
+  const record = node as { _authoringHeaderFor?: unknown; headerFor?: unknown };
+  if (typeof record._authoringHeaderFor === 'string') return record._authoringHeaderFor;
+  if (typeof record.headerFor === 'string') return record.headerFor;
+  return undefined;
+}
+
+function horizontalOverlap(a: Rect, b: Rect): number {
+  return Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1));
+}
+
+interface FlowFacts {
+  readonly nodesById: ReadonlyMap<string, FlowsJsonNode>;
+  readonly groupMembersById: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly groupIdByMemberId: ReadonlyMap<string, string>;
+  readonly commentsByTabId: ReadonlyMap<string, readonly FlowsJsonNode[]>;
+}
+
+function zOf(node: FlowsJsonNode): string | undefined {
+  const z = (node as { z?: unknown }).z;
+  return typeof z === 'string' ? z : undefined;
+}
+
+function flowFacts(flows: FlowsJson): FlowFacts {
+  const nodesById = new Map<string, FlowsJsonNode>();
+  const groupMembersById = new Map<string, Set<string>>();
+  const groupIdByMemberId = new Map<string, string>();
+  const commentsByTabId = new Map<string, FlowsJsonNode[]>();
+
+  for (const node of flows) {
+    nodesById.set(node.id, node);
+    if (isGroup(node)) {
+      const members = new Set<string>();
+      for (const id of node.nodes) members.add(id);
+      groupMembersById.set(node.id, members);
+      for (const id of members) groupIdByMemberId.set(id, node.id);
+    }
+  }
+
+  for (const node of flows) {
+    const groupId = (node as { g?: unknown }).g;
+    if (typeof groupId === 'string') {
+      let members = groupMembersById.get(groupId);
+      if (members === undefined) {
+        members = new Set();
+        groupMembersById.set(groupId, members);
+      }
+      members.add(node.id);
+      groupIdByMemberId.set(node.id, groupId);
+    }
+    if (isComment(node)) {
+      const tabId = zOf(node);
+      if (tabId === undefined) continue;
+      const comments = commentsByTabId.get(tabId);
+      if (comments === undefined) commentsByTabId.set(tabId, [node]);
+      else comments.push(node);
+    }
+  }
+
+  return { nodesById, groupMembersById, groupIdByMemberId, commentsByTabId };
 }
 
 function cubicPoint(from: Point, to: Point, t: number): Point {
@@ -208,7 +298,7 @@ function wireCrossingsRule(): RuleDefinition {
   return {
     id: RULE_WIRE_CROSSINGS,
     weight: 3,
-    evaluate: (geometry) => {
+    evaluate: (_flows, geometry) => {
       const offenders: Array<Readonly<Record<string, unknown>>> = [];
       const diagnostics: Diagnostic[] = [];
       let opportunities = 0;
@@ -257,7 +347,7 @@ function backwardWiresRule(): RuleDefinition {
   return {
     id: RULE_BACKWARD_WIRES,
     weight: 3,
-    evaluate: (geometry) => {
+    evaluate: (_flows, geometry) => {
       const offenders: Array<Readonly<Record<string, unknown>>> = [];
       const diagnostics: Diagnostic[] = [];
       let opportunities = 0;
@@ -307,7 +397,7 @@ function groupOverlapRule(): RuleDefinition {
   return {
     id: RULE_GROUP_OVERLAP,
     weight: 2,
-    evaluate: (geometry) => {
+    evaluate: (_flows, geometry) => {
       const offenders: Array<Readonly<Record<string, unknown>>> = [];
       const diagnostics: Diagnostic[] = [];
       let opportunities = 0;
@@ -349,7 +439,7 @@ function viewportOverflowRule(): RuleDefinition {
   return {
     id: RULE_VIEWPORT_OVERFLOW,
     weight: 1,
-    evaluate: (geometry, opts) => {
+    evaluate: (_flows, geometry, opts) => {
       const offenders: Array<Readonly<Record<string, unknown>>> = [];
       const diagnostics: Diagnostic[] = [];
       const usableWidth = Math.max(1, opts.viewportWindowWidth - EDITOR_CHROME_WIDTH);
@@ -388,12 +478,302 @@ function viewportOverflowRule(): RuleDefinition {
   };
 }
 
+function errorLaneBelowRule(): RuleDefinition {
+  return {
+    id: RULE_ERROR_LANE_BELOW,
+    weight: 2,
+    evaluate: (flows, geometry) => {
+      const offenders: Array<Readonly<Record<string, unknown>>> = [];
+      const diagnostics: Diagnostic[] = [];
+      const lanesByTab = deriveFlowsJsonLanes(flows);
+      let opportunities = 0;
+
+      for (const tab of geometry.tabs.values()) {
+        const lanes = lanesByTab.get(tab.tabId)?.lanesById;
+        if (lanes === undefined) continue;
+        const mainYs: number[] = [];
+        const errorYs: number[] = [];
+        for (const object of tab.objects.values()) {
+          const lane = lanes.get(object.id);
+          if (lane === 'main') mainYs.push(object.center.y);
+          else if (lane === 'error') errorYs.push(object.center.y);
+        }
+        if (mainYs.length === 0 || errorYs.length === 0) continue;
+        opportunities++;
+        const mainMedianY = median(mainYs);
+        const errorMedianY = median(errorYs);
+        if (errorMedianY > mainMedianY) continue;
+        const offender = { tabId: tab.tabId, mainMedianY, errorMedianY };
+        offenders.push(offender);
+        diagnostics.push({
+          severity: 'warning',
+          rule: RULE_ERROR_LANE_BELOW,
+          message: `Tab '${tab.tabId}' error lane median y ${errorMedianY}px is not below main lane median y ${mainMedianY}px.`,
+          tabId: tab.tabId,
+          context: offender,
+        });
+      }
+
+      if (opportunities === 0) {
+        return abstain(
+          RULE_ERROR_LANE_BELOW,
+          2,
+          'No tab has both inferred main-lane and error-lane nodes; excluded from weighted layout score.',
+        );
+      }
+
+      return {
+        rule: RULE_ERROR_LANE_BELOW,
+        score: scoreFrom(offenders.length, opportunities),
+        weight: 2,
+        offenders,
+        diagnostics,
+      };
+    },
+  };
+}
+
+function groupCentroidX(
+  tab: LayoutGeometry['tabs'] extends ReadonlyMap<string, infer T> ? T : never,
+  group: LayoutObject,
+  memberIds: ReadonlySet<string> | undefined,
+): number {
+  const memberXs: number[] = [];
+  for (const id of memberIds ?? []) {
+    const member = tab.objects.get(id);
+    if (member !== undefined && member.kind !== 'group') memberXs.push(member.center.x);
+  }
+  return memberXs.length > 0 ? mean(memberXs) : group.center.x;
+}
+
+function stageOrderRule(): RuleDefinition {
+  return {
+    id: RULE_STAGE_ORDER,
+    weight: 2,
+    evaluate: (flows, geometry) => {
+      const facts = flowFacts(flows);
+      const offenders: Array<Readonly<Record<string, unknown>>> = [];
+      const diagnostics: Diagnostic[] = [];
+      let hasAnyGroup = false;
+      let opportunities = 0;
+
+      for (const tab of geometry.tabs.values()) {
+        if (tab.groups.length > 0) hasAnyGroup = true;
+        const centroids = new Map<string, number>();
+        for (const group of tab.groups) {
+          centroids.set(group.id, groupCentroidX(tab, group, facts.groupMembersById.get(group.id)));
+        }
+
+        const seenEdges = new Set<string>();
+        for (const wire of tab.wires) {
+          const fromGroupId =
+            facts.groupIdByMemberId.get(wire.sourceId) ??
+            tab.objects.get(wire.sourceId)?.parentGroupId;
+          const toGroupId =
+            facts.groupIdByMemberId.get(wire.targetId) ??
+            tab.objects.get(wire.targetId)?.parentGroupId;
+          if (fromGroupId === undefined || toGroupId === undefined || fromGroupId === toGroupId) {
+            continue;
+          }
+          if (!centroids.has(fromGroupId) || !centroids.has(toGroupId)) continue;
+          const edgeKey = `${fromGroupId}\u0000${toGroupId}`;
+          if (seenEdges.has(edgeKey)) continue;
+          seenEdges.add(edgeKey);
+          opportunities++;
+          const fromCentroidX = centroids.get(fromGroupId)!;
+          const toCentroidX = centroids.get(toGroupId)!;
+          if (fromCentroidX <= toCentroidX) continue;
+          const offender = {
+            tabId: tab.tabId,
+            fromGroupId,
+            toGroupId,
+            fromCentroidX,
+            toCentroidX,
+          };
+          offenders.push(offender);
+          diagnostics.push({
+            severity: 'warning',
+            rule: RULE_STAGE_ORDER,
+            message: `Inter-group edge '${fromGroupId}' -> '${toGroupId}' runs right-to-left on tab '${tab.tabId}'.`,
+            tabId: tab.tabId,
+            nodeId: fromGroupId,
+            context: offender,
+          });
+        }
+      }
+
+      if (!hasAnyGroup) {
+        return abstain(
+          RULE_STAGE_ORDER,
+          2,
+          'No groups are present, so stage order cannot be inferred; excluded from weighted layout score.',
+        );
+      }
+      if (opportunities === 0) {
+        return abstain(
+          RULE_STAGE_ORDER,
+          2,
+          'No inter-group DAG edges are present, so stage order cannot be inferred; excluded from weighted layout score.',
+        );
+      }
+
+      return {
+        rule: RULE_STAGE_ORDER,
+        score: scoreFrom(offenders.length, opportunities),
+        weight: 2,
+        offenders,
+        diagnostics,
+      };
+    },
+  };
+}
+
+function affirmativeOnTopRule(): RuleDefinition {
+  return {
+    id: RULE_AFFIRMATIVE_ON_TOP,
+    weight: 1,
+    evaluate: (_flows, geometry) => {
+      const offenders: Array<Readonly<Record<string, unknown>>> = [];
+      const diagnostics: Diagnostic[] = [];
+      let opportunities = 0;
+
+      for (const tab of geometry.tabs.values()) {
+        const bySource = new Map<string, Map<number, number[]>>();
+        for (const wire of tab.wires) {
+          let ports = bySource.get(wire.sourceId);
+          if (ports === undefined) {
+            ports = new Map();
+            bySource.set(wire.sourceId, ports);
+          }
+          const ys = ports.get(wire.sourcePort);
+          if (ys === undefined) ports.set(wire.sourcePort, [wire.to.y]);
+          else ys.push(wire.to.y);
+        }
+
+        for (const [nodeId, ports] of bySource) {
+          const port0Ys = ports.get(0);
+          if (port0Ys === undefined || port0Ys.length === 0) continue;
+          const port0MeanTargetY = mean(port0Ys);
+          for (const [port, ys] of ports) {
+            if (port === 0 || ys.length === 0) continue;
+            opportunities++;
+            const portMeanTargetY = mean(ys);
+            if (port0MeanTargetY <= portMeanTargetY) continue;
+            const offender = {
+              tabId: tab.tabId,
+              nodeId,
+              port0MeanTargetY,
+              comparedPort: port,
+              comparedPortMeanTargetY: portMeanTargetY,
+            };
+            offenders.push(offender);
+            diagnostics.push({
+              severity: 'warning',
+              rule: RULE_AFFIRMATIVE_ON_TOP,
+              message: `Node '${nodeId}' output port 0 targets are below port ${port} targets on tab '${tab.tabId}'.`,
+              tabId: tab.tabId,
+              nodeId,
+              context: offender,
+            });
+          }
+        }
+      }
+
+      if (opportunities === 0) {
+        return abstain(
+          RULE_AFFIRMATIVE_ON_TOP,
+          1,
+          'No multi-output wired nodes have comparable port targets; excluded from weighted layout score.',
+        );
+      }
+
+      return {
+        rule: RULE_AFFIRMATIVE_ON_TOP,
+        score: scoreFrom(offenders.length, opportunities),
+        weight: 1,
+        offenders,
+        diagnostics,
+      };
+    },
+  };
+}
+
+function hasHeaderComment(
+  group: LayoutObject,
+  groupNode: GroupNode,
+  tab: LayoutGeometry['tabs'] extends ReadonlyMap<string, infer T> ? T : never,
+  facts: FlowFacts,
+): boolean {
+  const groupKey = authoringKeyOf(groupNode);
+  for (const commentNode of facts.commentsByTabId.get(group.tabId) ?? []) {
+    if (!named(commentNode)) continue;
+    const target = headerTargetOf(commentNode);
+    if (target !== undefined && (target === group.id || target === groupKey)) return true;
+    const commentObject = tab.objects.get(commentNode.id);
+    if (commentObject === undefined) continue;
+    const aboveGroup = commentObject.box.y2 <= group.box.y1;
+    const nearGroup = group.box.y1 - commentObject.box.y2 <= 80;
+    if (aboveGroup && nearGroup && horizontalOverlap(commentObject.box, group.box) > 0) return true;
+  }
+  return false;
+}
+
+function headerPresenceRule(): RuleDefinition {
+  return {
+    id: RULE_HEADER_PRESENCE,
+    weight: 1,
+    evaluate: (flows, geometry) => {
+      const facts = flowFacts(flows);
+      const offenders: Array<Readonly<Record<string, unknown>>> = [];
+      const diagnostics: Diagnostic[] = [];
+      let opportunities = 0;
+
+      for (const tab of geometry.tabs.values()) {
+        for (const group of tab.groups) {
+          const groupNode = facts.nodesById.get(group.id);
+          if (groupNode === undefined || !isGroup(groupNode)) continue;
+          const memberCount = facts.groupMembersById.get(group.id)?.size ?? groupNode.nodes.length;
+          if (memberCount < 3) continue;
+          opportunities++;
+          if (named(groupNode) || hasHeaderComment(group, groupNode, tab, facts)) continue;
+          const offender = { tabId: tab.tabId, groupId: group.id, memberCount };
+          offenders.push(offender);
+          diagnostics.push({
+            severity: 'warning',
+            rule: RULE_HEADER_PRESENCE,
+            message: `Group '${group.id}' has ${memberCount} members but no name or header comment on tab '${tab.tabId}'.`,
+            tabId: tab.tabId,
+            nodeId: group.id,
+            context: offender,
+          });
+        }
+      }
+
+      if (opportunities === 0) {
+        return abstain(
+          RULE_HEADER_PRESENCE,
+          1,
+          'No groups have at least three members; excluded from weighted layout score.',
+        );
+      }
+
+      return {
+        rule: RULE_HEADER_PRESENCE,
+        score: scoreFrom(offenders.length, opportunities),
+        weight: 1,
+        offenders,
+        diagnostics,
+      };
+    },
+  };
+}
+
 const RULES: readonly RuleDefinition[] = [
-  abstainingRule(RULE_STAGE_ORDER, 2),
+  stageOrderRule(),
   groupOverlapRule(),
-  abstainingRule(RULE_HEADER_PRESENCE, 1),
-  abstainingRule(RULE_ERROR_LANE_BELOW, 2),
-  abstainingRule(RULE_AFFIRMATIVE_ON_TOP, 1),
+  headerPresenceRule(),
+  errorLaneBelowRule(),
+  affirmativeOnTopRule(),
   wireCrossingsRule(),
   backwardWiresRule(),
   viewportOverflowRule(),
@@ -406,7 +786,7 @@ export function layoutLint(flows: FlowsJson, opts: LayoutLintOptions = {}): Layo
   const required: RequiredLayoutLintOptions = {
     viewportWindowWidth: opts.viewportWindowWidth ?? DEFAULT_VIEWPORT_WINDOW_WIDTH,
   };
-  const evaluations = RULES.map((r) => r.evaluate(geometry, required));
+  const evaluations = RULES.map((r) => r.evaluate(flows, geometry, required));
   let numerator = 0;
   let denominator = 0;
   for (const r of evaluations) {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
 import { describe, expect, it } from 'vitest';
@@ -5,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { FlowsJson, FlowsJsonNode } from '../../../../src/shared/flows-json.js';
 import { collectLayoutGeometry } from '../../../../src/toolkit/lint/geometry.js';
 import { layoutLint, type LayoutLintReport } from '../../../../src/toolkit/lint/layout-lint.js';
+import { deriveFlowsJsonLanes } from '../../../../src/toolkit/lanes.js';
 import type { GeometryProvider } from '../../../../src/toolkit/render/metrics.js';
 
 const TAB = { id: 'tab1', type: 'tab', label: 'Main' } as const;
@@ -40,22 +42,203 @@ function rule(report: LayoutLintReport, id: (typeof RULE_IDS)[number]) {
   return found;
 }
 
+function medianOf(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+function fixtureFlows(name: string): FlowsJson {
+  const raw = readFileSync(
+    new URL(`../../../fixtures/audit-2026-06-10/${name}`, import.meta.url),
+    'utf8',
+  );
+  return (JSON.parse(raw) as { flows: FlowsJson }).flows;
+}
+
 describe('layoutLint rule registry', () => {
-  it('registers the eight frozen ids in audit order, with D-2 semantic rules abstaining', () => {
+  it('registers the eight frozen ids in audit order', () => {
     const report = layoutLint(flow(regular('n1', 'inject', 100, 100, { wires: [[]] })));
 
     expect(report.rules.map((r) => r.rule)).toEqual(RULE_IDS);
+    expect(report.diagnostics.some((d) => d.message.includes('not yet implemented'))).toBe(false);
+  });
+});
+
+describe('semantic layout rules', () => {
+  it('uses medians for error-lane-below so the e1-agent 560-over-260 shape passes', () => {
+    const report = layoutLint(
+      flow(
+        regular('main1', 'inject', 100, 100, { wires: [[]] }),
+        regular('main2', 'function', 300, 260, { wires: [[]] }),
+        regular('main-outlier', 'debug', 500, 700),
+        regular('catch1', 'catch', 100, 520, { wires: [['err-fn']] }),
+        regular('err-fn', 'function', 300, 560, { wires: [['err-debug']] }),
+        regular('err-debug', 'debug', 500, 600),
+      ),
+    );
+
+    expect(rule(report, 'layout-error-lane-below').offenders).toHaveLength(0);
+  });
+
+  it('pins canonical e1-agent lane medians at main 260 and error 560', () => {
+    const flows = fixtureFlows('e1-flows.json');
+    const geometry = collectLayoutGeometry(flows);
+    const tab = [...geometry.tabs.values()][0]!;
+    const lanes = deriveFlowsJsonLanes(flows).get(tab.tabId)?.lanesById;
+    if (lanes === undefined) throw new Error('missing lane derivation');
+    const mainYs: number[] = [];
+    const errorYs: number[] = [];
+    for (const object of tab.objects.values()) {
+      const lane = lanes.get(object.id);
+      if (lane === 'main') mainYs.push(object.center.y);
+      else if (lane === 'error') errorYs.push(object.center.y);
+    }
+
+    expect(medianOf(mainYs)).toBe(260);
+    expect(medianOf(errorYs)).toBe(560);
+    expect(rule(layoutLint(flows), 'layout-error-lane-below').offenders).toHaveLength(0);
+  });
+
+  it('flags an error lane whose median is not below the main lane median', () => {
+    const report = layoutLint(
+      flow(
+        regular('main1', 'inject', 100, 240, { wires: [[]] }),
+        regular('main2', 'debug', 500, 260),
+        regular('catch1', 'catch', 100, 100, { wires: [['err-fn']] }),
+        regular('err-fn', 'function', 300, 120, { wires: [['err-debug']] }),
+        regular('err-debug', 'debug', 500, 140),
+      ),
+    );
+
+    expect(rule(report, 'layout-error-lane-below').offenders).toEqual([
+      expect.objectContaining({ tabId: TAB.id, mainMedianY: 250, errorMedianY: 120 }),
+    ]);
+  });
+
+  it('flags inter-group DAG edges that run right-to-left by group centroid', () => {
+    const report = layoutLint(
+      flow(
+        {
+          id: 'g-src',
+          type: 'group',
+          z: TAB.id,
+          x: 500,
+          y: 80,
+          w: 220,
+          h: 120,
+          name: 'Later',
+          nodes: ['src'],
+        },
+        {
+          id: 'g-dst',
+          type: 'group',
+          z: TAB.id,
+          x: 100,
+          y: 80,
+          w: 220,
+          h: 120,
+          name: 'Earlier',
+          nodes: ['dst'],
+        },
+        regular('src', 'inject', 580, 140, { g: 'g-src', wires: [['dst']] }),
+        regular('dst', 'debug', 180, 140, { g: 'g-dst' }),
+      ),
+    );
+
+    expect(rule(report, 'layout-stage-order').offenders).toEqual([
+      expect.objectContaining({ fromGroupId: 'g-src', toGroupId: 'g-dst' }),
+    ]);
+  });
+
+  it('flags switch output port 0 routed below a later port target', () => {
+    const report = layoutLint(
+      flow(
+        regular('sw', 'switch', 100, 200, {
+          outputs: 2,
+          wires: [['no'], ['yes']],
+        }),
+        regular('yes', 'debug', 400, 100),
+        regular('no', 'debug', 400, 300),
+      ),
+    );
+
+    expect(rule(report, 'layout-affirmative-on-top').offenders).toEqual([
+      expect.objectContaining({ nodeId: 'sw', port0MeanTargetY: 300, comparedPort: 1 }),
+    ]);
+  });
+
+  it('requires groups with at least three members to have a name or explicit header comment', () => {
+    const missing = layoutLint(
+      flow(
+        {
+          id: 'g1',
+          type: 'group',
+          z: TAB.id,
+          x: 80,
+          y: 80,
+          w: 500,
+          h: 180,
+          name: '',
+          nodes: ['a', 'b', 'c'],
+        },
+        regular('a', 'inject', 140, 140, { g: 'g1', wires: [[]] }),
+        regular('b', 'function', 300, 140, { g: 'g1', wires: [[]] }),
+        regular('c', 'debug', 460, 140, { g: 'g1' }),
+      ),
+    );
+    const withHeader = layoutLint(
+      flow(
+        {
+          id: 'g1',
+          type: 'group',
+          z: TAB.id,
+          x: 80,
+          y: 120,
+          w: 500,
+          h: 180,
+          name: '',
+          nodes: ['a', 'b', 'c'],
+        },
+        {
+          id: 'header1',
+          type: 'comment',
+          z: TAB.id,
+          x: 300,
+          y: 80,
+          name: 'Decision',
+          _authoringHeaderFor: 'g1',
+        },
+        regular('a', 'inject', 140, 180, { g: 'g1', wires: [[]] }),
+        regular('b', 'function', 300, 180, { g: 'g1', wires: [[]] }),
+        regular('c', 'debug', 460, 180, { g: 'g1' }),
+      ),
+    );
+
+    expect(rule(missing, 'layout-header-presence').offenders).toEqual([
+      expect.objectContaining({ groupId: 'g1', memberCount: 3 }),
+    ]);
+    expect(rule(withHeader, 'layout-header-presence').offenders).toHaveLength(0);
+  });
+
+  it('abstains semantic rules when their evidence is absent', () => {
+    const report = layoutLint(
+      flow(
+        regular('src', 'inject', 100, 100, { wires: [['dst']] }),
+        regular('dst', 'debug', 300, 100),
+      ),
+    );
+
     for (const id of [
       'layout-stage-order',
       'layout-header-presence',
       'layout-error-lane-below',
       'layout-affirmative-on-top',
     ] as const) {
-      expect(rule(report, id).offenders).toEqual([]);
-      const diagnostic = report.diagnostics.find(
-        (d) => d.rule === id && d.message.includes('not yet implemented (D-2)'),
+      expect(rule(report, id).offenders).toHaveLength(0);
+      expect(report.diagnostics).toContainEqual(
+        expect.objectContaining({ severity: 'info', rule: id }),
       );
-      expect(diagnostic).toMatchObject({ severity: 'info', rule: id });
     }
   });
 });
