@@ -101,11 +101,11 @@ describe('FlowOtter prompts registry', () => {
     expect(body).toContain('validate_all_flows');
   });
 
-  // D-5: review_my_flow gained a layout-scores step pointing at the
-  // layout_conventions catalog category and validate_flow's layout scores.
-  it('review_my_flow includes the layout-scores review step', () => {
+  // D-5: review_my_flow gained a layout review step pointing at the
+  // layout_conventions catalog category and validate_flow diagnostics.
+  it('review_my_flow includes the layout diagnostics review step', () => {
     const body = findPrompt('review_my_flow')!.build({});
     expect(body).toContain("get_authoring_guide(['layout_conventions'])");
-    expect(body).toContain('layout scores');
+    expect(body).toContain('validate_flow diagnostics');
   });
 });

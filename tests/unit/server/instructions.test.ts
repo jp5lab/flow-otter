@@ -24,7 +24,6 @@ describe('SERVER_INSTRUCTIONS', () => {
     'deploy_staged_change',
     'render_flow_svg',
     'render_flow_png',
-    'stage_changes',
     'validate_flow',
     'list_available_toolsets',
     'enable_toolset',
@@ -34,6 +33,10 @@ describe('SERVER_INSTRUCTIONS', () => {
     'health_check',
   ])('references tool %s', (toolName) => {
     expect(SERVER_INSTRUCTIONS).toContain(toolName);
+  });
+
+  it('does not advertise unshipped batch staging', () => {
+    expect(SERVER_INSTRUCTIONS).not.toContain('stage_changes');
   });
 
   // D-5 (R6/F4): the layout conventions are taught WITH NUMBERS, in-band.

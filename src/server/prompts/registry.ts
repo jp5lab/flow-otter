@@ -180,7 +180,7 @@ const reviewMyFlowPrompt: FlowOtterPrompt = {
       `1. ${tab ? `analyze_flow('${tab}')` : 'analyze_all_flows()'} for structural breakdown.`,
       `2. ${tab ? `validate_flow('${tab}')` : 'validate_all_flows()'} for diagnostics.`,
       `3. ${tab ? `render_flow_svg('${tab}')` : ''}`,
-      `4. Review layout against the eight layout_conventions criteria (get_authoring_guide(['layout_conventions'])); report the per-rule layout scores from validate_flow when present.`,
+      `4. Review layout against the eight layout_conventions criteria (get_authoring_guide(['layout_conventions'])); report matching validate_flow diagnostics when present.`,
       `5. Summarize: errors > warnings > info. For each, give the specific rule, the affected node, and the recommended fix.`,
       `6. If ISA-101 rules fired (saturated-color-outside-alarm, screen-clutter, unbounded-chart-append, button-group-color-decoration, dashboard-2-destructive-needs-confirm), explain the design principle behind them.`,
     ].join('\n');
