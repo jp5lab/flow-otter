@@ -2,6 +2,16 @@
 
 ## 2.0.0 (unreleased)
 
+### LAYO-4 slice A — Compound+ports ELK core
+
+- Rewrote `src/toolkit/layout/elk.ts` as the two-level engine's ELK core (slice A of three; kill-switch decision point before slices B/C per the fix plan): `layered` / direction from rankdir / `randomSeed=1` / `considerModelOrder: NODES_AND_EDGES` / `hierarchyHandling: INCLUDE_CHILDREN` / `nodePlacement: BRANDES_KOEPF`.
+- Groups now enter the graph as padded compounds (documented editor-chrome padding: 26px top, 10px sides/bottom), nested via `parentKey` with cycle/unknown-reference guards that degrade to root-level instead of throwing. Group geometry write-back is deliberately deferred to slice B.
+- Every node carries `FIXED_ORDER` ports — one WEST input when the node has inputs, one EAST port per output ordered by the GeometryProvider's port-anchor ys, so port index = rule order and affirmative-on-top holds by construction. Junctions are 10×10 waypoints with WEST/EAST ports. Edges are port-true (source = specific output port, target = the input port).
+- All dimensions flow through the REND-2 GeometryProvider helpers (`dimensionsForNode` / `dimensionsForJunction`) — no re-derived geometry; pinned by an F10 grep-guard test against hardcoded width literals in `elk.ts`.
+- ELK failure no longer propagates: the per-tab layout call is wrapped, emits a `layout/engine-error` warning diagnostic through `onDiagnostic`, and returns the tab untouched. Write-back accumulates INCLUDE_CHILDREN-relative coordinates to absolute centers and keeps the existing grid-snap + whole-tab translate post-pass (no per-node clamping).
+- Engine selection is unchanged — the ELK path stays opt-in behind the existing `layoutFlows` heuristics; no defaults flipped, no new MCP surface.
+- Added unit coverage: switch out0-target strictly above out1-target, nested-compound containment, grouped-junction no-crash, provider-true wide-node separation, compound/port determinism, engine-error untouched-tab diagnostic, and the grep-guard.
+
 ### LAYO-3 — Pure section partitioning joins the shared lanes contract
 
 - Added `src/toolkit/layout/sections.ts`: pure, total, deterministic section partitioning alongside the landed `src/toolkit/lanes.ts` lane-derivation contract. Sections are the weakly-connected components of the wiring graph (regular nodes + junctions; comments, groups, and config-shaped nodes are never members), ordered by minimum declaration index with a stable section id, exposed through the same two adapters as lanes: `deriveTabSpecSections(tab)` and per-tab `deriveFlowsJsonSections(flows)`.
