@@ -123,4 +123,68 @@ describe('link-resolution', () => {
     expect(dupDiags).toHaveLength(2); // one diagnostic per duplicate node
     expect(dupDiags[0]?.context).toMatchObject({ name: 'shared', count: 2 });
   });
+
+  it('warns when a function node.linkcall literal target is unmatched', () => {
+    const out = check([
+      { id: 'tab1', type: 'tab', label: 'T' },
+      {
+        id: 'fn1',
+        type: 'function',
+        z: 'tab1',
+        x: 0,
+        y: 0,
+        wires: [[]],
+        func: "node.linkcall('missing-target', msg);",
+      },
+      { id: 'li1', type: 'link in', z: 'tab1', x: 100, y: 0, wires: [[]], name: 'known' },
+    ] as never);
+
+    expect(out).toEqual([
+      {
+        severity: 'warning',
+        rule: 'link-resolution',
+        message:
+          "Function node 'fn1' calls node.linkcall target 'missing-target' but no matching link-in id or name exists.",
+        nodeId: 'fn1',
+        tabId: 'tab1',
+        context: { target: 'missing-target' },
+      },
+    ]);
+  });
+
+  it('does not warn when function node.linkcall literals match by id or name', () => {
+    const out = check([
+      { id: 'tab1', type: 'tab', label: 'T' },
+      {
+        id: 'fn1',
+        type: 'function',
+        z: 'tab1',
+        x: 0,
+        y: 0,
+        wires: [[]],
+        func: "node.linkcall('named-target', msg); node.linkcall('li2', msg);",
+      },
+      { id: 'li1', type: 'link in', z: 'tab1', x: 100, y: 0, wires: [[]], name: 'named-target' },
+      { id: 'li2', type: 'link in', z: 'tab1', x: 200, y: 0, wires: [[]], name: 'other' },
+    ] as never);
+
+    expect(out).toEqual([]);
+  });
+
+  it('does not warn for non-literal function node.linkcall targets', () => {
+    const out = check([
+      { id: 'tab1', type: 'tab', label: 'T' },
+      {
+        id: 'fn1',
+        type: 'function',
+        z: 'tab1',
+        x: 0,
+        y: 0,
+        wires: [[]],
+        func: 'node.linkcall(msg.target, msg);',
+      },
+    ] as never);
+
+    expect(out).toEqual([]);
+  });
 });

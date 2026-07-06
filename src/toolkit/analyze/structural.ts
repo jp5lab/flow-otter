@@ -13,6 +13,7 @@ import { lintFlows, type LayoutScoreSummary } from '../lint/flows-lint.js';
 import type { NamingContract } from '../naming/schema.js';
 import { runValidators, type ValidationReport } from '../validate/index.js';
 import { buildReport } from '../validate/report.js';
+import { findLinkCallTargets } from '../validate/rules/_function-ast.js';
 
 export interface FlowStructuralReport {
   readonly tabId: string;
@@ -30,6 +31,7 @@ export interface FlowStructuralReport {
     readonly linkIns: number;
     readonly linkOuts: number;
     readonly linkCalls: number;
+    readonly functionLinkCalls: number;
   };
   readonly dashboardWidgets: number;
   readonly orphans: readonly string[];
@@ -181,6 +183,7 @@ export function analyzeFlow(
   let linkIns = 0;
   let linkOuts = 0;
   let linkCalls = 0;
+  let functionLinkCalls = 0;
 
   for (const n of flows) {
     if (tabIdOf(n) !== tabId) continue;
@@ -199,6 +202,12 @@ export function analyzeFlow(
     if (n.type === 'link in') linkIns++;
     if (n.type === 'link out') linkOuts++;
     if (n.type === 'link call') linkCalls++;
+    if (n.type === 'function') {
+      const code = (n as { func?: unknown }).func;
+      if (typeof code === 'string' && code.length > 0) {
+        functionLinkCalls += findLinkCallTargets(code).length;
+      }
+    }
   }
 
   const wires = countWires(tabNodes);
@@ -221,7 +230,7 @@ export function analyzeFlow(
       subflowInstances: subflowInstances.length,
     },
     typeHistogram: Object.fromEntries(histogram),
-    linkSummary: { linkIns, linkOuts, linkCalls },
+    linkSummary: { linkIns, linkOuts, linkCalls, functionLinkCalls },
     dashboardWidgets,
     orphans,
     validation,

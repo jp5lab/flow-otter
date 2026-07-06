@@ -23,17 +23,17 @@ describe('explainFlow junction traversal', () => {
     expect(report.sinks.map((n) => n.id)).toEqual(['e2n10', 'e2n09', 'e2n11']);
     expect(report.orphans).toEqual([]);
     expect(report.edges).toEqual([
-      { fromId: 'e2n01', outputPort: 0, toId: 'e2n03' },
-      { fromId: 'e2n02', outputPort: 0, toId: 'e2n03' },
-      { fromId: 'e2n03', outputPort: 0, toId: 'e2n04' },
-      { fromId: 'e2n04', outputPort: 0, toId: 'e2n05' },
-      { fromId: 'e2n04', outputPort: 0, toId: 'e2n10' },
-      { fromId: 'e2n05', outputPort: 0, toId: 'e2n12' },
-      { fromId: 'e2n05', outputPort: 1, toId: 'e2n07' },
-      { fromId: 'e2n12', outputPort: 0, toId: 'e2n06' },
-      { fromId: 'e2n06', outputPort: 0, toId: 'e2n08' },
-      { fromId: 'e2n08', outputPort: 0, toId: 'e2n09' },
-      { fromId: 'e2n07', outputPort: 0, toId: 'e2n11' },
+      { fromId: 'e2n01', outputPort: 0, toId: 'e2n03', kind: 'wire' },
+      { fromId: 'e2n02', outputPort: 0, toId: 'e2n03', kind: 'wire' },
+      { fromId: 'e2n03', outputPort: 0, toId: 'e2n04', kind: 'wire' },
+      { fromId: 'e2n04', outputPort: 0, toId: 'e2n05', kind: 'wire' },
+      { fromId: 'e2n04', outputPort: 0, toId: 'e2n10', kind: 'wire' },
+      { fromId: 'e2n05', outputPort: 0, toId: 'e2n12', kind: 'wire' },
+      { fromId: 'e2n05', outputPort: 1, toId: 'e2n07', kind: 'wire' },
+      { fromId: 'e2n12', outputPort: 0, toId: 'e2n06', kind: 'wire' },
+      { fromId: 'e2n06', outputPort: 0, toId: 'e2n08', kind: 'wire' },
+      { fromId: 'e2n08', outputPort: 0, toId: 'e2n09', kind: 'wire' },
+      { fromId: 'e2n07', outputPort: 0, toId: 'e2n11', kind: 'wire' },
     ]);
   });
 
@@ -80,9 +80,9 @@ describe('explainFlow junction traversal', () => {
     expect(report.entrypoints.map((n) => n.id)).toEqual(['in1']);
     expect(report.sinks.map((n) => n.id)).toEqual(['end1']);
     expect(report.edges).toEqual([
-      { fromId: 'in1', outputPort: 0, toId: 'j1' },
-      { fromId: 'j1', outputPort: 0, toId: 'fn1' },
-      { fromId: 'fn1', outputPort: 0, toId: 'end1' },
+      { fromId: 'in1', outputPort: 0, toId: 'j1', kind: 'wire' },
+      { fromId: 'j1', outputPort: 0, toId: 'fn1', kind: 'wire' },
+      { fromId: 'fn1', outputPort: 0, toId: 'end1', kind: 'wire' },
     ]);
   });
 });

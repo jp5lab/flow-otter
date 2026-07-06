@@ -1,6 +1,8 @@
 import type { FlowsJson, FlowsJsonNode } from '../../../shared/flows-json.js';
 import type { Diagnostic } from '../report.js';
 
+import { findLinkCallTargets } from './_function-ast.js';
+
 export const RULE = 'link-resolution';
 
 const LINK_IN = 'link in';
@@ -36,6 +38,21 @@ function nameOf(node: FlowsJsonNode): string | undefined {
   return typeof n === 'string' && n.length > 0 ? n : undefined;
 }
 
+function functionCodeOf(node: FlowsJsonNode): string | undefined {
+  const code = (node as { func?: unknown }).func;
+  return typeof code === 'string' ? code : undefined;
+}
+
+function hasMatchingLinkIn(
+  target: string,
+  byId: ReadonlyMap<string, FlowsJsonNode>,
+  linkInsByName: ReadonlyMap<string, readonly FlowsJsonNode[]>,
+): boolean {
+  const byExactId = byId.get(target);
+  if (byExactId?.type === LINK_IN) return true;
+  return (linkInsByName.get(target)?.length ?? 0) > 0;
+}
+
 export function check(flows: FlowsJson): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const byId = new Map<string, FlowsJsonNode>();
@@ -64,6 +81,25 @@ export function check(flows: FlowsJson): Diagnostic[] {
         nodeId: dup.id,
         ...(t !== undefined ? { tabId: t } : {}),
         context: { name, count: nodes.length, ids: nodes.map((n) => n.id) },
+      });
+    }
+  }
+
+  for (const node of flows) {
+    if (node.type !== 'function') continue;
+    const code = functionCodeOf(node);
+    if (code === undefined || code.length === 0) continue;
+    const sourceTab = tabId(node);
+
+    for (const target of findLinkCallTargets(code)) {
+      if (hasMatchingLinkIn(target, byId, linkInsByName)) continue;
+      diagnostics.push({
+        severity: 'warning',
+        rule: RULE,
+        message: `Function node '${node.id}' calls node.linkcall target '${target}' but no matching link-in id or name exists.`,
+        nodeId: node.id,
+        ...(sourceTab !== undefined ? { tabId: sourceTab } : {}),
+        context: { target },
       });
     }
   }

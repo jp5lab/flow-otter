@@ -23,7 +23,7 @@ describe('explainFlow', () => {
     expect(report.entrypoints.map((e) => e.id)).toEqual(['in1']);
     expect(report.sinks.map((s) => s.id)).toEqual(['out1']);
     expect(report.orphans).toEqual([]);
-    expect(report.edges).toEqual([{ fromId: 'in1', outputPort: 0, toId: 'out1' }]);
+    expect(report.edges).toEqual([{ fromId: 'in1', outputPort: 0, toId: 'out1', kind: 'wire' }]);
   });
 
   it('flags orphan nodes', () => {
