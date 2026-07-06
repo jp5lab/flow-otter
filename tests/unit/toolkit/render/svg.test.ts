@@ -241,6 +241,11 @@ function loadE1(): E1Fixture {
   return JSON.parse(readFileSync(path, 'utf8')) as E1Fixture;
 }
 
+function loadSnapshot(name: string): string {
+  const path = fileURLToPath(new URL(`./__snapshots__/${name}`, import.meta.url));
+  return readFileSync(path, 'utf8');
+}
+
 const E1_TAB = 'f6f2187d.f17ca8';
 const E1_SWITCH = '3865da1cf3821d01';
 const E1_BROKER = '987eef4ff5597e9c';
@@ -317,6 +322,97 @@ describe('renderSvg', () => {
     ]) {
       expect(renderSvg(flows, { tabId: 'tab1' })).toBe(renderSvg(flows, { tabId: 'tab1' }));
     }
+  });
+
+  it('keeps no-option rendering byte-identical to the existing snapshot', () => {
+    expect(renderSvg(FIXTURE_INJECT_TO_DEBUG, { tabId: 'tab1' })).toBe(
+      loadSnapshot('inject_to_debug.svg'),
+    );
+  });
+
+  it('fills non-installed node types with the editor unknown-node color when installedTypes is set', () => {
+    const flows: FlowsJson = [
+      { id: 'tab1', type: 'tab', label: 'Unknowns' },
+      {
+        id: 'known1',
+        type: 'inject',
+        z: 'tab1',
+        x: 100,
+        y: 100,
+        wires: [['missing1']],
+        name: 'Known',
+      },
+      {
+        id: 'unknown1',
+        type: 'node-red-contrib-missing',
+        z: 'tab1',
+        x: 260,
+        y: 100,
+        wires: [],
+        name: 'Missing',
+      },
+    ];
+
+    const svg = renderSvg(flows, { tabId: 'tab1', installedTypes: ['inject', 'debug'] });
+    expect(svg.match(/fill="#fee"/g)).toHaveLength(1);
+    expect(svg).toContain(
+      '<rect x="200" y="85" width="120" height="30" rx="4" ry="4" fill="#fee" stroke="#888888" stroke-width="1"/>',
+    );
+    expect(svg).toContain('fill="#a6bbcf"');
+  });
+
+  it('does not flag subflow instances as unknown when their definition exists', () => {
+    const flows: FlowsJson = [
+      { id: 'tab1', type: 'tab', label: 'Subflow' },
+      { id: 'sub1', type: 'subflow', name: 'Sub', in: [{ wires: [] }], out: [{ wires: [] }] },
+      {
+        id: 'inst1',
+        type: 'subflow:sub1',
+        z: 'tab1',
+        x: 100,
+        y: 100,
+        wires: [[]],
+        name: 'Sub instance',
+      },
+    ];
+
+    const svg = renderSvg(flows, { tabId: 'tab1', installedTypes: [] });
+    expect(svg).not.toContain('fill="#fee"');
+    expect(svg).toContain('fill="#dddddd"');
+  });
+
+  it('draws a deterministic group info badge only for groups with non-empty info', () => {
+    const flows: FlowsJson = [
+      { id: 'tab1', type: 'tab', label: 'Groups' },
+      {
+        id: 'group-info',
+        type: 'group',
+        z: 'tab1',
+        x: 40,
+        y: 40,
+        w: 220,
+        h: 100,
+        name: 'Documented',
+        nodes: [],
+        info: 'Purpose text',
+      },
+      {
+        id: 'group-empty',
+        type: 'group',
+        z: 'tab1',
+        x: 300,
+        y: 40,
+        w: 220,
+        h: 100,
+        name: 'Plain',
+        nodes: [],
+      },
+    ];
+
+    const svg = renderSvg(flows, { tabId: 'tab1' });
+    expect(svg.match(/data-flowotter-info-badge=/g)).toHaveLength(1);
+    expect(svg).toContain('data-flowotter-info-badge="group-info"');
+    expect(svg).not.toContain('data-flowotter-info-badge="group-empty"');
   });
 });
 

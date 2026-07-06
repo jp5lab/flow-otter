@@ -57,6 +57,11 @@ export interface RenderSvgOptions {
   padding?: number;
   /** Render every tab in the flows, stacked vertically. Overrides tabId. */
   allTabs?: boolean;
+  /**
+   * Optional set/list of installed node types. When present, nodes whose type
+   * is not installed render with Node-RED's unknown-node fill.
+   */
+  installedTypes?: ReadonlySet<string> | readonly string[];
 }
 
 const DEFAULTS = {
@@ -72,6 +77,7 @@ const JUNCTION_FILL = '#eeeeee';
 const JUNCTION_SIZE = 10;
 const TAB_GAP = 40;
 const TAB_LABEL_OFFSET = 8;
+const UNKNOWN_NODE_FILL = '#fee';
 
 const TYPE_COLOR: Readonly<Record<string, string>> = {
   inject: '#a6bbcf',
@@ -99,6 +105,25 @@ function escapeXml(s: string): string {
 
 function colorFor(node: FlowsJsonNode): string {
   return TYPE_COLOR[node.type] ?? TYPE_COLOR['default']!;
+}
+
+function normalizeInstalledTypes(
+  installedTypes: ReadonlySet<string> | readonly string[],
+): ReadonlySet<string> {
+  return installedTypes instanceof Set ? installedTypes : new Set(installedTypes);
+}
+
+function fillForNode(
+  node: FlowsJsonNode,
+  installedTypes: ReadonlySet<string> | undefined,
+  subflowDefs: ReadonlyMap<string, SubflowDefNode>,
+): string {
+  if (installedTypes === undefined) return colorFor(node);
+  if (isSubflowInstance(node)) {
+    const defId = node.type.slice(SUBFLOW_INSTANCE_PREFIX.length);
+    if (subflowDefs.has(defId)) return colorFor(node);
+  }
+  return installedTypes.has(node.type) ? colorFor(node) : UNKNOWN_NODE_FILL;
 }
 
 function findTab(flows: FlowsJson, tabId: string | undefined): TabNode | undefined {
@@ -159,6 +184,7 @@ interface GroupBox {
   w: number;
   h: number;
   label: string;
+  hasInfo: boolean;
 }
 
 interface CommentBox {
@@ -178,6 +204,11 @@ interface WireSegment {
 interface RequiredOpts {
   background: string;
   padding: number;
+  installedTypes?: ReadonlySet<string>;
+}
+
+interface GeometryOpts {
+  installedTypes?: ReadonlySet<string>;
 }
 
 interface RenderedTab {
@@ -202,6 +233,9 @@ export function renderSvg(flows: FlowsJson, opts: RenderSvgOptions = {}): string
   const required: RequiredOpts = {
     background: opts.background ?? DEFAULTS.background,
     padding: opts.padding ?? DEFAULTS.padding,
+    ...(opts.installedTypes !== undefined
+      ? { installedTypes: normalizeInstalledTypes(opts.installedTypes) }
+      : {}),
   };
 
   if (opts.allTabs) {
@@ -255,6 +289,14 @@ function wiresOf(n: FlowsJsonNode): string[][] {
 }
 
 function computeTabGeometry(tab: TabNode, flows: FlowsJson): TabGeometry {
+  return computeTabGeometryForRender(tab, flows, {});
+}
+
+function computeTabGeometryForRender(
+  tab: TabNode,
+  flows: FlowsJson,
+  opts: GeometryOpts,
+): TabGeometry {
   const tabNodes = flows.filter(
     (n): n is FlowsJsonNode & { x: number; y: number } =>
       hasCanvasPosition(n) && (n as { z?: string }).z === tab.id,
@@ -278,7 +320,16 @@ function computeTabGeometry(tab: TabNode, flows: FlowsJson): TabGeometry {
     if (isGroup(n)) {
       const gw = (n as { w?: number }).w ?? 200;
       const gh = (n as { h?: number }).h ?? 100;
-      const g: GroupBox = { id: n.id, x: n.x, y: n.y, w: gw, h: gh, label: rawName };
+      const info = (n as { info?: unknown }).info;
+      const g: GroupBox = {
+        id: n.id,
+        x: n.x,
+        y: n.y,
+        w: gw,
+        h: gh,
+        label: rawName,
+        hasInfo: typeof info === 'string' && info.length > 0,
+      };
       groups.push(g);
       groupById.set(n.id, g);
       continue;
@@ -355,7 +406,7 @@ function computeTabGeometry(tab: TabNode, flows: FlowsJson): TabGeometry {
       h,
       label,
       hideLabel,
-      fill: colorFor(n),
+      fill: fillForNode(n, opts.installedTypes, subflowDefs),
       hasInput: inputs > 0,
       inputPoint: { x: left + inAnchor.x, y: top + inAnchor.y },
       outputPoints: outputPortAnchors(w, h, outputs).map((a) => ({
@@ -488,12 +539,13 @@ function computeTabGeometry(tab: TabNode, flows: FlowsJson): TabGeometry {
 }
 
 function renderTab(tab: TabNode, flows: FlowsJson, opts: RequiredOpts): RenderedTab {
-  const geo = computeTabGeometry(tab, flows);
+  const geo = computeTabGeometryForRender(tab, flows, opts);
 
   const parts: string[] = [];
   for (const g of geo.groups) {
     parts.push(groupRect(g.x, g.y, g.w, g.h));
     if (g.label) parts.push(text(g.x + 8, g.y + 16, g.label, '#666666', 12));
+    if (g.hasInfo) parts.push(groupInfoBadge(g));
   }
   for (const c of geo.comments) {
     const left = c.cx - c.w / 2;
@@ -563,6 +615,17 @@ function rect(
 
 function groupRect(x: number, y: number, w: number, h: number): string {
   return `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="4" ry="4" fill="#ffffff" stroke="#a4a4a4" stroke-width="1" stroke-dasharray="4 2"/>`;
+}
+
+function groupInfoBadge(g: GroupBox): string {
+  const x = g.x + g.w - 20;
+  const y = g.y + 6;
+  return [
+    `<g data-flowotter-info-badge="${escapeXml(g.id)}">`,
+    `  <rect x="${fmt(x)}" y="${fmt(y)}" width="12" height="12" rx="1" ry="1" fill="#ffffff" stroke="#777777" stroke-width="1"/>`,
+    `  <path d="M ${fmt(x + 3)} ${fmt(y + 3)} H ${fmt(x + 9)} M ${fmt(x + 3)} ${fmt(y + 6)} H ${fmt(x + 9)} M ${fmt(x + 3)} ${fmt(y + 9)} H ${fmt(x + 7)}" stroke="#777777" stroke-width="1" fill="none"/>`,
+    '</g>',
+  ].join('\n  ');
 }
 
 function commentRect(x: number, y: number, w: number, h: number): string {
