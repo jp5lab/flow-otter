@@ -15,6 +15,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { makeInvokable } from '../../../../../src/server/tools/_tool.js';
 import { addCommentTool } from '../../../../../src/server/tools/author/add-comment.js';
 import { canonicalHash } from '../../../../../src/shared/hash.js';
 
@@ -63,6 +64,29 @@ describe('REND-8 staged-byte identity (pinned at pre-enrichment HEAD)', () => {
     // hashes to the literal captured before enrichment existed — REND-8 must
     // never write render state into the staging slot.
     expect(canonicalHash(record)).toBe(PINNED_STAGED_RECORD_HASH);
+    expect(Object.keys(record as Record<string, unknown>)).not.toContain('render');
+  });
+
+  it('the lifecycle guidance is output-only and leaves the staged record byte-stable', async () => {
+    const invokable = makeInvokable(addCommentTool);
+    const out = (await invokable.invoke(PIN_COMMENT_INPUT, harness.ctx.container)) as {
+      staged_hash: string;
+      based_on_snapshot_hash: string;
+      _guidance?: string[];
+    };
+
+    expect(out.staged_hash).toBe(PINNED_STAGED_HASH);
+    expect(out.based_on_snapshot_hash).toBe(FIXTURE_HASH);
+    expect(out._guidance).toContain(
+      '[staged-change-lifecycle] The staging slot now holds this change; to refine it, call discard_staged_change then re-stage; to commit it, call deploy_staged_change (needs confirm/elicitation).',
+    );
+
+    const record = await harness.staging.read();
+    expect(record).not.toBeNull();
+    expect(record!.stagedHash).toBe(PINNED_STAGED_HASH);
+    expect(record!.basedOnSnapshotHash).toBe(FIXTURE_HASH);
+    expect(canonicalHash(record)).toBe(PINNED_STAGED_RECORD_HASH);
+    expect(Object.keys(record as Record<string, unknown>)).not.toContain('_guidance');
     expect(Object.keys(record as Record<string, unknown>)).not.toContain('render');
   });
 });

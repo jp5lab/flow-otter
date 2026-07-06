@@ -13,6 +13,7 @@ import { makeDeployWithoutPreviewNudge } from './rules/deploy-without-preview.js
 import { nodeKeyVocabularyNudge } from './rules/node-key-vocabulary.js';
 import { noPlanForLargeFlowNudge } from './rules/no-plan-for-large-flow.js';
 import { paramVocabularyNudge } from './rules/param-vocabulary.js';
+import { stagedChangeLifecycleNudge } from './rules/staged-change-lifecycle.js';
 import type { Nudge, NudgeContext } from './types.js';
 
 export function buildNudgeRegistry(container: Container): readonly Nudge[] {
@@ -21,6 +22,7 @@ export function buildNudgeRegistry(container: Container): readonly Nudge[] {
     makeDeployWithoutPreviewNudge(() => container),
     paramVocabularyNudge,
     nodeKeyVocabularyNudge,
+    stagedChangeLifecycleNudge,
   ];
 }
 
