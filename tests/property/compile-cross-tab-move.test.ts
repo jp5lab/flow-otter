@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { AUTHORING_KEY_FIELD, compile } from '../../src/toolkit/authoring/compile.js';
-import type { FlowsJsonNode } from '../../src/shared/flows-json.js';
+import { isRegularNode, type FlowsJsonNode } from '../../src/shared/flows-json.js';
 
 import { arbitraryCrossTabMove, arbitrarySpecPair } from './arbitraries.js';
 
@@ -31,7 +31,7 @@ describe('compile baseline-merge cross-tab move', () => {
         if (!sourceTabBefore) return;
         const beforeNode = beforeFlows.find(
           (n) =>
-            n.type !== 'tab' &&
+            isRegularNode(n) &&
             authoringKey(n) === move.movedNodeKey &&
             tabIdOf(n) === sourceTabBefore.id,
         );
@@ -42,7 +42,7 @@ describe('compile baseline-merge cross-tab move', () => {
         if (!destTabAfter) return;
         const afterNode = afterFlows.find(
           (n) =>
-            n.type !== 'tab' &&
+            isRegularNode(n) &&
             authoringKey(n) === move.movedNodeKey &&
             tabIdOf(n) === destTabAfter.id,
         );

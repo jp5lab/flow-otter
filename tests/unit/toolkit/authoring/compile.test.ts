@@ -140,6 +140,161 @@ describe('compile baseline-merge ID preservation', () => {
     expect(moverIdAfter).toBe(moverIdBefore);
   });
 
+  it('preserves a cross-tab moved node id when the same key exists inside a subflow', () => {
+    const before: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'aaaa',
+          label: 'a',
+          nodes: [
+            { key: 'yb', type: 'inject', label: 'a', position: { x: 0, y: 0 } },
+            { key: 'aa', type: 'inject', label: 'a', position: { x: 0, y: 0 } },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+        {
+          id: 'aaav',
+          label: 'a',
+          nodes: [{ key: 'aa', type: 'inject', label: 'a', position: { x: 0, y: 0 } }],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      subflowDefs: [
+        {
+          id: 'aa1a',
+          name: 'a',
+          nodes: [{ key: 'yb', type: 'inject', label: 'a', position: { x: 0, y: 0 } }],
+          connections: [],
+        },
+      ],
+    };
+    const beforeRes = compile(before);
+    const sourceTab = beforeRes.flows.find(
+      (n) => n.type === 'tab' && (n as Record<string, unknown>)['_authoringKey'] === 'aaaa',
+    );
+    const beforeMover = beforeRes.flows.find(
+      (n) =>
+        n.type === 'inject' &&
+        (n as Record<string, unknown>)['_authoringKey'] === 'yb' &&
+        (n as { z?: string }).z === sourceTab?.id,
+    );
+
+    const after: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'aaaa',
+          label: 'a',
+          nodes: [{ key: 'aa', type: 'inject', label: 'a', position: { x: 0, y: 0 } }],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+        {
+          id: 'aaav',
+          label: 'a',
+          nodes: [
+            { key: 'aa', type: 'inject', label: 'a', position: { x: 0, y: 0 } },
+            { key: 'yb', type: 'inject', label: 'a', position: { x: 0, y: 0 } },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+    };
+    const afterRes = compile(after, { prior: beforeRes.flows });
+    const destTab = afterRes.flows.find(
+      (n) => n.type === 'tab' && (n as Record<string, unknown>)['_authoringKey'] === 'aaav',
+    );
+    const afterMover = afterRes.flows.find(
+      (n) =>
+        n.type === 'inject' &&
+        (n as Record<string, unknown>)['_authoringKey'] === 'yb' &&
+        (n as { z?: string }).z === destTab?.id,
+    );
+
+    expect(beforeMover?.id).toBeDefined();
+    expect(afterMover?.id).toBe(beforeMover?.id);
+  });
+
+  it('does not let a new tab node steal a subflow body node id with the same key', () => {
+    const subflowDefs: NonNullable<AuthoringSpec['subflowDefs']> = [
+      {
+        id: 'shared-def',
+        name: 'Shared',
+        nodes: [{ key: 'shared', type: 'inject', position: { x: 0, y: 0 } }],
+        connections: [],
+      },
+    ];
+    const before: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      subflowDefs,
+    };
+    const beforeRes = compile(before);
+    const beforeDef = beforeRes.flows.find(
+      (n) =>
+        n.type === 'subflow' && (n as Record<string, unknown>)['_authoringKey'] === 'shared-def',
+    );
+    const beforeSubflowNode = beforeRes.flows.find(
+      (n) =>
+        n.type === 'inject' &&
+        (n as Record<string, unknown>)['_authoringKey'] === 'shared' &&
+        (n as { z?: string }).z === beforeDef?.id,
+    );
+
+    const after: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [{ key: 'shared', type: 'debug', position: { x: 200, y: 0 } }],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      subflowDefs,
+    };
+    const afterRes = compile(after, { prior: beforeRes.flows });
+    const afterTab = afterRes.flows.find(
+      (n) => n.type === 'tab' && (n as Record<string, unknown>)['_authoringKey'] === 'main',
+    );
+    const afterDef = afterRes.flows.find(
+      (n) =>
+        n.type === 'subflow' && (n as Record<string, unknown>)['_authoringKey'] === 'shared-def',
+    );
+    const afterTabNode = afterRes.flows.find(
+      (n) =>
+        n.type === 'debug' &&
+        (n as Record<string, unknown>)['_authoringKey'] === 'shared' &&
+        (n as { z?: string }).z === afterTab?.id,
+    );
+    const afterSubflowNode = afterRes.flows.find(
+      (n) =>
+        n.type === 'inject' &&
+        (n as Record<string, unknown>)['_authoringKey'] === 'shared' &&
+        (n as { z?: string }).z === afterDef?.id,
+    );
+
+    expect(beforeSubflowNode?.id).toBeDefined();
+    expect(afterSubflowNode?.id).toBe(beforeSubflowNode?.id);
+    expect(afterTabNode?.id).toBeDefined();
+    expect(afterTabNode?.id).not.toBe(beforeSubflowNode?.id);
+  });
+
   it('does not reuse a group id for a node with the same key (kind partition)', () => {
     const before: AuthoringSpec = {
       tabs: [

@@ -81,6 +81,7 @@ export interface CompileResult {
 }
 
 type Kind = 'tab' | 'node' | 'group' | 'comment' | 'subflowDef' | 'config' | 'junction';
+type BaselineScope = 'global' | 'tab' | 'subflow' | 'unknown';
 
 const AMBIGUOUS = Symbol('ambiguous');
 type ByKindKeyVal = string | typeof AMBIGUOUS;
@@ -89,13 +90,13 @@ interface PriorIndex {
   /** `${tabId}:${kind}:${authoringKey}` → existing Node-RED id (exact match). */
   byTabKindKey: Map<string, string>;
   /**
-   * `${kind}:${authoringKey}` → existing id, OR `AMBIGUOUS` if multiple prior
-   * nodes share the same kind+key (e.g. same key on different tabs). The
-   * cross-tab-move fallback uses this when the exact tab+kind+key lookup
-   * misses, treating "key present in prior, just on a different tab" as a
-   * move (preserve id). Ambiguous matches fall through to fresh generation.
+   * `${scope}:${kind}:${authoringKey}` → existing id, OR `AMBIGUOUS` if
+   * multiple prior nodes share the same scope+kind+key. The cross-container
+   * move fallback uses this when the exact container+kind+key lookup misses.
+   * Tab-canvas children and subflow-body children are separate scopes so equal
+   * keys in one scope cannot steal baseline ids from the other.
    */
-  byKindKey: Map<string, ByKindKeyVal>;
+  byScopeKindKey: Map<string, ByKindKeyVal>;
   /**
    * Every prior id, used as a legacy fallback when prior was authored
    * without `_authoringKey` (e.g. straight from the Node-RED editor).
@@ -103,8 +104,8 @@ interface PriorIndex {
   allIds: Set<string>;
   /**
    * Ids already claimed by `deriveId` during this compile pass. Prevents two
-   * new spec entries from claiming the same prior id when the byKindKey
-   * fallback would otherwise hand it out twice.
+   * new spec entries from claiming the same prior id when the scoped fallback
+   * would otherwise hand it out twice.
    */
   reservedIds: Set<string>;
 }
@@ -119,14 +120,48 @@ function kindOf(node: FlowsJsonNode): Kind {
   return 'node';
 }
 
+function baselineScopeForPrior(
+  kind: Kind,
+  containerId: string,
+  tabIds: ReadonlySet<string>,
+  subflowDefIds: ReadonlySet<string>,
+): BaselineScope {
+  if (kind === 'tab' || kind === 'subflowDef' || kind === 'config') return 'global';
+  if (tabIds.has(containerId)) return 'tab';
+  if (subflowDefIds.has(containerId)) return 'subflow';
+  return 'unknown';
+}
+
+function addScopedPriorId(
+  idx: PriorIndex,
+  scope: BaselineScope,
+  kind: Kind,
+  key: string,
+  id: string,
+): void {
+  const kk = `${scope}:${kind}:${key}`;
+  const prev = idx.byScopeKindKey.get(kk);
+  if (prev === undefined) {
+    idx.byScopeKindKey.set(kk, id);
+  } else if (prev !== id && prev !== AMBIGUOUS) {
+    idx.byScopeKindKey.set(kk, AMBIGUOUS);
+  }
+}
+
 function buildPriorIndex(prior: FlowsJson | undefined): PriorIndex {
   const idx: PriorIndex = {
     byTabKindKey: new Map(),
-    byKindKey: new Map(),
+    byScopeKindKey: new Map(),
     allIds: new Set(),
     reservedIds: new Set(),
   };
   if (!prior) return idx;
+  const tabIds = new Set<string>();
+  const subflowDefIds = new Set<string>();
+  for (const node of prior) {
+    if (node.type === 'tab') tabIds.add(node.id);
+    if (node.type === 'subflow') subflowDefIds.add(node.id);
+  }
   for (const node of prior) {
     idx.allIds.add(node.id);
     const ext = (node as Record<string, unknown>)[AUTHORING_KEY_FIELD];
@@ -137,13 +172,13 @@ function buildPriorIndex(prior: FlowsJson | undefined): PriorIndex {
         ? node.id
         : ((node as { z?: string }).z ?? '');
     idx.byTabKindKey.set(`${containerId}:${kind}:${ext}`, node.id);
-    const kk = `${kind}:${ext}`;
-    const prev = idx.byKindKey.get(kk);
-    if (prev === undefined) {
-      idx.byKindKey.set(kk, node.id);
-    } else if (prev !== node.id && prev !== AMBIGUOUS) {
-      idx.byKindKey.set(kk, AMBIGUOUS);
-    }
+    addScopedPriorId(
+      idx,
+      baselineScopeForPrior(kind, containerId, tabIds, subflowDefIds),
+      kind,
+      ext,
+      node.id,
+    );
   }
   return idx;
 }
@@ -159,12 +194,13 @@ function deriveId(
   kind: Kind,
   key: string,
   strategy: 'hash' | 'fixed',
+  fallbackScope: BaselineScope,
 ): string {
   const exact = prior.byTabKindKey.get(`${containerId}:${kind}:${key}`);
   if (exact !== undefined && !prior.reservedIds.has(exact)) {
     return reserve(prior, exact);
   }
-  const kk = prior.byKindKey.get(`${kind}:${key}`);
+  const kk = prior.byScopeKindKey.get(`${fallbackScope}:${kind}:${key}`);
   if (typeof kk === 'string' && !prior.reservedIds.has(kk)) {
     return reserve(prior, kk);
   }
@@ -484,7 +520,10 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   // `deriveId` does not hand them out to a regular node by mistake.
   const configKeyToId = new Map<string, string>();
   for (const configSpec of spec.configNodes ?? []) {
-    configKeyToId.set(configSpec.key, deriveId(prior, '', 'config', configSpec.key, strategy));
+    configKeyToId.set(
+      configSpec.key,
+      deriveId(prior, '', 'config', configSpec.key, strategy, 'global'),
+    );
   }
 
   // Pre-resolve subflow-def ids so per-tab subflow-instance nodes can rewrite
@@ -492,27 +531,30 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   // this the subflow-ports validator can't find the def at validation time.
   const subflowDefKeyToId = new Map<string, string>();
   for (const defSpec of spec.subflowDefs ?? []) {
-    subflowDefKeyToId.set(defSpec.id, deriveId(prior, '', 'subflowDef', defSpec.id, strategy));
+    subflowDefKeyToId.set(
+      defSpec.id,
+      deriveId(prior, '', 'subflowDef', defSpec.id, strategy, 'global'),
+    );
   }
 
   for (const tabSpec of spec.tabs) {
-    const tabId = deriveId(prior, '', 'tab', tabSpec.id, strategy);
+    const tabId = deriveId(prior, '', 'tab', tabSpec.id, strategy, 'global');
 
     const nodeKeyToId = new Map<string, string>();
     for (const n of tabSpec.nodes) {
-      nodeKeyToId.set(n.key, deriveId(prior, tabId, 'node', n.key, strategy));
+      nodeKeyToId.set(n.key, deriveId(prior, tabId, 'node', n.key, strategy, 'tab'));
     }
     const junctionKeyToId = new Map<string, string>();
     for (const j of tabSpec.junctions ?? []) {
-      junctionKeyToId.set(j.key, deriveId(prior, tabId, 'junction', j.key, strategy));
+      junctionKeyToId.set(j.key, deriveId(prior, tabId, 'junction', j.key, strategy, 'tab'));
     }
     const groupKeyToId = new Map<string, string>();
     for (const g of tabSpec.groups) {
-      groupKeyToId.set(g.key, deriveId(prior, tabId, 'group', g.key, strategy));
+      groupKeyToId.set(g.key, deriveId(prior, tabId, 'group', g.key, strategy, 'tab'));
     }
     const commentKeyToId = new Map<string, string>();
     for (const c of tabSpec.comments) {
-      commentKeyToId.set(c.key, deriveId(prior, tabId, 'comment', c.key, strategy));
+      commentKeyToId.set(c.key, deriveId(prior, tabId, 'comment', c.key, strategy, 'tab'));
     }
 
     const wireTargetMap = new Map<string, string>([...nodeKeyToId, ...junctionKeyToId]);
@@ -660,11 +702,11 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
     if (defId === undefined) continue;
     const nodeKeyToId = new Map<string, string>();
     for (const n of defSpec.nodes) {
-      nodeKeyToId.set(n.key, deriveId(prior, defId, 'node', n.key, strategy));
+      nodeKeyToId.set(n.key, deriveId(prior, defId, 'node', n.key, strategy, 'subflow'));
     }
     const junctionKeyToId = new Map<string, string>();
     for (const j of defSpec.junctions ?? []) {
-      junctionKeyToId.set(j.key, deriveId(prior, defId, 'junction', j.key, strategy));
+      junctionKeyToId.set(j.key, deriveId(prior, defId, 'junction', j.key, strategy, 'subflow'));
     }
     const wireTargetMap = new Map<string, string>([...nodeKeyToId, ...junctionKeyToId]);
 
