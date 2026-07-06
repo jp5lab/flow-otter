@@ -199,4 +199,32 @@ describe('compileValidateAndStage (extracted tail)', () => {
 
     expect(base.diagnostics[0]).toEqual(diag);
   });
+
+  it('layout warning diagnostics do not block staging', async () => {
+    const priorSpec = decompile(FIXTURE_FLOWS);
+    const tab = priorSpec.tabs[0]!;
+    const nextSpec: AuthoringSpec = {
+      ...priorSpec,
+      tabs: [
+        {
+          ...tab,
+          nodes: [
+            ...tab.nodes,
+            { key: 'sink', type: 'debug', label: 'Sink', position: { x: 0, y: 100 } },
+          ],
+          connections: [{ fromKey: 'source', outputPort: 0, toKey: 'sink' }],
+        },
+      ],
+    };
+
+    const base = await compileValidateAndStage(ctx, FIXTURE_PRIOR, nextSpec, {
+      toolName: 'layout_warning_test',
+    });
+
+    expect(base.ok).toBe(true);
+    expect(base.diagnostics).toContainEqual(
+      expect.objectContaining({ severity: 'warning', rule: 'layout-backward-wires' }),
+    );
+    expect(await staging.read()).not.toBeNull();
+  });
 });

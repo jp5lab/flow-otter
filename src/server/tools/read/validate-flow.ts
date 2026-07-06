@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import { isTab } from '../../../shared/flows-json.js';
+import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
 import type { NamingContract } from '../../../toolkit/naming/schema.js';
-import { runValidators } from '../../../toolkit/validate/index.js';
 import { ValidationFailedError, type Tool } from '../_tool.js';
 
 const InputSchema = z
@@ -28,6 +28,18 @@ const OutputSchema = z.object({
   has_errors: z.boolean(),
   errors: z.number().int().nonnegative(),
   warnings: z.number().int().nonnegative(),
+  layout: z.object({
+    overall: z.number(),
+    rules: z.array(
+      z.object({
+        rule: z.string(),
+        score: z.number(),
+        weight: z.number(),
+        offender_count: z.number().int().nonnegative(),
+        offenders: z.array(z.record(z.unknown())),
+      }),
+    ),
+  }),
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -52,11 +64,23 @@ export const validateFlowTool: Tool<Input, Output> = {
     const scoped = flows.filter((n) =>
       isTab(n) ? n.id === input.tab_id : (n as { z?: unknown }).z === input.tab_id,
     );
-    const validateOpts: { labelCap: number; namingContract?: NamingContract } = {
+    const validateOpts: {
+      labelCap: number;
+      canvasMaxX: number;
+      canvasMaxY: number;
+      lintViewportWindowWidth: number;
+      layout: true;
+      namingContract?: NamingContract;
+    } = {
       labelCap: ctx.config.LABEL_CAP_CHARS,
+      canvasMaxX: ctx.config.CANVAS_MAX_X,
+      canvasMaxY: ctx.config.CANVAS_MAX_Y,
+      lintViewportWindowWidth: ctx.config.LINT_VIEWPORT_WINDOW_WIDTH,
+      layout: true,
     };
     if (ctx.namingContract !== undefined) validateOpts.namingContract = ctx.namingContract;
-    const report = runValidators(scoped, validateOpts);
+    const report = lintFlows(scoped, validateOpts);
+    if (report.layout === undefined) throw new Error('layout lint report missing');
     return {
       rev,
       tab_id: input.tab_id,
@@ -71,6 +95,7 @@ export const validateFlowTool: Tool<Input, Output> = {
       has_errors: report.hasErrors,
       errors: report.errors.length,
       warnings: report.warnings.length,
+      layout: report.layout,
     };
   },
 };

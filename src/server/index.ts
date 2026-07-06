@@ -84,7 +84,7 @@ export const SERVER_INFO = {
  * `instructions`. Claude Code truncates server instructions at ~2KB; keep
  * under that ceiling. Update via tests/unit/server/instructions.test.ts.
  */
-export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for AI agents: staging, validation, snapshots, atomic deploys. Author in 4 phases.
+export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for agents: staging, validation, snapshots, atomic deploys. Use 4 phases.
 
 1. PLAN — for flows >10 nodes or operator dashboards, call plan_flow. Restate 3-7 stages; decide organization BEFORE nodes.
 
@@ -98,12 +98,12 @@ export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for 
 - Author ops write ONE staged change; pending stage blocks next author op until deploy_staged_change or discard_staged_change. Layout: positions/groups/move_node.
 - stage_changes batches many ops into ONE staged change.
 
-LAYOUT CONVENTIONS: 20px grid; stages left-to-right at 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport); minimize wire crossings; no backward wires. validate_flow returns diagnostics.
+LAYOUT CONVENTIONS: 20px grid; stages left-to-right at 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport); minimize crossings; no backward wires. validate_flow returns diagnostics + layout scores.
 
 4. REVIEW → VALIDATE → DEPLOY:
 - render_flow_png(against:'staged') returns png_path — Read it; render_flow_svg for SVG. Show user; validate_flow; get_staged_change gives staged_hash; preview_flow_diff before deploy_staged_change. User confirms.
 
-DISCOVERY: get_authoring_guide returns the catalog (node types, widgets, templates, validators, layout_conventions, ISA-101 principles); list_available_toolsets/enable_toolset unlock more tools.
+DISCOVERY: get_authoring_guide returns catalog (node types, widgets, templates, validators, layout_conventions, ISA-101); list_available_toolsets/enable_toolset unlock tools.
 
 SPECIALISTS: prefer generic add_node({type, ...}) for contrib + core types; enable author_specialists only when type-specific schemas matter.
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
+import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
 import type { NamingContract } from '../../../toolkit/naming/schema.js';
-import { runValidators } from '../../../toolkit/validate/index.js';
 import type { Tool } from '../_tool.js';
 
 const InputSchema = z.object({}).strict();
@@ -22,6 +22,18 @@ const OutputSchema = z.object({
   has_errors: z.boolean(),
   errors: z.number().int().nonnegative(),
   warnings: z.number().int().nonnegative(),
+  layout: z.object({
+    overall: z.number(),
+    rules: z.array(
+      z.object({
+        rule: z.string(),
+        score: z.number(),
+        weight: z.number(),
+        offender_count: z.number().int().nonnegative(),
+        offenders: z.array(z.record(z.unknown())),
+      }),
+    ),
+  }),
 });
 type Output = z.infer<typeof OutputSchema>;
 
@@ -35,11 +47,23 @@ export const validateAllFlowsTool: Tool<Input, Output> = {
   handler: async (_input, ctx) => {
     void _input;
     const { flows, rev } = await ctx.flowSource.load();
-    const validateOpts: { labelCap: number; namingContract?: NamingContract } = {
+    const validateOpts: {
+      labelCap: number;
+      canvasMaxX: number;
+      canvasMaxY: number;
+      lintViewportWindowWidth: number;
+      layout: true;
+      namingContract?: NamingContract;
+    } = {
       labelCap: ctx.config.LABEL_CAP_CHARS,
+      canvasMaxX: ctx.config.CANVAS_MAX_X,
+      canvasMaxY: ctx.config.CANVAS_MAX_Y,
+      lintViewportWindowWidth: ctx.config.LINT_VIEWPORT_WINDOW_WIDTH,
+      layout: true,
     };
     if (ctx.namingContract !== undefined) validateOpts.namingContract = ctx.namingContract;
-    const report = runValidators(flows, validateOpts);
+    const report = lintFlows(flows, validateOpts);
+    if (report.layout === undefined) throw new Error('layout lint report missing');
     return {
       rev,
       diagnostics: report.diagnostics.map((d) => ({
@@ -53,6 +77,7 @@ export const validateAllFlowsTool: Tool<Input, Output> = {
       has_errors: report.hasErrors,
       errors: report.errors.length,
       warnings: report.warnings.length,
+      layout: report.layout,
     };
   },
 };

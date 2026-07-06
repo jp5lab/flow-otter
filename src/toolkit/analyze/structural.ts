@@ -9,6 +9,7 @@ import {
   type FlowsJson,
   type FlowsJsonNode,
 } from '../../shared/flows-json.js';
+import { lintFlows, type LayoutScoreSummary } from '../lint/flows-lint.js';
 import type { NamingContract } from '../naming/schema.js';
 import { runValidators, type ValidationReport } from '../validate/index.js';
 import { buildReport } from '../validate/report.js';
@@ -33,6 +34,7 @@ export interface FlowStructuralReport {
   readonly dashboardWidgets: number;
   readonly orphans: readonly string[];
   readonly validation: ValidationReport;
+  readonly layout: LayoutScoreSummary;
 }
 
 export interface AllFlowsStructuralReport {
@@ -52,6 +54,9 @@ export interface AllFlowsStructuralReport {
 
 export interface AnalyzeOptions {
   readonly labelCap?: number;
+  readonly canvasMaxX?: number;
+  readonly canvasMaxY?: number;
+  readonly lintViewportWindowWidth?: number;
   readonly namingContract?: NamingContract;
 }
 
@@ -137,6 +142,26 @@ function filterValidationForTab(
   );
 }
 
+function scopedFlowsForTab(flows: FlowsJson, tabId: string): FlowsJson {
+  return flows.filter((n) => (isTab(n) ? n.id === tabId : tabIdOf(n) === tabId));
+}
+
+function layoutForTab(flows: FlowsJson, tabId: string, opts: AnalyzeOptions): LayoutScoreSummary {
+  const lintOpts: Parameters<typeof lintFlows>[1] = {
+    layout: true,
+    ...(opts.labelCap !== undefined ? { labelCap: opts.labelCap } : {}),
+    ...(opts.canvasMaxX !== undefined ? { canvasMaxX: opts.canvasMaxX } : {}),
+    ...(opts.canvasMaxY !== undefined ? { canvasMaxY: opts.canvasMaxY } : {}),
+    ...(opts.lintViewportWindowWidth !== undefined
+      ? { lintViewportWindowWidth: opts.lintViewportWindowWidth }
+      : {}),
+    ...(opts.namingContract !== undefined ? { namingContract: opts.namingContract } : {}),
+  };
+  const report = lintFlows(scopedFlowsForTab(flows, tabId), lintOpts);
+  if (report.layout === undefined) throw new Error('layout lint report missing');
+  return report.layout;
+}
+
 export function analyzeFlow(
   flows: FlowsJson,
   tabId: string,
@@ -182,6 +207,7 @@ export function analyzeFlow(
   if (opts.labelCap !== undefined) validateOpts.labelCap = opts.labelCap;
   if (opts.namingContract !== undefined) validateOpts.namingContract = opts.namingContract;
   const validation = filterValidationForTab(flows, tabId, runValidators(flows, validateOpts));
+  const layout = layoutForTab(flows, tabId, opts);
 
   return {
     tabId,
@@ -199,6 +225,7 @@ export function analyzeFlow(
     dashboardWidgets,
     orphans,
     validation,
+    layout,
   };
 }
 

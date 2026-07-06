@@ -33,6 +33,9 @@ export const analyzeFlowTool: Tool<Input, Output> = {
     const { flows, rev } = await ctx.flowSource.load();
     const report = analyzeFlow(flows, input.tab_id, {
       labelCap: ctx.config.LABEL_CAP_CHARS,
+      canvasMaxX: ctx.config.CANVAS_MAX_X,
+      canvasMaxY: ctx.config.CANVAS_MAX_Y,
+      lintViewportWindowWidth: ctx.config.LINT_VIEWPORT_WINDOW_WIDTH,
       ...(ctx.namingContract !== undefined ? { namingContract: ctx.namingContract } : {}),
     });
     return { rev, report: report as unknown as Record<string, unknown> };

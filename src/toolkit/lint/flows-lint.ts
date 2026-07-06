@@ -13,6 +13,7 @@ import {
   type LayoutObject,
   type Rect,
 } from './geometry.js';
+import { layoutLint, type LayoutLintReport } from './layout-lint.js';
 
 export interface LintOptions {
   labelCap?: number;
@@ -25,7 +26,26 @@ export interface LintOptions {
   nodeHeight?: number;
   /** Future viewport option; accepted here for stage-pipeline pass-through. */
   lintViewportWindowWidth?: number;
+  /** Include v1.5 additive scored layout lint diagnostics and summary. */
+  layout?: boolean;
   namingContract?: NamingContract;
+}
+
+export interface LayoutRuleScoreSummary {
+  rule: string;
+  score: number;
+  weight: number;
+  offender_count: number;
+  offenders: Array<Readonly<Record<string, unknown>>>;
+}
+
+export interface LayoutScoreSummary {
+  overall: number;
+  rules: LayoutRuleScoreSummary[];
+}
+
+export interface FlowLintReport extends ValidationReport {
+  readonly layout?: LayoutScoreSummary;
 }
 
 export const DEFAULTS = {
@@ -35,6 +55,31 @@ export const DEFAULTS = {
 
 const RULE_OFF_CANVAS = 'off-canvas';
 const RULE_BBOX_OVERLAP = 'bbox-overlap';
+const LAYOUT_OFFENDER_LIMIT = 10;
+
+function summarizeLayout(report: LayoutLintReport): LayoutScoreSummary {
+  return {
+    overall: report.overall,
+    rules: report.rules.map((r) => ({
+      rule: r.rule,
+      score: r.score,
+      weight: r.weight,
+      offender_count: r.offenders.length,
+      offenders: r.offenders.slice(0, LAYOUT_OFFENDER_LIMIT),
+    })),
+  };
+}
+
+function nonBlockingLayoutDiagnostics(report: LayoutLintReport): Diagnostic[] {
+  return report.diagnostics.map((d) =>
+    d.severity === 'error'
+      ? {
+          ...d,
+          severity: 'warning' as const,
+        }
+      : d,
+  );
+}
 
 function boxForOverlap(object: LayoutObject, opts: LintOptions): Rect {
   const w = opts.nodeWidth ?? rectWidth(object.box);
@@ -43,7 +88,7 @@ function boxForOverlap(object: LayoutObject, opts: LintOptions): Rect {
   return centeredRect(object.center, w, h);
 }
 
-export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): ValidationReport {
+export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): FlowLintReport {
   const validateOpts: { labelCap?: number; grid?: number; namingContract?: NamingContract } = {};
   if (opts.labelCap !== undefined) validateOpts.labelCap = opts.labelCap;
   if (opts.grid !== undefined) validateOpts.grid = opts.grid;
@@ -113,5 +158,17 @@ export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): ValidationR
     }
   }
 
-  return buildReport(diagnostics);
+  if (opts.layout !== true) return buildReport(diagnostics);
+
+  const layoutReport = layoutLint(flows, {
+    ...(opts.lintViewportWindowWidth !== undefined
+      ? { viewportWindowWidth: opts.lintViewportWindowWidth }
+      : {}),
+  });
+  diagnostics.push(...nonBlockingLayoutDiagnostics(layoutReport));
+
+  return {
+    ...buildReport(diagnostics),
+    layout: summarizeLayout(layoutReport),
+  };
 }

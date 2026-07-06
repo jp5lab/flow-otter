@@ -10,6 +10,7 @@ import type { Logger } from '../../shared/logger.js';
 import type { Container } from '../container.js';
 
 import { makeDeployWithoutPreviewNudge } from './rules/deploy-without-preview.js';
+import { layoutScoresNudge } from './rules/layout-scores.js';
 import { nodeKeyVocabularyNudge } from './rules/node-key-vocabulary.js';
 import { noPlanForLargeFlowNudge } from './rules/no-plan-for-large-flow.js';
 import { paramVocabularyNudge } from './rules/param-vocabulary.js';
@@ -22,6 +23,7 @@ export function buildNudgeRegistry(container: Container): readonly Nudge[] {
     makeDeployWithoutPreviewNudge(() => container),
     paramVocabularyNudge,
     nodeKeyVocabularyNudge,
+    layoutScoresNudge,
     stagedChangeLifecycleNudge,
   ];
 }

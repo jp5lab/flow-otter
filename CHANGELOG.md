@@ -2,6 +2,13 @@
 
 ## 1.5.0 (unreleased)
 
+### D-3 — Layout lint read-surface wiring and layout-score guidance
+
+- `validate_flow` and `validate_all_flows` now run the layout-aware lint path and add an additive `layout` block with `overall` plus eight per-rule scores, weights, true `offender_count`, and offender samples capped at 10 per rule. Existing diagnostics/error/warning fields are preserved; layout diagnostics are warning/info at the wiring layer so the stage gate cannot newly block on layout findings.
+- `analyze_flow` and `analyze_all_flows` now include per-tab layout scores, while the `flows-lint` CLI emits the same JSON `layout` key by default and accepts `--no-layout` to retain the pre-D-3 diagnostic surface. Exit-code thresholds remain diagnostic-severity based.
+- Added the author-tier `layout-scores` soft nudge (excluding `plan_flow`): once per `staged_hash`, scores below 0.95 append a ≤300-char `_guidance` hint naming the weakest rules and pointing to `validate_flow`; scoring is best-effort and never breaks the tool result. `_stage-pipeline` now passes `layout:true` at the existing lint seam, after REND-8's output-only render enrichment invariants.
+- Re-added the shipped `validate_flow` layout-scores claim to `SERVER_INSTRUCTIONS` while keeping the 2KB client budget and all pinned D-5 convention tokens intact.
+
 ### D-2 — Semantic layout lint rules and shared lanes
 
 - Added the shared lane module (`src/toolkit/lanes.ts`) with the ratified `main` / `indicate` / `error` vocabulary, `LANE_ORDER = ['main','indicate','error']`, `LANE_GAP = 120`, and one topology closure used by both `FlowsJson` and `TabSpec` adapters. The closure reads `_authoringLane` / future `lane` annotations when present, seeds catch/complete into the error lane and status into the indicate lane, traverses junctions, and conservatively keeps shared sinks reachable from a non-error root in the main lane.

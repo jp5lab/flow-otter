@@ -6,6 +6,7 @@
  */
 
 import { readPlan } from '../../toolkit/staging/plan-record.js';
+import { lintFlows } from '../../toolkit/lint/flows-lint.js';
 import type { Container } from '../container.js';
 
 import type { NudgeContext, NudgeFlowInfo, NudgeStagingInfo } from './types.js';
@@ -13,11 +14,29 @@ import type { NudgeContext, NudgeFlowInfo, NudgeStagingInfo } from './types.js';
 async function safeReadStaging(container: Container): Promise<NudgeStagingInfo> {
   let stagedNodeCount = 0;
   let stagedHash: string | undefined;
+  let layout: NudgeStagingInfo['layout'];
   try {
     const staged = await container.staging.read();
     if (staged !== null) {
       stagedNodeCount = staged.flows.length;
       stagedHash = staged.stagedHash;
+      try {
+        layout = lintFlows(staged.flows, {
+          labelCap: container.config.LABEL_CAP_CHARS,
+          canvasMaxX: container.config.CANVAS_MAX_X,
+          canvasMaxY: container.config.CANVAS_MAX_Y,
+          lintViewportWindowWidth: container.config.LINT_VIEWPORT_WINDOW_WIDTH,
+          layout: true,
+          ...(container.namingContract !== undefined
+            ? { namingContract: container.namingContract }
+            : {}),
+        }).layout;
+      } catch (err) {
+        container.logger.debug(
+          { err: err instanceof Error ? err.message : String(err) },
+          'nudge-context: layout score failed (best-effort)',
+        );
+      }
     }
   } catch (err) {
     // best-effort: a missing staging dir is normal pre-first-edit. Surface
@@ -47,6 +66,7 @@ async function safeReadStaging(container: Container): Promise<NudgeStagingInfo> 
     has_plan: hasPlan,
     ...(planId !== undefined ? { plan_id: planId } : {}),
     ...(stagedHash !== undefined ? { staged_hash: stagedHash } : {}),
+    ...(layout !== undefined ? { layout } : {}),
   };
 }
 

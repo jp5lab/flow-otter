@@ -22,6 +22,8 @@
  *   (no place to attach the array).
  */
 
+import type { LayoutScoreSummary } from '../../toolkit/lint/flows-lint.js';
+
 export interface NudgeStagingInfo {
   /** Total nodes across all tabs in the staged spec. 0 if no stage. */
   readonly node_count: number;
@@ -31,6 +33,8 @@ export interface NudgeStagingInfo {
   readonly plan_id?: string;
   /** Hash of the current staged change (for cross-referencing). */
   readonly staged_hash?: string;
+  /** Best-effort layout score for the current staged change. */
+  readonly layout?: LayoutScoreSummary;
 }
 
 export interface NudgeFlowInfo {

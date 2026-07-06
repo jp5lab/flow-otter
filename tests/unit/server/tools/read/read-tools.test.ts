@@ -254,30 +254,45 @@ describe('read tools (file flow source)', () => {
     const out = (await validateFlowTool.handler({ tab_id: 'tab1' }, ctx)) as {
       has_errors: boolean;
       diagnostics: unknown[];
+      layout: { overall: number; rules: Array<{ rule: string; offender_count: number }> };
     };
     expect(out.has_errors).toBe(false);
     expect(Array.isArray(out.diagnostics)).toBe(true);
+    expect(out.layout.rules).toHaveLength(8);
+    expect(out.layout.rules.map((r) => r.rule)).toContain('layout-backward-wires');
   });
 
   it('validate_all_flows runs across the whole document', async () => {
-    const out = (await validateAllFlowsTool.handler({}, ctx)) as { has_errors: boolean };
+    const out = (await validateAllFlowsTool.handler({}, ctx)) as {
+      has_errors: boolean;
+      layout: { overall: number; rules: Array<{ rule: string; offender_count: number }> };
+    };
     expect(out.has_errors).toBe(false);
+    expect(out.layout.rules).toHaveLength(8);
   });
 
   it('analyze_flow returns a structural report', async () => {
     const out = (await analyzeFlowTool.handler({ tab_id: 'tab1' }, ctx)) as unknown as {
-      report: { counts: { nodes: number; wires: number } };
+      report: {
+        counts: { nodes: number; wires: number };
+        layout: { overall: number; rules: Array<{ rule: string }> };
+      };
     };
     expect(out.report.counts.nodes).toBe(2);
     expect(out.report.counts.wires).toBe(1);
+    expect(out.report.layout.rules).toHaveLength(8);
   });
 
   it('analyze_all_flows aggregates totals', async () => {
     const out = (await analyzeAllFlowsTool.handler({}, ctx)) as unknown as {
-      report: { totals: { tabs: number; nodes: number } };
+      report: {
+        totals: { tabs: number; nodes: number };
+        perTab: Array<{ layout: { overall: number; rules: Array<{ rule: string }> } }>;
+      };
     };
     expect(out.report.totals.tabs).toBe(1);
     expect(out.report.totals.nodes).toBe(2);
+    expect(out.report.perTab[0]?.layout.rules).toHaveLength(8);
   });
 
   it('explain_flow returns entrypoints and sinks', async () => {
