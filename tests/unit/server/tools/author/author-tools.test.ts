@@ -373,6 +373,100 @@ describe('author tools (workflow node tools)', () => {
     expect(out.added_node_id).toMatch(HEX16);
   });
 
+  it('add_subflow_instance resolves conf-type env values from config authoring keys in file mode', async () => {
+    const cleanCtx = await rebuildCtx([
+      { id: 'tab1', type: 'tab', label: 'Main', _authoringKey: 'tab1' },
+      {
+        id: 'subflow1',
+        type: 'subflow',
+        name: 'Reusable',
+        env: [{ name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' }],
+        out: [{ x: 40, y: 80, wires: [] }],
+        _authoringKey: 'subflow1',
+      },
+      {
+        id: 'broker1',
+        type: 'mqtt-broker',
+        name: 'Broker A',
+        broker: 'broker.example',
+        port: 1883,
+        _authoringKey: 'broker-a',
+      },
+    ]);
+    try {
+      const out = (await addSubflowInstanceTool.handler(
+        {
+          tab_id: 'tab1',
+          defId: 'subflow1',
+          opts: {
+            env: [
+              { name: 'BROKER', type: 'conf-type', value: 'broker-a' },
+              { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+            ],
+          },
+        },
+        cleanCtx.ctx,
+      )) as AddNodeOutput;
+      expect(out.ok).toBe(true);
+      const staged = await cleanCtx.ctx.staging.read();
+      const inst = staged?.flows.find(
+        (n) => (n as Record<string, unknown>)['_authoringKey'] === 'subflow-subflow1',
+      ) as Record<string, unknown> | undefined;
+      expect((inst?.['env'] as Array<Record<string, unknown>>)[0]?.['value']).toBe('broker1');
+      expect((inst?.['env'] as Array<Record<string, unknown>>)[1]).toEqual({
+        name: 'TOPIC',
+        type: 'str',
+        value: 'sensors/temperature',
+      });
+    } finally {
+      await cleanCtx.cleanup();
+    }
+  });
+
+  it('add_subflow_instance refuses conf-type env overrides when runtime lacks subflowPerInstanceConfig', async () => {
+    const cleanCtx = await rebuildCtx([
+      { id: 'tab1', type: 'tab', label: 'Main', _authoringKey: 'tab1' },
+      {
+        id: 'subflow1',
+        type: 'subflow',
+        name: 'Reusable',
+        env: [{ name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' }],
+        out: [{ x: 40, y: 80, wires: [] }],
+        _authoringKey: 'subflow1',
+      },
+      {
+        id: 'broker1',
+        type: 'mqtt-broker',
+        name: 'Broker A',
+        broker: 'broker.example',
+        port: 1883,
+        _authoringKey: 'broker-a',
+      },
+    ]);
+    try {
+      (
+        cleanCtx.ctx.container as unknown as {
+          noderedClient: { getNoderedVersion: () => Promise<{ version: string }> };
+        }
+      ).noderedClient = {
+        getNoderedVersion: () => Promise.resolve({ version: '3.1.11' }),
+      };
+
+      await expect(
+        addSubflowInstanceTool.handler(
+          {
+            tab_id: 'tab1',
+            defId: 'subflow1',
+            opts: { env: [{ name: 'BROKER', type: 'conf-type', value: 'broker-a' }] },
+          },
+          cleanCtx.ctx,
+        ),
+      ).rejects.toThrow(/subflowPerInstanceConfig|Node-RED 4\.0/);
+    } finally {
+      await cleanCtx.cleanup();
+    }
+  });
+
   it('add_group stages a new group', async () => {
     const out = (await addGroupTool.handler(
       { tab_id: 'tab1', name: 'Group A' },
@@ -589,12 +683,26 @@ describe('author tools (workflow node tools)', () => {
 
   it('create_subflow_definition stages a new subflow definition', async () => {
     const out = (await createSubflowDefinitionTool.handler(
-      { name: 'Created Subflow' },
+      {
+        name: 'Created Subflow',
+        env: [
+          { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+          { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+        ],
+      },
       ctx,
     )) as CreateSubflowDefinitionOutput;
     expect(out.ok).toBe(true);
     expect(out.diff_summary.nodes_added).toBe(1);
     expect(out.new_def_id).toMatch(HEX16);
+    const staged = await ctx.staging.read();
+    const def = staged?.flows.find(
+      (n) => n.type === 'subflow' && (n as Record<string, unknown>)['name'] === 'Created Subflow',
+    ) as Record<string, unknown> | undefined;
+    expect(def?.['env']).toEqual([
+      { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+      { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+    ]);
   });
 
   it('instantiate_template stages a built-in template', async () => {

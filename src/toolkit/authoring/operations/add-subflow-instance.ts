@@ -1,4 +1,4 @@
-import type { AuthoringSpec, NodeSpec, TabSpec } from '../types.js';
+import type { AuthoringSpec, NodeSpec, TabEnvEntry, TabSpec } from '../types.js';
 
 import { defaultSpawnPosition } from './_spawn.js';
 
@@ -9,6 +9,8 @@ export interface AddSubflowInstanceOpts {
   key?: string;
   /** Type-specific passthrough (env overrides, etc.). */
   passthrough?: Readonly<Record<string, unknown>>;
+  /** Per-instance subflow env overrides. `conf-type` values are config-node authoring keys. */
+  env?: readonly TabEnvEntry[];
   /** Membership in an existing group. */
   groupKey?: string;
 }
@@ -50,10 +52,14 @@ export function addSubflowInstance(
   const newKey = uniqueKey(opts.key ?? `subflow-${defId}`, taken);
   const type = `subflow:${defId}`;
   const label = opts.label ?? DEFAULTS.label;
+  const passthrough =
+    opts.env !== undefined
+      ? { ...(opts.passthrough ?? {}), env: opts.env.map((entry) => ({ ...entry })) }
+      : opts.passthrough;
   const position = defaultSpawnPosition(tab, {
     type,
     label,
-    ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
+    ...(passthrough !== undefined ? { passthrough } : {}),
   });
 
   const newNode: NodeSpec = {
@@ -62,7 +68,7 @@ export function addSubflowInstance(
     label,
     position,
     ...(opts.groupKey !== undefined ? { groupKey: opts.groupKey } : {}),
-    ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
+    ...(passthrough !== undefined ? { passthrough } : {}),
   };
 
   const updatedTab: TabSpec = {

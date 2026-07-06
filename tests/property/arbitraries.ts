@@ -263,13 +263,64 @@ const arbSubflowDef: fc.Arbitrary<SubflowDefSpec> = fc
       filteredConn,
       (c) => `${c.fromKey}|${c.outputPort}|${c.toKey}`,
     );
+    const env: TabEnvEntry[] =
+      raw.id.length % 2 === 0
+        ? [
+            { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+            { name: 'TOPIC', type: 'str', value: 'telemetry' },
+          ]
+        : [];
     return {
       id: raw.id,
       name: raw.name,
+      ...(env.length > 0 ? { env } : {}),
       nodes,
       connections: dedupedConn,
     };
   });
+
+function withNr512SubflowEnv(spec: AuthoringSpec): AuthoringSpec {
+  const firstTab = spec.tabs[0];
+  if (firstTab === undefined) return spec;
+  const configNode: ConfigNodeSpec = {
+    key: 'nr512_broker',
+    type: 'mqtt-broker',
+    label: 'NR512 Broker',
+    passthrough: { broker: 'broker.example', port: 1883 },
+  };
+  const def: SubflowDefSpec = {
+    id: 'nr512_subflow',
+    name: 'NR512Subflow',
+    env: [
+      { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+      { name: 'TOPIC', type: 'str', value: 'telemetry' },
+    ],
+    nodes: [],
+    connections: [],
+  };
+  const instance: NodeSpec = {
+    key: 'nr512_instance',
+    type: 'subflow:nr512_subflow',
+    label: 'NR512 inst',
+    position: { x: 120, y: 120 },
+    passthrough: {
+      env: [
+        { name: 'BROKER', type: 'conf-type', value: 'nr512_broker' },
+        { name: 'TOPIC', type: 'str', value: 'telemetry/override' },
+      ],
+    },
+  };
+  const tab: TabSpec = {
+    ...firstTab,
+    nodes: [...firstTab.nodes, instance],
+  };
+  return {
+    ...spec,
+    tabs: [tab, ...spec.tabs.slice(1)],
+    configNodes: [...(spec.configNodes ?? []), configNode],
+    subflowDefs: [...(spec.subflowDefs ?? []), def],
+  };
+}
 
 export const arbitraryAuthoringSpec: fc.Arbitrary<AuthoringSpec> = fc
   .tuple(
@@ -280,8 +331,8 @@ export const arbitraryAuthoringSpec: fc.Arbitrary<AuthoringSpec> = fc
     const uniqueTabs = dedupeUniqueByKey(tabs, (t) => t.id);
     const tabIds = new Set(uniqueTabs.map((t) => t.id));
     const uniqueDefs = dedupeUniqueByKey(defs, (d) => d.id).filter((d) => !tabIds.has(d.id));
-    if (uniqueDefs.length === 0) return { tabs: uniqueTabs };
-    return { tabs: uniqueTabs, subflowDefs: uniqueDefs };
+    if (uniqueDefs.length === 0) return withNr512SubflowEnv({ tabs: uniqueTabs });
+    return withNr512SubflowEnv({ tabs: uniqueTabs, subflowDefs: uniqueDefs });
   })
   .filter((spec) => spec.tabs.length > 0);
 

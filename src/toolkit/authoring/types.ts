@@ -144,6 +144,8 @@ export interface SubflowDefSpec {
   readonly id: string;
   readonly name: string;
   readonly info?: string;
+  /** Subflow-level typed environment variable declarations. */
+  readonly env?: readonly TabEnvEntry[];
   readonly nodes: readonly NodeSpec[];
   readonly connections: readonly ConnectionSpec[];
   readonly junctions?: readonly JunctionSpec[];

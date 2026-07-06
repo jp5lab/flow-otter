@@ -372,8 +372,9 @@ function emitNode(
       effectiveType = `${SUBFLOW_INSTANCE_PREFIX}${defId}`;
     }
   }
+  const passthrough = passthroughForSubflowInstanceEnvEmit(spec, tabId, configKeyToId, diagnostics);
   const node: Record<string, unknown> = {
-    ...(spec.passthrough ?? {}),
+    ...(passthrough ?? {}),
     ...(spec.info !== undefined ? { info: spec.info } : {}),
     id,
     type: effectiveType,
@@ -401,6 +402,45 @@ function emitNode(
     }
   }
   return node as RegularNode;
+}
+
+function passthroughForSubflowInstanceEnvEmit(
+  spec: NodeSpec,
+  tabId: string,
+  configKeyToId: ReadonlyMap<string, string>,
+  diagnostics: CompileDiagnostic[],
+): Readonly<Record<string, unknown>> | undefined {
+  if (!spec.type.startsWith(SUBFLOW_INSTANCE_PREFIX)) return spec.passthrough;
+  const env = spec.passthrough?.['env'];
+  if (!Array.isArray(env)) return spec.passthrough;
+
+  const resolvedEnv = (env as readonly unknown[]).map((entry): unknown => {
+    if (!isRecord(entry) || Array.isArray(entry)) return entry;
+    const next = { ...entry };
+    if (next['type'] !== 'conf-type' || typeof next['value'] !== 'string') return next;
+    const refKey = next['value'];
+    const targetId = configKeyToId.get(refKey);
+    if (targetId !== undefined) {
+      next['value'] = targetId;
+      return next;
+    }
+    const envName = typeof next['name'] === 'string' ? next['name'] : '<unnamed>';
+    diagnostics.push({
+      severity: 'warning',
+      rule: 'compile/unresolved-subflow-env-config-ref',
+      message: `Node '${spec.key}' env '${envName}' conf-type value '${refKey}' was preserved but does not match any config node; it may be a dangling Node-RED id or a typo'd authoring key.`,
+      tabId,
+      nodeKey: spec.key,
+      context: { envName: next['name'], refKey },
+    });
+    return next;
+  });
+
+  return { ...(spec.passthrough ?? {}), env: resolvedEnv };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function emitGroup(
@@ -505,9 +545,11 @@ function autoFitGroupGeometry(
 }
 
 function emitSubflowDef(spec: SubflowDefSpec, id: string): FlowsJsonNode {
+  const env = spec.env !== undefined ? spec.env.map((e) => ({ ...e })) : undefined;
   return {
     ...(spec.passthrough ?? {}),
     ...(spec.info !== undefined ? { info: spec.info } : {}),
+    ...(env !== undefined ? { env } : {}),
     id,
     type: 'subflow',
     name: spec.name,

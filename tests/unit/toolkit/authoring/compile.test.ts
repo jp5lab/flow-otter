@@ -565,6 +565,129 @@ describe('compile baseline-merge ID preservation', () => {
     expect(errors).toHaveLength(0);
   });
 
+  it('emits subflow definition env declarations', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          nodes: [],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      subflowDefs: [
+        {
+          id: 'my-sub',
+          name: 'MySub',
+          env: [
+            { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+            { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+          ],
+          nodes: [],
+          connections: [],
+        },
+      ],
+    };
+
+    const { flows } = compile(spec);
+    const def = flows.find((n) => n.type === 'subflow') as Record<string, unknown> | undefined;
+    expect(def?.['env']).toEqual([
+      { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+      { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+    ]);
+  });
+
+  it('resolves subflow instance conf-type env authoring keys to config node ids', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          nodes: [
+            {
+              key: 'sub-inst',
+              type: 'subflow:my-sub',
+              position: { x: 100, y: 100 },
+              passthrough: {
+                env: [
+                  { name: 'BROKER', type: 'conf-type', value: 'broker-a' },
+                  { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+                ],
+              },
+            },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      configNodes: [
+        {
+          key: 'broker-a',
+          type: 'mqtt-broker',
+          label: 'Broker A',
+          passthrough: { broker: 'broker.example', port: 1883 },
+        },
+      ],
+      subflowDefs: [{ id: 'my-sub', name: 'MySub', nodes: [], connections: [] }],
+    };
+
+    const { flows } = compile(spec);
+    const broker = flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'broker-a',
+    );
+    const inst = flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'sub-inst',
+    ) as Record<string, unknown> | undefined;
+    expect((inst?.['env'] as Array<Record<string, unknown>>)[0]?.['value']).toBe(broker?.id);
+    expect((inst?.['env'] as Array<Record<string, unknown>>)[1]).toEqual({
+      name: 'TOPIC',
+      type: 'str',
+      value: 'sensors/temperature',
+    });
+  });
+
+  it('diagnoses unresolved subflow instance conf-type env config refs', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          nodes: [
+            {
+              key: 'sub-inst',
+              type: 'subflow:my-sub',
+              position: { x: 100, y: 100 },
+              passthrough: {
+                env: [{ name: 'BROKER', type: 'conf-type', value: 'missing-broker' }],
+              },
+            },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      subflowDefs: [{ id: 'my-sub', name: 'MySub', nodes: [], connections: [] }],
+    };
+
+    const result = compile(spec);
+    expect(result.diagnostics.map((d) => d.rule)).toContain(
+      'compile/unresolved-subflow-env-config-ref',
+    );
+    const inst = result.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'sub-inst',
+    ) as Record<string, unknown> | undefined;
+    expect((inst?.['env'] as Array<Record<string, unknown>>)[0]).toEqual({
+      name: 'BROKER',
+      type: 'conf-type',
+      value: 'missing-broker',
+    });
+    expect(result.diagnostics[0]?.message).toContain('was preserved');
+  });
+
   it('surfaces compile diagnostics for unresolved wire targets', () => {
     const spec: AuthoringSpec = {
       tabs: [

@@ -33,12 +33,20 @@ describe('createSubflowDefinition', () => {
       name: 'X',
       nodes: [{ key: 'in', type: 'subflow:in', position: { x: 0, y: 0 } }],
       connections: [{ fromKey: 'in', outputPort: 0, toKey: 'out' }],
+      env: [
+        { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+        { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+      ],
       passthrough: { category: 'common' },
     });
     expect(newDefId).toBe('def-x');
     const def = spec.subflowDefs![0]!;
     expect(def.nodes.length).toBe(1);
     expect(def.connections.length).toBe(1);
+    expect(def.env).toEqual([
+      { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+      { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+    ]);
     expect(def.passthrough).toEqual({ category: 'common' });
   });
 

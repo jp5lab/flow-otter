@@ -1,4 +1,10 @@
-import type { AuthoringSpec, ConnectionSpec, NodeSpec, SubflowDefSpec } from '../types.js';
+import type {
+  AuthoringSpec,
+  ConnectionSpec,
+  NodeSpec,
+  SubflowDefSpec,
+  TabEnvEntry,
+} from '../types.js';
 
 export interface CreateSubflowDefinitionOpts {
   /** Custom def id. Auto-generated as `subflow-def` (with collision suffix) if omitted. */
@@ -6,6 +12,7 @@ export interface CreateSubflowDefinitionOpts {
   name: string;
   nodes?: readonly NodeSpec[];
   connections?: readonly ConnectionSpec[];
+  env?: readonly TabEnvEntry[];
   passthrough?: Readonly<Record<string, unknown>>;
 }
 
@@ -47,6 +54,7 @@ export function createSubflowDefinition(
   const newDef: SubflowDefSpec = {
     id: newDefId,
     name: opts.name,
+    ...(opts.env !== undefined ? { env: opts.env.map((entry) => ({ ...entry })) } : {}),
     nodes: opts.nodes ?? [],
     connections: opts.connections ?? [],
     ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
