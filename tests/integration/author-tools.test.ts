@@ -113,6 +113,10 @@ interface StageResult {
   staged_hash: string;
 }
 
+interface AddGroupStageResult extends StageResult {
+  added_group_id?: string;
+}
+
 interface DeployResult {
   ok: boolean;
   deployed_hash: string;
@@ -181,5 +185,42 @@ describe('author tools end-to-end', () => {
     for (const c of AUTHOR_TOOL_CASES) {
       expect(names, `tool ${c.name} should be registered`).toContain(c.name);
     }
+  });
+
+  it('adds same-key groups on two tabs without cross-tab id theft', async () => {
+    const first = (await callTool(rig.registry, rig.container, 'add_group', {
+      tab_id: TAB_2,
+      key: 'shared-group',
+      name: 'Shared',
+    })) as AddGroupStageResult;
+    expect(first.ok).toBe(true);
+    expect(first.added_group_id).toBeDefined();
+
+    await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
+      staged_hash: first.staged_hash,
+    });
+
+    const second = (await callTool(rig.registry, rig.container, 'add_group', {
+      tab_id: TAB_1,
+      key: 'shared-group',
+      name: 'Shared',
+    })) as AddGroupStageResult;
+    expect(second.ok).toBe(true);
+    expect(second.added_group_id).toBeDefined();
+    expect(second.added_group_id).not.toBe(first.added_group_id);
+
+    const deployed = (await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
+      staged_hash: second.staged_hash,
+    })) as DeployResult;
+    expect(deployed.ok).toBe(true);
+
+    const groups = (await fetchRuntimeFlows()).filter(
+      (n) =>
+        n.type === 'group' && (n as Record<string, unknown>)['_authoringKey'] === 'shared-group',
+    );
+    expect(groups).toHaveLength(2);
+    expect(new Set(groups.map((g) => g.id)).size).toBe(2);
   });
 });

@@ -33,6 +33,7 @@ const SizeSchema = z
 const InputSchema = z
   .object({
     tab_id: z.string().min(1, 'tab_id is required'),
+    key: z.string().min(1).optional(),
     name: z.string().min(1, 'name is required').max(24),
     node_keys: z.array(z.string().min(1)).optional(),
     position: PositionSchema.optional(),
@@ -82,6 +83,7 @@ export const addGroupTool: Tool<Input, Output> = {
     type: 'object',
     properties: {
       tab_id: { type: 'string', minLength: 1 },
+      key: { type: 'string', minLength: 1 },
       name: { type: 'string', minLength: 1, maxLength: 24 },
       node_keys: {
         type: 'array',
@@ -126,6 +128,7 @@ export const addGroupTool: Tool<Input, Output> = {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
         const opts: Parameters<typeof addGroup>[2] = { name: input.name };
+        if (input.key !== undefined) opts.key = input.key;
         const guidance: NodeKeyResolutionGuidance[] = [];
         if (input.node_keys !== undefined) {
           opts.nodeKeys = input.node_keys.map((value, index) => {

@@ -21,6 +21,7 @@ const PositionSchema = z
 const InputSchema = z
   .object({
     tab_id: z.string().min(1, 'tab_id is required'),
+    key: z.string().min(1).optional(),
     text: z.string().min(1, 'text is required'),
     position: PositionSchema.optional(),
     info: z.string().optional(),
@@ -67,6 +68,7 @@ export const addCommentTool: Tool<Input, Output> = {
     type: 'object',
     properties: {
       tab_id: { type: 'string', minLength: 1 },
+      key: { type: 'string', minLength: 1 },
       text: { type: 'string', minLength: 1 },
       position: {
         type: 'object',
@@ -94,6 +96,7 @@ export const addCommentTool: Tool<Input, Output> = {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
         const opts: Parameters<typeof addComment>[2] = { text: input.text };
+        if (input.key !== undefined) opts.key = input.key;
         if (input.position !== undefined) opts.position = input.position;
         if (input.info !== undefined) opts.info = input.info;
         if (input.group_key !== undefined) opts.groupKey = input.group_key;

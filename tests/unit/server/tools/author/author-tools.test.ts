@@ -28,7 +28,7 @@ import { moveNodeTool } from '../../../../../src/server/tools/author/move-node.j
 import { removeNodeTool } from '../../../../../src/server/tools/author/remove-node.js';
 import { updateNodeTool } from '../../../../../src/server/tools/author/update-node.js';
 import { wireNodesTool } from '../../../../../src/server/tools/author/wire-nodes.js';
-import { isGroup } from '../../../../../src/shared/flows-json.js';
+import { isComment, isGroup } from '../../../../../src/shared/flows-json.js';
 import { createLogger } from '../../../../../src/shared/logger.js';
 import { FilesystemSnapshotStore } from '../../../../../src/toolkit/snapshot/filesystem.js';
 import { StagedStore } from '../../../../../src/toolkit/staging/staged-store.js';
@@ -333,6 +333,20 @@ describe('author tools (workflow node tools)', () => {
     expect(out.added_group_id).toMatch(HEX16);
   });
 
+  it('add_group stages an explicit authoring key', async () => {
+    const out = (await addGroupTool.handler(
+      { tab_id: 'tab1', key: 'explicit-group', name: 'Group A' },
+      ctx,
+    )) as AddGroupOutput;
+    expect(out.ok).toBe(true);
+    expect(out.added_group_id).toMatch(HEX16);
+    const staged = await ctx.staging.read();
+    const group = staged?.flows.find(
+      (n) => isGroup(n) && (n as Record<string, unknown>)['_authoringKey'] === 'explicit-group',
+    );
+    expect(group?.id).toBe(out.added_group_id);
+  });
+
   it('add_group stages explicit group geometry and parent metadata', async () => {
     const cleanCtx = await rebuildCtx([
       { id: 'tab1', type: 'tab', label: 'Main', _authoringKey: 'tab1' },
@@ -404,6 +418,25 @@ describe('author tools (workflow node tools)', () => {
     expect(out.ok).toBe(true);
     expect(out.diff_summary.nodes_added).toBe(1);
     expect(out.added_comment_id).toMatch(HEX16);
+  });
+
+  it('add_comment stages an explicit authoring key', async () => {
+    const out = (await addCommentTool.handler(
+      {
+        tab_id: 'tab1',
+        key: 'explicit-comment',
+        text: 'Note',
+        position: { x: 100, y: 280 },
+      },
+      ctx,
+    )) as AddCommentOutput;
+    expect(out.ok).toBe(true);
+    expect(out.added_comment_id).toMatch(HEX16);
+    const staged = await ctx.staging.read();
+    const comment = staged?.flows.find(
+      (n) => isComment(n) && (n as Record<string, unknown>)['_authoringKey'] === 'explicit-comment',
+    );
+    expect(comment?.id).toBe(out.added_comment_id);
   });
 
   it('wire_nodes stages a new wire', async () => {

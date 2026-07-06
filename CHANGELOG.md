@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 (unreleased)
+
+### WSB-2 — Compile ID preservation
+
+- **Cross-tab group/comment key ownership**: `compile()` now builds the complete ID-derivation entry list before resolving IDs, reserves every exact `container:kind:key` owner first, then runs the existing scoped fallback / legacy-id / fixed / fresh path in the prior deterministic order. This layers on top of 6f70281's global/tab/subflow fallback scoping: same-scope cross-tab moves still preserve IDs, while a new same-key group/comment on an earlier tab can no longer steal the owner's ID or create duplicate IDs. Fresh hash IDs keep the legacy unsalted seed when available and deterministically salt (`~1`, `~2`, ...) when the base hash is already reserved or present in the prior flow. `add_group` and `add_comment` now expose optional `key` inputs through both Zod and JSON schemas and thread them to the existing op support, so agents can intentionally create matching authoring keys across tabs without tripping ID uniqueness.
+
 ## 1.4.0 (unreleased)
 
 ### PHASE1-EXIT fixes

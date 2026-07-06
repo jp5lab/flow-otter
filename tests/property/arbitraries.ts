@@ -323,7 +323,14 @@ export function canonicalizeSpec(spec: AuthoringSpec): AuthoringSpec {
   };
 }
 
-type Transformation = 'identity' | 'cross-tab-move' | 'delete-node' | 'add-node' | 'multi-edit';
+type Transformation =
+  | 'identity'
+  | 'cross-tab-move'
+  | 'delete-node'
+  | 'add-node'
+  | 'add-duplicate-group-on-new-tab'
+  | 'add-duplicate-comment-on-new-tab'
+  | 'multi-edit';
 
 function moveCrossTab(before: AuthoringSpec, seed: number): AuthoringSpec {
   if (before.tabs.length < 2) return before;
@@ -387,6 +394,64 @@ function addOneNode(before: AuthoringSpec, seed: number): AuthoringSpec {
   };
 }
 
+function freshTabId(before: AuthoringSpec, seed: number): string {
+  const existing = new Set(before.tabs.map((t) => t.id));
+  let id = `newtab${seed}`;
+  let suffix = 2;
+  while (existing.has(id)) {
+    id = `newtab${seed}-${suffix}`;
+    suffix++;
+  }
+  return id;
+}
+
+function addDuplicateGroupOnNewTab(before: AuthoringSpec, seed: number): AuthoringSpec {
+  const sourceTab = before.tabs.find((t) => t.groups.length > 0);
+  if (!sourceTab) return before;
+  const sourceGroup = sourceTab.groups[seed % sourceTab.groups.length]!;
+  const newTab: TabSpec = {
+    id: freshTabId(before, seed),
+    label: 'New group tab',
+    nodes: [],
+    connections: [],
+    groups: [
+      {
+        key: sourceGroup.key,
+        name: sourceGroup.name,
+        nodeKeys: [],
+        ...(sourceGroup.position !== undefined ? { position: sourceGroup.position } : {}),
+        ...(sourceGroup.size !== undefined ? { size: sourceGroup.size } : {}),
+      },
+    ],
+    comments: [],
+  };
+  const tabs = seed % 2 === 0 ? [...before.tabs, newTab] : [newTab, ...before.tabs];
+  return { ...before, tabs };
+}
+
+function addDuplicateCommentOnNewTab(before: AuthoringSpec, seed: number): AuthoringSpec {
+  const sourceTab = before.tabs.find((t) => t.comments.length > 0);
+  if (!sourceTab) return before;
+  const sourceComment = sourceTab.comments[seed % sourceTab.comments.length]!;
+  const newTab: TabSpec = {
+    id: freshTabId(before, seed),
+    label: 'New comment tab',
+    nodes: [],
+    connections: [],
+    groups: [],
+    comments: [
+      {
+        key: sourceComment.key,
+        text: sourceComment.text,
+        position: sourceComment.position,
+        ...(sourceComment.size !== undefined ? { size: sourceComment.size } : {}),
+      },
+    ],
+  };
+  const tabs = seed % 2 === 0 ? [...before.tabs, newTab] : [newTab, ...before.tabs];
+  return { ...before, tabs };
+}
+
 function multiEdit(before: AuthoringSpec, seed: number): AuthoringSpec {
   const suffix = (seed % 90) + 10;
   return {
@@ -415,6 +480,10 @@ function applyTransformation(
       return deleteOneNode(before, seed);
     case 'add-node':
       return addOneNode(before, seed);
+    case 'add-duplicate-group-on-new-tab':
+      return addDuplicateGroupOnNewTab(before, seed);
+    case 'add-duplicate-comment-on-new-tab':
+      return addDuplicateCommentOnNewTab(before, seed);
     case 'multi-edit':
       return multiEdit(before, seed);
   }
@@ -434,6 +503,8 @@ export const arbitrarySpecPair: fc.Arbitrary<SpecPair> = fc
       'cross-tab-move',
       'delete-node',
       'add-node',
+      'add-duplicate-group-on-new-tab',
+      'add-duplicate-comment-on-new-tab',
       'multi-edit',
     ),
     fc.integer({ min: 0, max: 9999 }),

@@ -103,11 +103,37 @@ interface PriorIndex {
    */
   allIds: Set<string>;
   /**
-   * Ids already claimed by `deriveId` during this compile pass. Prevents two
+   * Ids already claimed by ID resolution during this compile pass. Prevents two
    * new spec entries from claiming the same prior id when the scoped fallback
    * would otherwise hand it out twice.
    */
   reservedIds: Set<string>;
+}
+
+type IdContainerRef =
+  | { readonly kind: 'global' }
+  | { readonly kind: 'tab'; readonly spec: TabSpec }
+  | { readonly kind: 'subflow'; readonly spec: SubflowDefSpec };
+
+interface IdEntry {
+  readonly container: IdContainerRef;
+  readonly kind: Kind;
+  readonly key: string;
+  readonly fallbackScope: BaselineScope;
+  readonly assign: (id: string) => void;
+  id?: string;
+}
+
+interface TabResolvedIds {
+  readonly nodeKeyToId: Map<string, string>;
+  readonly junctionKeyToId: Map<string, string>;
+  readonly groupKeyToId: Map<string, string>;
+  readonly commentKeyToId: Map<string, string>;
+}
+
+interface SubflowResolvedIds {
+  readonly nodeKeyToId: Map<string, string>;
+  readonly junctionKeyToId: Map<string, string>;
 }
 
 function kindOf(node: FlowsJsonNode): Kind {
@@ -188,31 +214,77 @@ function reserve(prior: PriorIndex, id: string): string {
   return id;
 }
 
-function deriveId(
+function priorGlobalId(prior: PriorIndex, kind: Kind, key: string): string | undefined {
+  const id = prior.byScopeKindKey.get(`global:${kind}:${key}`);
+  return typeof id === 'string' ? id : undefined;
+}
+
+function priorContainerIdForExact(prior: PriorIndex, entry: IdEntry): string | undefined {
+  switch (entry.container.kind) {
+    case 'global':
+      return priorGlobalId(prior, entry.kind, entry.key);
+    case 'tab':
+      return priorGlobalId(prior, 'tab', entry.container.spec.id);
+    case 'subflow':
+      return priorGlobalId(prior, 'subflowDef', entry.container.spec.id);
+  }
+}
+
+function reserveExactId(prior: PriorIndex, entry: IdEntry): void {
+  const containerId = priorContainerIdForExact(prior, entry);
+  if (containerId === undefined) return;
+  const exact = prior.byTabKindKey.get(`${containerId}:${entry.kind}:${entry.key}`);
+  if (exact === undefined || prior.reservedIds.has(exact)) return;
+  entry.id = reserve(prior, exact);
+  entry.assign(entry.id);
+}
+
+function freshId(prior: PriorIndex, seed: string): string {
+  const unsalted = generateNodeId(seed);
+  if (!prior.reservedIds.has(unsalted) && !prior.allIds.has(unsalted)) {
+    return reserve(prior, unsalted);
+  }
+  let n = 1;
+  while (true) {
+    const salted = generateNodeId(`${seed}~${n}`);
+    if (!prior.reservedIds.has(salted) && !prior.allIds.has(salted)) {
+      return reserve(prior, salted);
+    }
+    n++;
+  }
+}
+
+function seedForId(containerId: string, kind: Kind, key: string): string {
+  return kind === 'tab' || kind === 'subflowDef' || kind === 'config'
+    ? `${kind}:${key}`
+    : `${containerId}:${kind}:${key}`;
+}
+
+function resolveIdEntry(
   prior: PriorIndex,
+  entry: IdEntry,
   containerId: string,
-  kind: Kind,
-  key: string,
   strategy: 'hash' | 'fixed',
-  fallbackScope: BaselineScope,
-): string {
-  const exact = prior.byTabKindKey.get(`${containerId}:${kind}:${key}`);
-  if (exact !== undefined && !prior.reservedIds.has(exact)) {
-    return reserve(prior, exact);
-  }
-  const kk = prior.byScopeKindKey.get(`${fallbackScope}:${kind}:${key}`);
+): void {
+  if (entry.id !== undefined) return;
+  const kk = prior.byScopeKindKey.get(`${entry.fallbackScope}:${entry.kind}:${entry.key}`);
   if (typeof kk === 'string' && !prior.reservedIds.has(kk)) {
-    return reserve(prior, kk);
+    entry.id = reserve(prior, kk);
+    entry.assign(entry.id);
+    return;
   }
-  if (prior.allIds.has(key) && !prior.reservedIds.has(key)) {
-    return reserve(prior, key);
+  if (prior.allIds.has(entry.key) && !prior.reservedIds.has(entry.key)) {
+    entry.id = reserve(prior, entry.key);
+    entry.assign(entry.id);
+    return;
   }
-  if (strategy === 'fixed') return reserve(prior, key);
-  const seed =
-    kind === 'tab' || kind === 'subflowDef' || kind === 'config'
-      ? `${kind}:${key}`
-      : `${containerId}:${kind}:${key}`;
-  return reserve(prior, generateNodeId(seed));
+  if (strategy === 'fixed') {
+    entry.id = reserve(prior, entry.key);
+    entry.assign(entry.id);
+    return;
+  }
+  entry.id = freshId(prior, seedForId(containerId, entry.kind, entry.key));
+  entry.assign(entry.id);
 }
 
 function emitTab(spec: TabSpec, id: string): TabNode {
@@ -514,48 +586,144 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   const flows: FlowsJsonNode[] = [];
   const diagnostics: CompileDiagnostic[] = [];
   const subflowDefOutCount = buildSubflowDefOutCount(spec.subflowDefs);
-
-  // Pre-resolve config-node ids so per-tab nodes can resolve `widgetAnchor`.
-  // Reserving these ids up-front ensures the cross-tab-move fallback in
-  // `deriveId` does not hand them out to a regular node by mistake.
   const configKeyToId = new Map<string, string>();
+  const subflowDefKeyToId = new Map<string, string>();
+  const subflowDefIdBySpec = new Map<SubflowDefSpec, string>();
+  const tabIdBySpec = new Map<TabSpec, string>();
+  const idsByTab = new Map<TabSpec, TabResolvedIds>();
+  const idsBySubflowDef = new Map<SubflowDefSpec, SubflowResolvedIds>();
+  const idEntries: IdEntry[] = [];
+
+  const addIdEntry = (entry: IdEntry): void => {
+    idEntries.push(entry);
+  };
+
   for (const configSpec of spec.configNodes ?? []) {
-    configKeyToId.set(
-      configSpec.key,
-      deriveId(prior, '', 'config', configSpec.key, strategy, 'global'),
-    );
+    addIdEntry({
+      container: { kind: 'global' },
+      kind: 'config',
+      key: configSpec.key,
+      fallbackScope: 'global',
+      assign: (id) => configKeyToId.set(configSpec.key, id),
+    });
   }
 
-  // Pre-resolve subflow-def ids so per-tab subflow-instance nodes can rewrite
-  // `subflow:<authoringKey>` → `subflow:<noderedId>` at emit time. Without
-  // this the subflow-ports validator can't find the def at validation time.
-  const subflowDefKeyToId = new Map<string, string>();
   for (const defSpec of spec.subflowDefs ?? []) {
-    subflowDefKeyToId.set(
-      defSpec.id,
-      deriveId(prior, '', 'subflowDef', defSpec.id, strategy, 'global'),
-    );
+    addIdEntry({
+      container: { kind: 'global' },
+      kind: 'subflowDef',
+      key: defSpec.id,
+      fallbackScope: 'global',
+      assign: (id) => {
+        subflowDefKeyToId.set(defSpec.id, id);
+        subflowDefIdBySpec.set(defSpec, id);
+      },
+    });
   }
 
   for (const tabSpec of spec.tabs) {
-    const tabId = deriveId(prior, '', 'tab', tabSpec.id, strategy, 'global');
+    const tabIds: TabResolvedIds = {
+      nodeKeyToId: new Map(),
+      junctionKeyToId: new Map(),
+      groupKeyToId: new Map(),
+      commentKeyToId: new Map(),
+    };
+    idsByTab.set(tabSpec, tabIds);
 
-    const nodeKeyToId = new Map<string, string>();
+    addIdEntry({
+      container: { kind: 'global' },
+      kind: 'tab',
+      key: tabSpec.id,
+      fallbackScope: 'global',
+      assign: (id) => tabIdBySpec.set(tabSpec, id),
+    });
+
     for (const n of tabSpec.nodes) {
-      nodeKeyToId.set(n.key, deriveId(prior, tabId, 'node', n.key, strategy, 'tab'));
+      addIdEntry({
+        container: { kind: 'tab', spec: tabSpec },
+        kind: 'node',
+        key: n.key,
+        fallbackScope: 'tab',
+        assign: (id) => tabIds.nodeKeyToId.set(n.key, id),
+      });
     }
-    const junctionKeyToId = new Map<string, string>();
     for (const j of tabSpec.junctions ?? []) {
-      junctionKeyToId.set(j.key, deriveId(prior, tabId, 'junction', j.key, strategy, 'tab'));
+      addIdEntry({
+        container: { kind: 'tab', spec: tabSpec },
+        kind: 'junction',
+        key: j.key,
+        fallbackScope: 'tab',
+        assign: (id) => tabIds.junctionKeyToId.set(j.key, id),
+      });
     }
-    const groupKeyToId = new Map<string, string>();
     for (const g of tabSpec.groups) {
-      groupKeyToId.set(g.key, deriveId(prior, tabId, 'group', g.key, strategy, 'tab'));
+      addIdEntry({
+        container: { kind: 'tab', spec: tabSpec },
+        kind: 'group',
+        key: g.key,
+        fallbackScope: 'tab',
+        assign: (id) => tabIds.groupKeyToId.set(g.key, id),
+      });
     }
-    const commentKeyToId = new Map<string, string>();
     for (const c of tabSpec.comments) {
-      commentKeyToId.set(c.key, deriveId(prior, tabId, 'comment', c.key, strategy, 'tab'));
+      addIdEntry({
+        container: { kind: 'tab', spec: tabSpec },
+        kind: 'comment',
+        key: c.key,
+        fallbackScope: 'tab',
+        assign: (id) => tabIds.commentKeyToId.set(c.key, id),
+      });
     }
+  }
+
+  for (const defSpec of spec.subflowDefs ?? []) {
+    const bodyIds: SubflowResolvedIds = {
+      nodeKeyToId: new Map(),
+      junctionKeyToId: new Map(),
+    };
+    idsBySubflowDef.set(defSpec, bodyIds);
+
+    for (const n of defSpec.nodes) {
+      addIdEntry({
+        container: { kind: 'subflow', spec: defSpec },
+        kind: 'node',
+        key: n.key,
+        fallbackScope: 'subflow',
+        assign: (id) => bodyIds.nodeKeyToId.set(n.key, id),
+      });
+    }
+    for (const j of defSpec.junctions ?? []) {
+      addIdEntry({
+        container: { kind: 'subflow', spec: defSpec },
+        kind: 'junction',
+        key: j.key,
+        fallbackScope: 'subflow',
+        assign: (id) => bodyIds.junctionKeyToId.set(j.key, id),
+      });
+    }
+  }
+
+  for (const entry of idEntries) reserveExactId(prior, entry);
+
+  for (const entry of idEntries) {
+    let containerId = '';
+    if (entry.container.kind === 'tab') {
+      const tabId = tabIdBySpec.get(entry.container.spec);
+      if (tabId === undefined) throw new Error(`Internal compile error: unresolved tab id.`);
+      containerId = tabId;
+    } else if (entry.container.kind === 'subflow') {
+      const defId = subflowDefIdBySpec.get(entry.container.spec);
+      if (defId === undefined) throw new Error(`Internal compile error: unresolved subflow id.`);
+      containerId = defId;
+    }
+    resolveIdEntry(prior, entry, containerId, strategy);
+  }
+
+  for (const tabSpec of spec.tabs) {
+    const tabId = tabIdBySpec.get(tabSpec);
+    const resolved = idsByTab.get(tabSpec);
+    if (tabId === undefined || resolved === undefined) continue;
+    const { nodeKeyToId, junctionKeyToId, groupKeyToId, commentKeyToId } = resolved;
 
     const wireTargetMap = new Map<string, string>([...nodeKeyToId, ...junctionKeyToId]);
 
@@ -698,16 +866,10 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   }
 
   for (const defSpec of spec.subflowDefs ?? []) {
-    const defId = subflowDefKeyToId.get(defSpec.id);
-    if (defId === undefined) continue;
-    const nodeKeyToId = new Map<string, string>();
-    for (const n of defSpec.nodes) {
-      nodeKeyToId.set(n.key, deriveId(prior, defId, 'node', n.key, strategy, 'subflow'));
-    }
-    const junctionKeyToId = new Map<string, string>();
-    for (const j of defSpec.junctions ?? []) {
-      junctionKeyToId.set(j.key, deriveId(prior, defId, 'junction', j.key, strategy, 'subflow'));
-    }
+    const defId = subflowDefIdBySpec.get(defSpec);
+    const resolved = idsBySubflowDef.get(defSpec);
+    if (defId === undefined || resolved === undefined) continue;
+    const { nodeKeyToId, junctionKeyToId } = resolved;
     const wireTargetMap = new Map<string, string>([...nodeKeyToId, ...junctionKeyToId]);
 
     flows.push(emitSubflowDef(defSpec, defId));
