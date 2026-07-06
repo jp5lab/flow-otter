@@ -42,6 +42,32 @@ describe('analyzeFlow', () => {
     expect(report.orphans).toEqual(['lonely']);
   });
 
+  it('counts literal function node.linkcall targets in the link summary', () => {
+    const report = analyzeFlow(
+      [
+        { id: 'tab1', type: 'tab', label: 'Main' },
+        {
+          id: 'fn1',
+          type: 'function',
+          z: 'tab1',
+          x: 0,
+          y: 0,
+          wires: [[]],
+          func: "node.linkcall('Known', msg); node.linkcall('missing', msg); node.linkcall(msg.target, msg);",
+        },
+        { id: 'li1', type: 'link in', z: 'tab1', x: 100, y: 0, wires: [[]], name: 'Known' },
+      ] as never,
+      'tab1',
+    );
+
+    expect(report.linkSummary).toEqual({
+      linkIns: 1,
+      linkOuts: 0,
+      linkCalls: 0,
+      functionLinkCalls: 2,
+    });
+  });
+
   it('does not mark dashboard widgets as flow orphans', () => {
     const report = analyzeFlow(
       [
