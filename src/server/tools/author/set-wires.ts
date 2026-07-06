@@ -3,7 +3,12 @@ import { z } from 'zod';
 import { setWires } from '../../../toolkit/authoring/operations/set-wires.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
-import { resolveAuthoringKey, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
+import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -66,7 +71,10 @@ export const setWiresTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: (input, ctx) =>
-    runStagedAuthorOp<{ removed: number; added: number }, Output>(
+    runStagedAuthorOp<
+      { removed: number; added: number; guidance: readonly NodeKeyResolutionGuidance[] },
+      Output
+    >(
       ctx,
       { toolName: 'set_wires' },
       (priorSpec, priorFlows) => {
@@ -74,20 +82,35 @@ export const setWiresTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
-        const sourceKey = resolveAuthoringKey(priorFlows, input.source_node_id);
-        if (sourceKey === undefined) {
-          throw new ValidationFailedError(
-            `Source node '${input.source_node_id}' not found in current flows.`,
-            [],
-          );
+        const sourceKey = resolveNodeKeyOnTab({
+          spec: priorSpec,
+          priorFlows,
+          tabId,
+          value: input.source_node_id,
+          field: 'source_node_id',
+          subject: 'Source node',
+        });
+        if (!sourceKey.ok) {
+          throw new ValidationFailedError(sourceKey.message, []);
         }
         const targetKeys: string[] = [];
-        for (const tid of input.target_node_ids) {
-          const k = resolveAuthoringKey(priorFlows, tid);
-          if (k === undefined) {
-            throw new ValidationFailedError(`Target node '${tid}' not found in current flows.`, []);
+        const guidance: NodeKeyResolutionGuidance[] =
+          sourceKey.guidance !== undefined ? [sourceKey.guidance] : [];
+        for (const [index, tid] of input.target_node_ids.entries()) {
+          const targetKey = resolveNodeKeyOnTab({
+            spec: priorSpec,
+            priorFlows,
+            tabId,
+            value: tid,
+            field: `target_node_ids[${index}]`,
+            subject: 'Target node',
+            notFoundSuffix: ' (cross-tab wires require link nodes)',
+          });
+          if (!targetKey.ok) {
+            throw new ValidationFailedError(targetKey.message, []);
           }
-          targetKeys.push(k);
+          targetKeys.push(targetKey.key);
+          if (targetKey.guidance !== undefined) guidance.push(targetKey.guidance);
         }
         const {
           spec: nextSpec,
@@ -95,22 +118,26 @@ export const setWiresTool: Tool<Input, Output> = {
           added,
         } = setWires(priorSpec, {
           tabId,
-          sourceKey,
+          sourceKey: sourceKey.key,
           outputPort: input.output_port ?? 0,
           targetKeys,
         });
-        return { nextSpec, extras: { removed, added } };
+        return { nextSpec, extras: { removed, added, guidance } };
       },
-      (base, extras) => ({
-        ok: base.ok,
-        staged_hash: base.staged_hash,
-        based_on_snapshot_hash: base.based_on_snapshot_hash,
-        based_on_rev: base.based_on_rev,
-        diff_summary: base.diff_summary,
-        wires_removed_count: extras.removed,
-        wires_added_count: extras.added,
-        diagnostics: [...base.diagnostics],
-        render: base.render,
-      }),
+      (base, extras) =>
+        attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            wires_removed_count: extras.removed,
+            wires_added_count: extras.added,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+          },
+          extras.guidance,
+        ),
     ),
 };

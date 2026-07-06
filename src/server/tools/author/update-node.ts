@@ -2,9 +2,13 @@ import { z } from 'zod';
 
 import { applyPatches, PatchError } from '../../../toolkit/authoring/operations/_patches.js';
 import { updateNode } from '../../../toolkit/authoring/operations/update-node.js';
-import type { AuthoringSpec, NodeSpec, TabSpec } from '../../../toolkit/authoring/types.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
+import {
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
@@ -120,7 +124,10 @@ export const updateNodeTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: (input, ctx) =>
-    runStagedAuthorOp<{ updated: boolean; patchesApplied: number }, Output>(
+    runStagedAuthorOp<
+      { updated: boolean; patchesApplied: number; guidance: readonly NodeKeyResolutionGuidance[] },
+      Output
+    >(
       ctx,
       { toolName: 'update_node' },
       (priorSpec, priorFlows) => {
@@ -128,6 +135,18 @@ export const updateNodeTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
+        const nodeKey = resolveNodeKeyOnTab({
+          spec: priorSpec,
+          priorFlows,
+          tabId,
+          value: input.node_key,
+          field: 'node_key',
+        });
+        if (!nodeKey.ok && nodeKey.reason !== 'key-not-found') {
+          throw new ValidationFailedError(nodeKey.message, []);
+        }
+        const resolvedNodeKey = nodeKey.ok ? nodeKey.key : input.node_key;
+        const guidance = nodeKey.ok && nodeKey.guidance !== undefined ? [nodeKey.guidance] : [];
 
         // Compute the passthrough patches first — apply `patches[]` on top of
         // whatever passthrough merge the agent supplied (or the existing
@@ -136,12 +155,8 @@ export const updateNodeTool: Tool<Input, Output> = {
         let effectivePassthrough = input.passthrough;
         let patchesApplied = 0;
         if (input.patches && input.patches.length > 0) {
-          const existingNode = findNodeOnTab(priorSpec, tabId, input.node_key);
-          if (!existingNode) {
-            throw new ValidationFailedError(
-              `Node '${input.node_key}' not found on tab '${input.tab_id}'.`,
-              [],
-            );
+          if (!nodeKey.ok) {
+            throw new ValidationFailedError(nodeKey.message, []);
           }
           const byProperty = new Map<string, typeof input.patches>();
           for (const p of input.patches) {
@@ -150,7 +165,7 @@ export const updateNodeTool: Tool<Input, Output> = {
             byProperty.set(p.property, list);
           }
           const merged: Record<string, unknown> = {
-            ...(existingNode.passthrough ?? {}),
+            ...(nodeKey.node.passthrough ?? {}),
             ...(input.passthrough ?? {}),
           };
           for (const [property, propPatches] of byProperty) {
@@ -178,24 +193,23 @@ export const updateNodeTool: Tool<Input, Output> = {
         if (input.group_key !== undefined) opts.groupKey = input.group_key;
         if (effectivePassthrough !== undefined) opts.passthrough = effectivePassthrough;
 
-        const { spec: nextSpec, updated } = updateNode(priorSpec, tabId, input.node_key, opts);
-        return { nextSpec, extras: { updated, patchesApplied } };
+        const { spec: nextSpec, updated } = updateNode(priorSpec, tabId, resolvedNodeKey, opts);
+        return { nextSpec, extras: { updated, patchesApplied, guidance } };
       },
-      (base, extras) => ({
-        ok: base.ok,
-        staged_hash: base.staged_hash,
-        based_on_snapshot_hash: base.based_on_snapshot_hash,
-        based_on_rev: base.based_on_rev,
-        diff_summary: base.diff_summary,
-        updated: extras.updated,
-        patches_applied: extras.patchesApplied,
-        diagnostics: [...base.diagnostics],
-        render: base.render,
-      }),
+      (base, extras) =>
+        attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            updated: extras.updated,
+            patches_applied: extras.patchesApplied,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+          },
+          extras.guidance,
+        ),
     ),
 };
-
-function findNodeOnTab(spec: AuthoringSpec, tabId: string, nodeKey: string): NodeSpec | undefined {
-  const tab: TabSpec | undefined = spec.tabs.find((t) => t.id === tabId);
-  return tab?.nodes.find((n) => n.key === nodeKey);
-}

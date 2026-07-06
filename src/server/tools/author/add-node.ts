@@ -5,11 +5,11 @@ import { addNode } from '../../../toolkit/authoring/operations/add-node.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import {
-  findNewNodeId,
-  resolveAuthoringKey,
-  resolveTabId,
-  runStagedAuthorOp,
-} from './_stage-pipeline.js';
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
+import { findNewNodeId, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -102,7 +102,13 @@ export const addNodeTool: Tool<Input, Output> = {
   outputZod: OutputSchema,
   handler: (input, ctx) =>
     runStagedAuthorOp<
-      { tabId: string; newNodeKey: string; wired: boolean; typeHadSchema: boolean },
+      {
+        tabId: string;
+        newNodeKey: string;
+        wired: boolean;
+        typeHadSchema: boolean;
+        guidance: readonly NodeKeyResolutionGuidance[];
+      },
       Output
     >(
       ctx,
@@ -141,14 +147,21 @@ export const addNodeTool: Tool<Input, Output> = {
         }
 
         let sourceKey: string | undefined;
+        let guidance: readonly NodeKeyResolutionGuidance[] = [];
         if (input.opts?.source_node_id) {
-          sourceKey = resolveAuthoringKey(priorFlows, input.opts.source_node_id);
-          if (!sourceKey) {
-            throw new ValidationFailedError(
-              `Source node '${input.opts.source_node_id}' not found in current flows.`,
-              [],
-            );
+          const resolvedSourceKey = resolveNodeKeyOnTab({
+            spec: priorSpec,
+            priorFlows,
+            tabId,
+            value: input.opts.source_node_id,
+            field: 'opts.source_node_id',
+            subject: 'Source node',
+          });
+          if (!resolvedSourceKey.ok) {
+            throw new ValidationFailedError(resolvedSourceKey.message, []);
           }
+          sourceKey = resolvedSourceKey.key;
+          guidance = resolvedSourceKey.guidance !== undefined ? [resolvedSourceKey.guidance] : [];
         }
 
         const addOpts: Parameters<typeof addNode>[3] = {};
@@ -167,30 +180,33 @@ export const addNodeTool: Tool<Input, Output> = {
           newNodeKey,
           wired,
         } = addNode(priorSpec, tabId, input.type, addOpts);
-        return { nextSpec, extras: { tabId, newNodeKey, wired, typeHadSchema } };
+        return { nextSpec, extras: { tabId, newNodeKey, wired, typeHadSchema, guidance } };
       },
       (base, extras) => {
         const newNodeId = findNewNodeId(base.compiledFlows, extras.tabId, extras.newNodeKey);
-        return {
-          ok: base.ok,
-          staged_hash: base.staged_hash,
-          based_on_snapshot_hash: base.based_on_snapshot_hash,
-          based_on_rev: base.based_on_rev,
-          diff_summary: base.diff_summary,
-          type_had_schema: extras.typeHadSchema,
-          diagnostics: [...base.diagnostics],
-          render: base.render,
-          ...(newNodeId !== undefined ? { added_node_id: newNodeId } : {}),
-          ...(extras.wired && newNodeId !== undefined && input.opts?.source_node_id !== undefined
-            ? {
-                added_wire: {
-                  from: input.opts.source_node_id,
-                  output_port: input.opts.source_output_port ?? 0,
-                  to: newNodeId,
-                },
-              }
-            : {}),
-        };
+        return attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            type_had_schema: extras.typeHadSchema,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+            ...(newNodeId !== undefined ? { added_node_id: newNodeId } : {}),
+            ...(extras.wired && newNodeId !== undefined && input.opts?.source_node_id !== undefined
+              ? {
+                  added_wire: {
+                    from: input.opts.source_node_id,
+                    output_port: input.opts.source_output_port ?? 0,
+                    to: newNodeId,
+                  },
+                }
+              : {}),
+          },
+          extras.guidance,
+        );
       },
     ),
 };

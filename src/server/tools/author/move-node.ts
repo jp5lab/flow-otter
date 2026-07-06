@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { moveNode } from '../../../toolkit/authoring/operations/move-node.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
+import {
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
@@ -119,7 +124,15 @@ export const moveNodeTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: (input, ctx) =>
-    runStagedAuthorOp<{ sourceTabId: string; destTabId: string }, Output>(
+    runStagedAuthorOp<
+      {
+        sourceTabId: string;
+        destTabId: string;
+        nodeKey: string;
+        guidance: readonly NodeKeyResolutionGuidance[];
+      },
+      Output
+    >(
       ctx,
       { toolName: 'move_node' },
       (priorSpec, priorFlows) => {
@@ -146,23 +159,45 @@ export const moveNodeTool: Tool<Input, Output> = {
             [],
           );
         }
-        const { spec: nextSpec } = moveNode(priorSpec, sourceTabId, input.node_key, {
+        const nodeKey = resolveNodeKeyOnTab({
+          spec: priorSpec,
+          priorFlows,
+          tabId: sourceTabId,
+          value: input.node_key,
+          field: 'node_key',
+        });
+        if (!nodeKey.ok) {
+          throw new ValidationFailedError(nodeKey.message, []);
+        }
+        const { spec: nextSpec } = moveNode(priorSpec, sourceTabId, nodeKey.key, {
           ...(input.dest_tab_id !== undefined ? { destTabId } : {}),
           ...(input.position !== undefined ? { position: input.position } : {}),
         });
-        return { nextSpec, extras: { sourceTabId, destTabId } };
+        return {
+          nextSpec,
+          extras: {
+            sourceTabId,
+            destTabId,
+            nodeKey: nodeKey.key,
+            guidance: nodeKey.guidance !== undefined ? [nodeKey.guidance] : [],
+          },
+        };
       },
-      (base, extras) => ({
-        ok: base.ok,
-        staged_hash: base.staged_hash,
-        based_on_snapshot_hash: base.based_on_snapshot_hash,
-        based_on_rev: base.based_on_rev,
-        diff_summary: base.diff_summary,
-        moved_node_key: input.node_key,
-        source_tab_id: extras.sourceTabId,
-        dest_tab_id: extras.destTabId,
-        diagnostics: [...base.diagnostics],
-        render: base.render,
-      }),
+      (base, extras) =>
+        attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            moved_node_key: extras.nodeKey,
+            source_tab_id: extras.sourceTabId,
+            dest_tab_id: extras.destTabId,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+          },
+          extras.guidance,
+        ),
     ),
 };

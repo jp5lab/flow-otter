@@ -4,11 +4,11 @@ import { addDebugNode } from '../../../toolkit/authoring/operations/add-debug-no
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import {
-  findNewNodeId,
-  resolveAuthoringKey,
-  resolveTabId,
-  runStagedAuthorOp,
-} from './_stage-pipeline.js';
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
+import { findNewNodeId, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -84,7 +84,10 @@ export const addDebugNodeTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: (input, ctx) =>
-    runStagedAuthorOp<{ tabId: string; newNodeKey: string }, Output>(
+    runStagedAuthorOp<
+      { tabId: string; newNodeKey: string; guidance: readonly NodeKeyResolutionGuidance[] },
+      Output
+    >(
       ctx,
       { toolName: 'add_debug_node' },
       (priorSpec, priorFlows) => {
@@ -92,12 +95,16 @@ export const addDebugNodeTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
-        const sourceKey = resolveAuthoringKey(priorFlows, input.source_node_id);
-        if (!sourceKey) {
-          throw new ValidationFailedError(
-            `Source node '${input.source_node_id}' not found in current flows.`,
-            [],
-          );
+        const sourceKey = resolveNodeKeyOnTab({
+          spec: priorSpec,
+          priorFlows,
+          tabId,
+          value: input.source_node_id,
+          field: 'source_node_id',
+          subject: 'Source node',
+        });
+        if (!sourceKey.ok) {
+          throw new ValidationFailedError(sourceKey.message, []);
         }
         const opts: Parameters<typeof addDebugNode>[3] = {};
         if (input.opts?.label !== undefined) opts.label = input.opts.label;
@@ -107,30 +114,40 @@ export const addDebugNodeTool: Tool<Input, Output> = {
         if (input.opts?.source_output_port !== undefined) {
           opts.sourceOutputPort = input.opts.source_output_port;
         }
-        const { spec: nextSpec, newNodeKey } = addDebugNode(priorSpec, tabId, sourceKey, opts);
-        return { nextSpec, extras: { tabId, newNodeKey } };
+        const { spec: nextSpec, newNodeKey } = addDebugNode(priorSpec, tabId, sourceKey.key, opts);
+        return {
+          nextSpec,
+          extras: {
+            tabId,
+            newNodeKey,
+            guidance: sourceKey.guidance !== undefined ? [sourceKey.guidance] : [],
+          },
+        };
       },
       (base, extras) => {
         const newNodeId = findNewNodeId(base.compiledFlows, extras.tabId, extras.newNodeKey);
-        return {
-          ok: base.ok,
-          staged_hash: base.staged_hash,
-          based_on_snapshot_hash: base.based_on_snapshot_hash,
-          based_on_rev: base.based_on_rev,
-          diff_summary: base.diff_summary,
-          diagnostics: [...base.diagnostics],
-          render: base.render,
-          ...(newNodeId !== undefined
-            ? {
-                added_node_id: newNodeId,
-                added_wire: {
-                  from: input.source_node_id,
-                  output_port: input.opts?.source_output_port ?? 0,
-                  to: newNodeId,
-                },
-              }
-            : {}),
-        };
+        return attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+            ...(newNodeId !== undefined
+              ? {
+                  added_node_id: newNodeId,
+                  added_wire: {
+                    from: input.source_node_id,
+                    output_port: input.opts?.source_output_port ?? 0,
+                    to: newNodeId,
+                  },
+                }
+              : {}),
+          },
+          extras.guidance,
+        );
       },
     ),
 };

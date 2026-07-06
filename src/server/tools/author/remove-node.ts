@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { removeNode } from '../../../toolkit/authoring/operations/remove-node.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
+import {
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
@@ -58,7 +63,7 @@ export const removeNodeTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: (input, ctx) =>
-    runStagedAuthorOp<{ removed: boolean }, Output>(
+    runStagedAuthorOp<{ removed: boolean; guidance: readonly NodeKeyResolutionGuidance[] }, Output>(
       ctx,
       { toolName: 'remove_node' },
       (priorSpec, priorFlows) => {
@@ -66,18 +71,39 @@ export const removeNodeTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
-        const { spec: nextSpec, removed } = removeNode(priorSpec, tabId, input.node_key);
-        return { nextSpec, extras: { removed } };
+        const nodeKey = resolveNodeKeyOnTab({
+          spec: priorSpec,
+          priorFlows,
+          tabId,
+          value: input.node_key,
+          field: 'node_key',
+        });
+        if (!nodeKey.ok && nodeKey.reason !== 'key-not-found') {
+          throw new ValidationFailedError(nodeKey.message, []);
+        }
+        const resolvedNodeKey = nodeKey.ok ? nodeKey.key : input.node_key;
+        const { spec: nextSpec, removed } = removeNode(priorSpec, tabId, resolvedNodeKey);
+        return {
+          nextSpec,
+          extras: {
+            removed,
+            guidance: nodeKey.ok && nodeKey.guidance !== undefined ? [nodeKey.guidance] : [],
+          },
+        };
       },
-      (base, extras) => ({
-        ok: base.ok,
-        staged_hash: base.staged_hash,
-        based_on_snapshot_hash: base.based_on_snapshot_hash,
-        based_on_rev: base.based_on_rev,
-        diff_summary: base.diff_summary,
-        removed: extras.removed,
-        diagnostics: [...base.diagnostics],
-        render: base.render,
-      }),
+      (base, extras) =>
+        attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            removed: extras.removed,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+          },
+          extras.guidance,
+        ),
     ),
 };

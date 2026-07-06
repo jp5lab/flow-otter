@@ -4,6 +4,11 @@ import type { FlowsJson } from '../../../shared/flows-json.js';
 import { addGroup } from '../../../toolkit/authoring/operations/add-group.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
+import {
+  attachNodeKeyResolutionGuidance,
+  resolveNodeKeyOnTab,
+  type NodeKeyResolutionGuidance,
+} from './_node-key-resolution.js';
 import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
@@ -104,7 +109,10 @@ export const addGroupTool: Tool<Input, Output> = {
   },
   outputZod: OutputSchema,
   handler: (input, ctx) =>
-    runStagedAuthorOp<{ tabId: string; newGroupKey: string }, Output>(
+    runStagedAuthorOp<
+      { tabId: string; newGroupKey: string; guidance: readonly NodeKeyResolutionGuidance[] },
+      Output
+    >(
       ctx,
       { toolName: 'add_group' },
       (priorSpec, priorFlows) => {
@@ -113,27 +121,49 @@ export const addGroupTool: Tool<Input, Output> = {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
         const opts: Parameters<typeof addGroup>[2] = { name: input.name };
-        if (input.node_keys !== undefined) opts.nodeKeys = input.node_keys;
+        const guidance: NodeKeyResolutionGuidance[] = [];
+        if (input.node_keys !== undefined) {
+          opts.nodeKeys = input.node_keys.map((value, index) => {
+            const resolved = resolveNodeKeyOnTab({
+              spec: priorSpec,
+              priorFlows,
+              tabId,
+              value,
+              field: `node_keys[${index}]`,
+            });
+            if (!resolved.ok) {
+              if (resolved.reason !== 'key-not-found') {
+                throw new ValidationFailedError(resolved.message, []);
+              }
+              return value;
+            }
+            if (resolved.guidance !== undefined) guidance.push(resolved.guidance);
+            return resolved.key;
+          });
+        }
         if (input.position !== undefined) opts.position = input.position;
         if (input.size !== undefined) opts.size = input.size;
         if (input.parent_key !== undefined) opts.parentKey = input.parent_key;
         if (input.info !== undefined) opts.info = input.info;
         if (input.style !== undefined) opts.style = input.style;
         const { spec: nextSpec, newGroupKey } = addGroup(priorSpec, tabId, opts);
-        return { nextSpec, extras: { tabId, newGroupKey } };
+        return { nextSpec, extras: { tabId, newGroupKey, guidance } };
       },
       (base, extras) => {
         const newGroupId = findNewGroupId(base.compiledFlows, extras.tabId, extras.newGroupKey);
-        return {
-          ok: base.ok,
-          staged_hash: base.staged_hash,
-          based_on_snapshot_hash: base.based_on_snapshot_hash,
-          based_on_rev: base.based_on_rev,
-          diff_summary: base.diff_summary,
-          diagnostics: [...base.diagnostics],
-          render: base.render,
-          ...(newGroupId !== undefined ? { added_group_id: newGroupId } : {}),
-        };
+        return attachNodeKeyResolutionGuidance(
+          {
+            ok: base.ok,
+            staged_hash: base.staged_hash,
+            based_on_snapshot_hash: base.based_on_snapshot_hash,
+            based_on_rev: base.based_on_rev,
+            diff_summary: base.diff_summary,
+            diagnostics: [...base.diagnostics],
+            render: base.render,
+            ...(newGroupId !== undefined ? { added_group_id: newGroupId } : {}),
+          },
+          extras.guidance,
+        );
       },
     ),
 };
