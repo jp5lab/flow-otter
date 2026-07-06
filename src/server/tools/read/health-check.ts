@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { allCapabilities, requirementFor } from '../../../adapters/nodered/capabilities.js';
 import { rasterizerAvailable } from '../../../toolkit/render/png.js';
 import { getOrProbeRuntimeInfo } from '../../runtime-info.js';
 import { persistedTargetAgeSeconds, persistedTargetPath } from '../../state/persisted-target.js';
@@ -23,6 +24,10 @@ const RuntimeInfoSchema = z.object({
   capabilities: z.record(z.boolean()),
 });
 
+const CAPABILITY_REQUIREMENTS = Object.fromEntries(
+  allCapabilities().map((cap) => [cap, requirementFor(cap)]),
+);
+
 const OutputSchema = z.object({
   ok: z.boolean(),
   server_version: z.string(),
@@ -41,6 +46,14 @@ const OutputSchema = z.object({
    */
   runtime: RuntimeInfoSchema.optional(),
   /**
+   * Static Node-RED version gates for every known capability. This
+   * complements `runtime.capabilities`: requirements are the version ranges,
+   * while runtime.capabilities is what the probed target actually satisfies.
+   * `runtimeStateApi` is also gated by `runtimeState.enabled = true` in
+   * settings.js, so version satisfaction alone is not sufficient.
+   */
+  capability_requirements: z.record(z.string()),
+  /**
    * True when the optional `@resvg/resvg-js` rasterizer is loadable, i.e.
    * `render_flow_png` will work. When false, PNG tools HARD-FAIL with
    * RasterizerUnavailableError (REND-5) — there is no silent SVG fallback.
@@ -53,7 +66,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const healthCheckTool: Tool<Input, Output> = {
   name: 'health_check',
   description:
-    'Reports server liveness, version, configured flow source, reachability, env_name + persisted-target.json status, rasterizer_available (whether render_flow_png can work), and any environment-shape warnings (e.g. project-mode flowFile mismatches, no-target-configured). Read-only.',
+    'Reports server liveness, version, configured flow source, reachability, env_name + persisted-target.json status, capability_requirements (static Node-RED version gates; runtimeStateApi also needs runtimeState.enabled in settings.js), rasterizer_available (whether render_flow_png can work), and any environment-shape warnings (e.g. project-mode flowFile mismatches, no-target-configured). Read-only.',
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: {
@@ -114,6 +127,7 @@ export const healthCheckTool: Tool<Input, Output> = {
       persisted_target_path: persistedTargetPath(envName),
       persisted_target_age_seconds: ageSeconds,
       ...(runtime !== undefined ? { runtime } : {}),
+      capability_requirements: CAPABILITY_REQUIREMENTS,
       rasterizer_available: await rasterizerAvailable(),
       warnings: allWarnings,
     };

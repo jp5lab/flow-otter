@@ -30,6 +30,10 @@ import { validateAllFlowsTool } from '../../../../../src/server/tools/read/valid
 import { validateFlowTool } from '../../../../../src/server/tools/read/validate-flow.js';
 import { FileFlowSource } from '../../../../../src/adapters/flowsource/file.js';
 import { NoAuth } from '../../../../../src/adapters/nodered/auth.js';
+import {
+  allCapabilities,
+  requirementFor,
+} from '../../../../../src/adapters/nodered/capabilities.js';
 import { FilesystemSnapshotStore } from '../../../../../src/toolkit/snapshot/filesystem.js';
 import { StagedStore } from '../../../../../src/toolkit/staging/staged-store.js';
 import { createLogger } from '../../../../../src/shared/logger.js';
@@ -136,8 +140,13 @@ describe('read tools (file flow source)', () => {
     const out = (await healthCheckTool.handler({}, ctx)) as {
       ok: boolean;
       rasterizer_available: boolean;
+      capability_requirements: Record<string, string>;
     };
     expect(out.ok).toBe(true);
+    expect(new Set(Object.keys(out.capability_requirements))).toEqual(new Set(allCapabilities()));
+    for (const cap of allCapabilities()) {
+      expect(out.capability_requirements[cap]).toBe(requirementFor(cap));
+    }
     // REND-5: @resvg/resvg-js is installed in the dev environment, so the
     // PNG channel must report available (false-path pinned in
     // tests/unit/toolkit/render/png-unavailable.test.ts).

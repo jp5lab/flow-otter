@@ -14,11 +14,11 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 
 - `list_available_toolsets` — lists all toolsets and which are enabled in the current session.
 - `enable_toolset` — enables a non-default toolset (e.g., `author_specialists`).
-- `get_authoring_guide` — returns the FlowOtter **capability catalog**: Node-RED concepts, core node types (with `is_core: bool` distinguishing them from contrib packages), Dashboard 2.0 widgets (with `flow_otter_status: supported|missing|partial`), built-in templates, validators, ISA-101 design principles, the eight numeric **layout conventions** (`layout_conventions` — 20px grid, 140-220px column pitch, error lane ≥120px below the happy path, switch port 0 on top, ~1420px visible viewport; each entry names its frozen layout-lint rule id, scored from v1.5.0), and the 8-phase authoring methodology. Filter via `categories` to load only what you need.
+- `get_authoring_guide` — returns the FlowOtter **capability catalog**: Node-RED concepts, core node types (including `min_node_red_version` and version-gated `capabilities` where relevant), Dashboard 2.0 widgets (with `flow_otter_status: supported|missing|partial`), built-in templates, validators, ISA-101 design principles, the eight numeric **layout conventions** (`layout_conventions` — 20px grid, 140-220px column pitch, error lane ≥120px below the happy path, switch port 0 on top, ~1420px visible viewport; each entry names its frozen layout-lint rule id, scored from v1.5.0), and the 8-phase authoring methodology. Filter via `categories` to load only what you need.
 
 ## Read Tools
 
-- `health_check` — also surfaces `env_name`, `persisted_target_path`, and `persisted_target_age_seconds` (null if no target.json).
+- `health_check` — also surfaces `env_name`, `persisted_target_path`, `persisted_target_age_seconds` (null if no target.json), and `capability_requirements`.
 - `get_server_config_summary`
 - `set_target` — point the server at a Node-RED target at runtime. Discriminated input:
   - `{ base_url, ... }` (or `{ flow_source: "admin-api", base_url, ... }`) — admin-api mode.
@@ -53,7 +53,9 @@ The full mapping lives in `src/server/tools/toolsets.ts`; tools below are listed
 
 ### Health output (v1.3.0+)
 
-`health_check` returns an optional `runtime: { name, version, is_prerelease, node_js_version?, detected_at, capabilities: Record<string,boolean> }` block when the target is admin-api and the `/settings` probe succeeded. Capability keys gate version-specific features (e.g., `functionLinkCall` is 5.0+, `subflowPerInstanceConfig` is 4.0+, `adminCorsDefault` is pre-5.0). The probe is lazy-cached and invalidated on `set_target`.
+`health_check` always returns `capability_requirements: Record<string,string>`, the static Node-RED version range for each known capability. It also returns an optional `runtime: { name, version, is_prerelease, node_js_version?, detected_at, capabilities: Record<string,boolean> }` block when the target is admin-api and the `/settings` probe succeeded. Capability keys gate version-specific features (e.g., `functionLinkCall` is 5.0+, `subflowPerInstanceConfig` is 4.0+, `adminCorsDefault` is pre-5.0). The probe is lazy-cached and invalidated on `set_target`.
+
+`runtimeStateApi` has an extra settings gate: the version can satisfy the capability while `/flows/state` still requires `runtimeState.enabled = true` in `settings.js`.
 
 Since v1.4.0 `health_check` also returns `rasterizer_available: boolean` — whether the optional `@resvg/resvg-js` dependency is loadable, i.e. whether `render_flow_png` will work (when false, PNG tools hard-fail with `RasterizerUnavailableError`; there is no silent SVG fallback).
 

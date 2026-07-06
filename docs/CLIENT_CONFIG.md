@@ -158,6 +158,17 @@ process that staged it (`staged.agent_id`).
   (false means deploy/discard needs `force_takeover:true`), and `stale` (true means the next
   author op will auto-clear it; null when the runtime is unreachable).
 
+## Node-RED Version Notes
+
+Node-RED 5.0.0-beta.6+ removed the default `httpAdminCors` rules (PR #5652). Browser-based
+cross-origin Admin API clients must configure CORS explicitly in `settings.js`. FlowOtter
+surfaces this as the `adminCorsDefault` capability in `health_check`: `true` means the target is
+older than 5.0.0-beta.6 and still has the default rules.
+
+The `/flows/state` runtime-state API exists in supported Node-RED 2.x+ runtimes, but it also
+requires `runtimeState.enabled = true` in `settings.js`. `health_check.runtime.capabilities`
+reports version eligibility; it does not prove the setting is enabled.
+
 ## Troubleshooting
 
 - Run `health_check` first. It reports the configured target and whether `/flows` is reachable.
