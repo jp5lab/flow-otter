@@ -9,7 +9,11 @@ import {
 } from '../../../toolkit/authoring/widget-schemas.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
-import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -63,8 +67,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const addDashboardWidgetTool: Tool<Input, Output> = {
   name: 'add_dashboard_widget',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a new Dashboard 2.0 widget. Pass `widget_type` (one of ui-dropdown / ui-radio-group / ui-slider / ui-switch / ui-text-input / ui-number-input / ui-file-input / ui-markdown / ui-progress / ui-audio / ui-spacer / ui-event / ui-link / ui-group-dialog). `opts.group_key` is required for most widgets (call instantiate_template dashboard_2_skeleton first to get one). `opts.ui_key` for ui-link. `opts.page_key` for ui-group-dialog. Validates passthrough against per-widget Zod. Does NOT deploy.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

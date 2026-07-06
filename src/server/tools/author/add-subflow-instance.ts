@@ -3,7 +3,12 @@ import { z } from 'zod';
 import { addSubflowInstance } from '../../../toolkit/authoring/operations/add-subflow-instance.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
-import { findNewNodeId, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  findNewNodeId,
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -51,8 +56,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const addSubflowInstanceTool: Tool<Input, Output> = {
   name: 'add_subflow_instance',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a new subflow instance on the given tab. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

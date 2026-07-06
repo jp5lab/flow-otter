@@ -8,7 +8,11 @@ import {
   resolveNodeKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
-import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
@@ -87,8 +91,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const moveNodeTool: Tool<Input, Output> = {
   name: 'move_node',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a move or reposition of an existing node. Takes `tab_id` (the tab currently holding the node — same vocabulary as every other author tool; `source_tab_id` is a DEPRECATED alias slated for removal in v2.0.0) plus optional `dest_tab_id` for cross-tab moves. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

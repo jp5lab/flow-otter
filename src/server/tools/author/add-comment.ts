@@ -4,7 +4,11 @@ import type { FlowsJson } from '../../../shared/flows-json.js';
 import { addComment } from '../../../toolkit/authoring/operations/add-comment.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
-import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
@@ -54,8 +58,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const addCommentTool: Tool<Input, Output> = {
   name: 'add_comment',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a new comment on the given tab. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

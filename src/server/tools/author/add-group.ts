@@ -9,7 +9,11 @@ import {
   resolveNodeKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
-import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
@@ -69,8 +73,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const addGroupTool: Tool<Input, Output> = {
   name: 'add_group',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a new visual group on the given tab. Supports node membership, position, size, parent group, info, and style so agents can sketch readable Node-RED sections before programming internals. Does NOT deploy.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

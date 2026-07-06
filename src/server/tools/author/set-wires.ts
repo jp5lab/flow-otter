@@ -8,7 +8,11 @@ import {
   resolveNodeKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
-import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -51,8 +55,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const setWiresTool: Tool<Input, Output> = {
   name: 'set_wires',
-  description:
+  description: withStagedAuthorToolDescription(
     'Atomically replaces all wires originating from `(source_node_id, output_port)` with new wires to the given target node ids on the same tab. Pass `target_node_ids: []` to clear the port. Cross-tab wiring goes through link nodes — see `set_links`. Does NOT deploy.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

@@ -3,7 +3,12 @@ import { z } from 'zod';
 import { addLinkInNode } from '../../../toolkit/authoring/operations/add-link-in-node.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
-import { findNewNodeId, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  findNewNodeId,
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -50,8 +55,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const addLinkInNodeTool: Tool<Input, Output> = {
   name: 'add_link_in_node',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a new `link in` node on the given tab. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

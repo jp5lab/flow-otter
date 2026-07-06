@@ -79,6 +79,13 @@ export interface StageMeta {
   readonly autoClearDiagnostic?: StageBase['diagnostics'][number];
 }
 
+export const STAGED_AUTHOR_TOOL_LIFECYCLE_SENTENCE =
+  'Stages into the single staging slot: if a staged change is already pending, deploy_staged_change or discard_staged_change it first — staging over it is refused.';
+
+export function withStagedAuthorToolDescription(description: string): string {
+  return `${description} ${STAGED_AUTHOR_TOOL_LIFECYCLE_SENTENCE}`;
+}
+
 /**
  * Shared staging pipeline for author-tier tools.
  *

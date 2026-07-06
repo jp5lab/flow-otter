@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { instantiateTemplate } from '../../../toolkit/templates/index.js';
 import { type Tool } from '../_tool.js';
 
-import { runStagedAuthorOp } from './_stage-pipeline.js';
+import { runStagedAuthorOp, withStagedAuthorToolDescription } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -43,8 +43,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const instantiateTemplateTool: Tool<Input, Output> = {
   name: 'instantiate_template',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a built-in flow template against the current runtime. Validates and lints the result; produces a semantic diff. Does NOT deploy — call deploy_staged_change to push to the runtime.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

@@ -9,7 +9,11 @@ import {
   resolveNodeKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
-import { resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
@@ -80,8 +84,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const updateNodeTool: Tool<Input, Output> = {
   name: 'update_node',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages updates to an existing node on a tab. Supports two edit modes: (1) full-property `passthrough` (merge over existing), and (2) `patches[]` — line-based replace/insert/delete on string passthrough fields (function-node `func`, ui-template `format`, template-node `template`). Line numbers are 1-indexed and refer to the ORIGINAL content; patches must be non-overlapping. Per-property order: passthrough applied first, then patches. Validates and lints the result; produces a semantic diff. Does NOT deploy.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

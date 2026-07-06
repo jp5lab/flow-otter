@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { setLinks } from '../../../toolkit/authoring/operations/set-links.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
 
-import { resolveAuthoringKey, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  resolveAuthoringKey,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -43,8 +47,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const setLinksTool: Tool<Input, Output> = {
   name: 'set_links',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a cross-tab pairing on a `link out` or `link call` node by setting its `passthrough.links` to point at one or more `link in` peers. Replaces the existing pairing atomically; pass `target_node_ids: []` to clear. Targets may live on any tab. Does NOT deploy — call `deploy_staged_change`.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

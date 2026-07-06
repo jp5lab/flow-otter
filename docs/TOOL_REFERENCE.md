@@ -61,6 +61,8 @@ Since v1.4.0 `health_check` also returns `rasterizer_available: boolean` — whe
 
 Author tools stage a change. They do not deploy.
 
+Each staging author tool's MCP description ends with this call-time lifecycle sentence: "Stages into the single staging slot: if a staged change is already pending, deploy_staged_change or discard_staged_change it first — staging over it is refused."
+
 Every successful stage output carries a `render` block (v1.4.0+): before/after preview paths for each tab the stage touched — `{rasterizer_available, tabs:[{tab_id, before_svg, after_svg, before_png, after_png}]}`. SVGs are always written; PNGs only when the optional `@resvg/resvg-js` rasterizer is installed (otherwise the `*_png` fields are null and `rasterizer_available` is false — absence is loud, never a silent SVG substitution). Read `after_png` (or `after_svg`) to SEE what you just staged without spending another tool call. Files live under `RENDER_DIR` (`stage-<tab>-before/after.svg/.png`, overwritten per stage); a side absent because the tab was created/removed is null. Render problems never fail the stage — the output then carries `render: null`.
 
 - `plan_flow` (v1.3.0+) — **methodology spine**. Takes `{goal, stages[]}` where each stage declares `{name, purpose, estimated_nodes, organization, organization_rationale}`. Returns `plan_id`, explicit visual-layout guidance (`layout_strategy: "manual"` until a real `layout_flow` tool exists), and ordered `next_actions[]` referencing real tool calls. Writes `~/.flow-otter/<env>/staging/plan.json` so soft-nudge guidance can detect "agent started authoring without planning."

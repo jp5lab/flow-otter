@@ -9,7 +9,12 @@ import {
   resolveNodeKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
-import { findNewNodeId, resolveTabId, runStagedAuthorOp } from './_stage-pipeline.js';
+import {
+  findNewNodeId,
+  resolveTabId,
+  runStagedAuthorOp,
+  withStagedAuthorToolDescription,
+} from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const InputSchema = z
@@ -63,8 +68,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const addNodeTool: Tool<Input, Output> = {
   name: 'add_node',
-  description:
+  description: withStagedAuthorToolDescription(
     'Generic node-add: stages a new node of any Node-RED type on a tab. Pass `type` (e.g. "change", "switch", "http in") and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {

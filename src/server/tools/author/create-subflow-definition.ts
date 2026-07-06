@@ -4,7 +4,7 @@ import type { FlowsJson } from '../../../shared/flows-json.js';
 import { createSubflowDefinition } from '../../../toolkit/authoring/operations/create-subflow-definition.js';
 import { type Tool } from '../_tool.js';
 
-import { runStagedAuthorOp } from './_stage-pipeline.js';
+import { runStagedAuthorOp, withStagedAuthorToolDescription } from './_stage-pipeline.js';
 import { StageRenderOutputSchema } from './_stage-render.js';
 
 const PositionSchema = z
@@ -73,8 +73,9 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const createSubflowDefinitionTool: Tool<Input, Output> = {
   name: 'create_subflow_definition',
-  description:
+  description: withStagedAuthorToolDescription(
     'Stages a new subflow definition. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+  ),
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {
