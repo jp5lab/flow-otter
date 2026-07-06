@@ -56,6 +56,19 @@ export interface CompileOptions {
   layoutAlgorithm?: 'none';
   /** 'fixed' is for tests that need predictable IDs from spec keys directly. */
   idStrategy?: 'hash' | 'fixed';
+  /**
+   * Batch-only ID tombstones. When an object is removed and re-added with the
+   * same tab/kind/key inside one atomic batch, compile must NOT inherit the
+   * prior exact-match id; the sequential deploy-equivalent path would mint a
+   * fresh id after the remove deploy.
+   */
+  idTombstones?: readonly CompileIdTombstone[];
+}
+
+export interface CompileIdTombstone {
+  readonly tabId: string;
+  readonly kind: 'node' | 'junction' | 'group' | 'comment';
+  readonly key: string;
 }
 
 export interface CompileDiagnostic {
@@ -108,6 +121,7 @@ interface PriorIndex {
    * would otherwise hand it out twice.
    */
   reservedIds: Set<string>;
+  tombstones: Set<string>;
 }
 
 type IdContainerRef =
@@ -174,12 +188,20 @@ function addScopedPriorId(
   }
 }
 
-function buildPriorIndex(prior: FlowsJson | undefined): PriorIndex {
+function tombstoneKey(tabId: string, kind: CompileIdTombstone['kind'], key: string): string {
+  return `${tabId}:${kind}:${key}`;
+}
+
+function buildPriorIndex(
+  prior: FlowsJson | undefined,
+  tombstones: readonly CompileIdTombstone[] = [],
+): PriorIndex {
   const idx: PriorIndex = {
     byTabKindKey: new Map(),
     byScopeKindKey: new Map(),
     allIds: new Set(),
     reservedIds: new Set(),
+    tombstones: new Set(tombstones.map((t) => tombstoneKey(t.tabId, t.kind, t.key))),
   };
   if (!prior) return idx;
   const tabIds = new Set<string>();
@@ -209,6 +231,19 @@ function buildPriorIndex(prior: FlowsJson | undefined): PriorIndex {
   return idx;
 }
 
+function isTombstoned(prior: PriorIndex, entry: IdEntry): boolean {
+  if (entry.container.kind !== 'tab') return false;
+  if (
+    entry.kind !== 'node' &&
+    entry.kind !== 'junction' &&
+    entry.kind !== 'group' &&
+    entry.kind !== 'comment'
+  ) {
+    return false;
+  }
+  return prior.tombstones.has(tombstoneKey(entry.container.spec.id, entry.kind, entry.key));
+}
+
 function reserve(prior: PriorIndex, id: string): string {
   prior.reservedIds.add(id);
   return id;
@@ -231,6 +266,7 @@ function priorContainerIdForExact(prior: PriorIndex, entry: IdEntry): string | u
 }
 
 function reserveExactId(prior: PriorIndex, entry: IdEntry): void {
+  if (isTombstoned(prior, entry)) return;
   const containerId = priorContainerIdForExact(prior, entry);
   if (containerId === undefined) return;
   const exact = prior.byTabKindKey.get(`${containerId}:${entry.kind}:${entry.key}`);
@@ -267,6 +303,15 @@ function resolveIdEntry(
   strategy: 'hash' | 'fixed',
 ): void {
   if (entry.id !== undefined) return;
+  if (isTombstoned(prior, entry)) {
+    if (strategy === 'fixed') {
+      entry.id = reserve(prior, entry.key);
+    } else {
+      entry.id = freshId(prior, seedForId(containerId, entry.kind, entry.key));
+    }
+    entry.assign(entry.id);
+    return;
+  }
   const kk = prior.byScopeKindKey.get(`${entry.fallbackScope}:${entry.kind}:${entry.key}`);
   if (typeof kk === 'string' && !prior.reservedIds.has(kk)) {
     entry.id = reserve(prior, kk);
@@ -582,7 +627,7 @@ function portCountForNode(
 
 export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): CompileResult {
   const strategy = opts.idStrategy ?? 'hash';
-  const prior = buildPriorIndex(opts.prior);
+  const prior = buildPriorIndex(opts.prior, opts.idTombstones);
   const flows: FlowsJsonNode[] = [];
   const diagnostics: CompileDiagnostic[] = [];
   const subflowDefOutCount = buildSubflowDefOutCount(spec.subflowDefs);

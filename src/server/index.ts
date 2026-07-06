@@ -24,6 +24,7 @@ import { removeGroupTool } from './tools/author/remove-group.js';
 import { removeNodeTool } from './tools/author/remove-node.js';
 import { setLinksTool } from './tools/author/set-links.js';
 import { setWiresTool } from './tools/author/set-wires.js';
+import { stageChangesTool } from './tools/author/stage-changes.js';
 import { updateCommentTool } from './tools/author/update-comment.js';
 import { updateGroupTool } from './tools/author/update-group.js';
 import { updateNodeTool } from './tools/author/update-node.js';
@@ -83,9 +84,9 @@ export const SERVER_INFO = {
  * `instructions`. Claude Code truncates server instructions at ~2KB; keep
  * under that ceiling. Update via tests/unit/server/instructions.test.ts.
  */
-export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for an AI agent: staging, validation, snapshots, atomic deploys. Author in 4 phases.
+export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for AI agents: staging, validation, snapshots, atomic deploys. Author in 4 phases.
 
-1. PLAN — for flows >10 nodes or operator dashboards, call plan_flow first. Restate as 3-7 stages; decide organization BEFORE adding nodes.
+1. PLAN — for flows >10 nodes or operator dashboards, call plan_flow. Restate 3-7 stages; decide organization BEFORE nodes.
 
 2. ORGANIZE — decision tree:
 - Pattern repeats 2+ times → create_subflow_definition + add_subflow_instance
@@ -94,12 +95,13 @@ export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for 
 - Stage is independent → new tab
 
 3. STRUCTURE → WIRE → LAYOUT:
-- Author ops write ONE staged change; a pending stage blocks the next author op until deploy_staged_change or discard_staged_change. Layout: positions, group geometry, move_node.
+- Author ops write ONE staged change; pending stage blocks next author op until deploy_staged_change or discard_staged_change. Layout: positions/groups/move_node.
+- stage_changes batches many ops into ONE staged change.
 
 LAYOUT CONVENTIONS: 20px grid; stages left-to-right at 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport); minimize wire crossings; no backward wires. validate_flow returns diagnostics.
 
 4. REVIEW → VALIDATE → DEPLOY:
-- render_flow_png (against:'staged') returns png_path — Read it; render_flow_svg for SVG. Show user; validate_flow must pass; get_staged_change gives staged_hash; preview_flow_diff before deploy_staged_change. User confirmation required.
+- render_flow_png(against:'staged') returns png_path — Read it; render_flow_svg for SVG. Show user; validate_flow; get_staged_change gives staged_hash; preview_flow_diff before deploy_staged_change. User confirms.
 
 DISCOVERY: get_authoring_guide returns the catalog (node types, widgets, templates, validators, layout_conventions, ISA-101 principles); list_available_toolsets/enable_toolset unlock more tools.
 
@@ -161,6 +163,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   wireNodesTool as unknown as Tool<unknown, unknown>,
   setLinksTool as unknown as Tool<unknown, unknown>,
   setWiresTool as unknown as Tool<unknown, unknown>,
+  stageChangesTool as unknown as Tool<unknown, unknown>,
   removeNodeTool as unknown as Tool<unknown, unknown>,
   updateNodeTool as unknown as Tool<unknown, unknown>,
   moveNodeTool as unknown as Tool<unknown, unknown>,

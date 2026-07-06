@@ -28,6 +28,7 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'remove_node',
   'set_links',
   'set_wires',
+  'stage_changes',
   'update_comment',
   'update_group',
   'update_node',

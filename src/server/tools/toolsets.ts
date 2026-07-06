@@ -112,6 +112,7 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
       'wire_nodes',
       'set_wires',
       'set_links',
+      'stage_changes',
       'remove_node',
       'update_node',
       'discard_staged_change',

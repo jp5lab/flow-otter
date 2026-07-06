@@ -1,6 +1,6 @@
 import type { FlowsJson } from '../../../shared/flows-json.js';
 import { canonicalHash } from '../../../shared/hash.js';
-import { compile } from '../../../toolkit/authoring/compile.js';
+import { compile, type CompileIdTombstone } from '../../../toolkit/authoring/compile.js';
 import { decompile } from '../../../toolkit/authoring/decompile.js';
 import type { AuthoringSpec } from '../../../toolkit/authoring/types.js';
 import { diffFlows, summarizeDiff } from '../../../toolkit/diff/semantic.js';
@@ -77,6 +77,15 @@ export interface StageMeta {
    * PREPENDED to the assembled stage-output diagnostics.
    */
   readonly autoClearDiagnostic?: StageBase['diagnostics'][number];
+  /** Batch-only ID tombstones for remove-then-readd equivalence. */
+  readonly idTombstones?: readonly CompileIdTombstone[];
+  /** Validate/diff without writing the staging slot or render sidecar. */
+  readonly dryRun?: boolean;
+}
+
+export interface PendingStageGuardResult {
+  readonly autoClearDiagnostic?: StageBase['diagnostics'][number];
+  readonly amended: boolean;
 }
 
 export const STAGED_AUTHOR_TOOL_LIFECYCLE_SENTENCE =
@@ -84,6 +93,51 @@ export const STAGED_AUTHOR_TOOL_LIFECYCLE_SENTENCE =
 
 export function withStagedAuthorToolDescription(description: string): string {
   return `${description} ${STAGED_AUTHOR_TOOL_LIFECYCLE_SENTENCE}`;
+}
+
+export async function guardPendingStageForAuthorOp(
+  ctx: ToolContext,
+  input: AuthorOpInput & { readonly amendOf?: string },
+  priorHash: string,
+): Promise<PendingStageGuardResult> {
+  const pending = await ctx.staging.read();
+  if (pending === null) {
+    if (input.amendOf !== undefined) {
+      throw new ToolBlockedError(
+        `No staged change is pending to amend; amend_of '${input.amendOf}' did not match a current staged_hash.`,
+      );
+    }
+    return { amended: false };
+  }
+
+  const otherAgent =
+    pending.agent_id !== undefined && pending.agent_id !== ctx.agentId
+      ? ` by a DIFFERENT agent process ('${pending.agent_id}')`
+      : '';
+
+  if (input.amendOf !== undefined && input.amendOf === pending.stagedHash) {
+    return { amended: true };
+  }
+
+  if (pending.stagedHash === priorHash && input.amendOf === undefined) {
+    await ctx.staging.clear();
+    return {
+      amended: false,
+      autoClearDiagnostic: {
+        severity: 'info',
+        rule: 'staging/auto-cleared-stale-stage',
+        message:
+          `Auto-cleared a stale staged change (reason '${pending.reason}', staged at ${pending.stagedAt}${otherAgent}): ` +
+          `its staged_hash ${pending.stagedHash.slice(0, 12)}… is byte-identical to the current runtime flows, so it contained no undeployed work.`,
+      },
+    };
+  }
+
+  throw new ToolBlockedError(
+    `A staged change is already pending deploy (reason '${pending.reason}', staged_hash ${pending.stagedHash.slice(0, 12)}…, staged at ${pending.stagedAt}${otherAgent}). ` +
+      `Staging '${input.toolName}' now would silently discard it. Deploy it first (deploy_staged_change) or discard it ` +
+      `(discard_staged_change — pass force_takeover: true if it was staged by a different agent process).`,
+  );
 }
 
 /**
@@ -124,30 +178,7 @@ export async function runStagedAuthorOp<TExtras, TOutput>(
   // information-lossless by construction — auto-clear it regardless of which
   // agent process staged it and proceed. This can never mask drift: it fires
   // only on byte-equality with the runtime the drift check compares against.
-  const pending = await ctx.staging.read();
-  let autoClearDiagnostic: StageBase['diagnostics'][number] | undefined;
-  if (pending !== null) {
-    const otherAgent =
-      pending.agent_id !== undefined && pending.agent_id !== ctx.agentId
-        ? ` by a DIFFERENT agent process ('${pending.agent_id}')`
-        : '';
-    if (pending.stagedHash === priorHash) {
-      await ctx.staging.clear();
-      autoClearDiagnostic = {
-        severity: 'info',
-        rule: 'staging/auto-cleared-stale-stage',
-        message:
-          `Auto-cleared a stale staged change (reason '${pending.reason}', staged at ${pending.stagedAt}${otherAgent}): ` +
-          `its staged_hash ${pending.stagedHash.slice(0, 12)}… is byte-identical to the current runtime flows, so it contained no undeployed work.`,
-      };
-    } else {
-      throw new ToolBlockedError(
-        `A staged change is already pending deploy (reason '${pending.reason}', staged_hash ${pending.stagedHash.slice(0, 12)}…, staged at ${pending.stagedAt}${otherAgent}). ` +
-          `Staging '${input.toolName}' now would silently discard it. Deploy it first (deploy_staged_change) or discard it ` +
-          `(discard_staged_change — pass force_takeover: true if it was staged by a different agent process).`,
-      );
-    }
-  }
+  const { autoClearDiagnostic } = await guardPendingStageForAuthorOp(ctx, input, priorHash);
 
   const priorSpec = decompile(priorFlows);
   const { nextSpec, extras } = await op(priorSpec, priorFlows);
@@ -193,7 +224,10 @@ export async function compileValidateAndStage(
   const { flows: priorFlows, hash: priorHash, rev: priorRev } = prior;
   const autoClearDiagnostic = meta.autoClearDiagnostic;
 
-  const compiled = compile(nextSpec, { prior: priorFlows });
+  const compiled = compile(nextSpec, {
+    prior: priorFlows,
+    ...(meta.idTombstones !== undefined ? { idTombstones: meta.idTombstones } : {}),
+  });
 
   // NO-OP REFUSAL (WSB-3, e1 poison cascade): a compiled result byte-identical
   // to the runtime means the op changed nothing — staging it would only arm a
@@ -259,23 +293,26 @@ export async function compileValidateAndStage(
   const diffSummary = summarizeDiff(diff);
   const stagedAt = ctx.clock().toISOString();
 
-  await ctx.staging.write({
-    flows: compiled.flows,
-    basedOnSnapshotHash: priorHash,
-    basedOnRev: priorRev,
-    stagedHash: compiled.hash,
-    stagedAt,
-    actor: ctx.config.ACTOR_NAME,
-    agent_id: ctx.agentId,
-    reason: meta.reason ?? meta.toolName,
-  });
+  let render: StageRender | null = null;
+  if (meta.dryRun !== true) {
+    await ctx.staging.write({
+      flows: compiled.flows,
+      basedOnSnapshotHash: priorHash,
+      basedOnRev: priorRev,
+      stagedHash: compiled.hash,
+      stagedAt,
+      actor: ctx.config.ACTOR_NAME,
+      agent_id: ctx.agentId,
+      reason: meta.reason ?? meta.toolName,
+    });
 
-  // ── REND-8: stage-output enrichment ───────────────────────────────────────
-  // Output-only enrichment (before/after render paths) — strictly AFTER
-  // staging.write so it can never change the staged bytes, staged_hash,
-  // based_on_snapshot_hash, the single-slot contract, or drift refusal.
-  // Enrichment failures never fail the stage (`render: null` on the output).
-  const render = await buildStageRenderEnrichment(ctx, priorFlows, compiled.flows, compiled.hash);
+    // ── REND-8: stage-output enrichment ───────────────────────────────────────
+    // Output-only enrichment (before/after render paths) — strictly AFTER
+    // staging.write so it can never change the staged bytes, staged_hash,
+    // based_on_snapshot_hash, the single-slot contract, or drift refusal.
+    // Enrichment failures never fail the stage (`render: null` on the output).
+    render = await buildStageRenderEnrichment(ctx, priorFlows, compiled.flows, compiled.hash);
+  }
 
   const diffSummaryOut = {
     nodes_added: diffSummary.nodes_added,

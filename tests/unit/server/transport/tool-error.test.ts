@@ -8,7 +8,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { DriftError } from '../../../../src/adapters/nodered/errors.js';
-import { ToolBlockedError, ValidationFailedError } from '../../../../src/server/tools/_tool.js';
+import {
+  BatchOpError,
+  ToolBlockedError,
+  ValidationFailedError,
+} from '../../../../src/server/tools/_tool.js';
 import {
   DIAGNOSTICS_CAP,
   toolErrorContent,
@@ -146,18 +150,20 @@ describe('toolErrorPayload — generic branch', () => {
     expect(payload).toEqual({ error: { name: 'ValidationFailedError', message: 'shape off' } });
   });
 
-  // WSB-5 replaces this test when the BatchOpError branch is added: the
-  // payload then gains failed_op_index / failed_op. Until then a name-only
-  // 'BatchOpError' falls through to the generic branch — pinned here so the
-  // flip is deliberate. See the contract in src/server/transport/tool-error.ts.
-  it("'BatchOpError' (does not exist yet) currently falls through to the generic branch", () => {
-    const err = Object.assign(new Error('op 3 failed'), {
-      name: 'BatchOpError',
-      failedOpIndex: 3,
-      failedOp: { op: 'add_node' },
-    });
+  it('BatchOpError carries failed_op_index, failed_op, and wrapped diagnostics', () => {
+    const err = new BatchOpError('op 3 failed', 3, { op: 'add_node' }, [
+      { rule: 'batch/op-failed', message: 'bad op' },
+    ]);
     const payload = toolErrorPayload(err);
-    expect(payload).toEqual({ error: { name: 'BatchOpError', message: 'op 3 failed' } });
+    expect(payload).toEqual({
+      error: {
+        name: 'BatchOpError',
+        message: 'op 3 failed',
+        failed_op_index: 3,
+        failed_op: { op: 'add_node' },
+        diagnostics: [{ rule: 'batch/op-failed', message: 'bad op' }],
+      },
+    });
   });
 });
 

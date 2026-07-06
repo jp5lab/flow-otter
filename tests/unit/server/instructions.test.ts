@@ -28,6 +28,7 @@ describe('SERVER_INSTRUCTIONS', () => {
     'list_available_toolsets',
     'enable_toolset',
     'add_node',
+    'stage_changes',
     'create_subflow_definition',
     'set_target',
     'health_check',
@@ -35,8 +36,8 @@ describe('SERVER_INSTRUCTIONS', () => {
     expect(SERVER_INSTRUCTIONS).toContain(toolName);
   });
 
-  it('does not advertise unshipped batch staging', () => {
-    expect(SERVER_INSTRUCTIONS).not.toContain('stage_changes');
+  it('advertises shipped batch staging', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('stage_changes batches many ops into ONE staged change.');
   });
 
   // D-5 (R6/F4): the layout conventions are taught WITH NUMBERS, in-band.

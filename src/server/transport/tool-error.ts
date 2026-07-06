@@ -42,24 +42,9 @@
  *   as the truncation marker.
  * - `DriftError` (src/adapters/nodered/errors.ts) → `expected_hash` /
  *   `actual_hash`.
+ * - `BatchOpError` (src/server/tools/_tool.ts) → `failed_op_index` /
+ *   `failed_op`, plus wrapped diagnostics when present.
  * - everything else → `name` + `message` only.
- *
- * ## FUTURE BRANCH — BatchOpError (WSB-5, Phase 2)
- *
- * `BatchOpError` does not exist yet; `stage_changes` (WSB-5) introduces it.
- * When it lands, add exactly one branch here:
- *
- *   `err.name === 'BatchOpError'` → emit `failed_op_index` (number — the
- *   zero-based index of the op that aborted the batch) and `failed_op`
- *   (the offending op object as submitted, JSON-serializable). If the batch
- *   failure wraps a validation failure, the wrapped `diagnostics` flow through
- *   the same capped field above.
- *
- * No reshaping is required: {@link ToolErrorPayload} already declares both
- * optional fields, and the text layout (human line + JSON block) is unchanged.
- * The unit test pinning today's fall-through behavior for a name-only
- * 'BatchOpError' lives in tests/unit/server/transport/tool-error.test.ts and
- * is flipped by WSB-5 when the branch is added.
  */
 
 /** Maximum number of diagnostics serialized into one error payload. */
@@ -120,6 +105,30 @@ function readStringField(err: unknown, field: string): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+function readNumberField(err: unknown, field: string): number | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const v = (err as Record<string, unknown>)[field];
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+function readUnknownField(err: unknown, field: string): unknown {
+  if (typeof err !== 'object' || err === null) return undefined;
+  return (err as Record<string, unknown>)[field];
+}
+
+function diagnosticsPayload(diagnostics: readonly unknown[]):
+  | {
+      readonly diagnostics: readonly unknown[];
+      readonly diagnostics_truncated?: number;
+    }
+  | Record<string, never> {
+  const truncated = diagnostics.length - DIAGNOSTICS_CAP;
+  return {
+    diagnostics: truncated > 0 ? diagnostics.slice(0, DIAGNOSTICS_CAP) : diagnostics,
+    ...(truncated > 0 ? { diagnostics_truncated: truncated } : {}),
+  };
+}
+
 /**
  * Build the machine-readable payload for a thrown tool error. Pure.
  * See the file header for the full field contract.
@@ -131,13 +140,11 @@ export function toolErrorPayload(err: unknown): ToolErrorPayload {
   if (name === 'ValidationFailedError') {
     const diagnostics = readDiagnostics(err);
     if (diagnostics !== undefined) {
-      const truncated = diagnostics.length - DIAGNOSTICS_CAP;
       return {
         error: {
           name,
           message,
-          diagnostics: truncated > 0 ? diagnostics.slice(0, DIAGNOSTICS_CAP) : diagnostics,
-          ...(truncated > 0 ? { diagnostics_truncated: truncated } : {}),
+          ...diagnosticsPayload(diagnostics),
         },
       };
     }
@@ -153,7 +160,22 @@ export function toolErrorPayload(err: unknown): ToolErrorPayload {
     }
   }
 
-  // BatchOpError (WSB-5) branch slots in here — see file header.
+  if (name === 'BatchOpError') {
+    const failedOpIndex = readNumberField(err, 'failedOpIndex');
+    const failedOp = readUnknownField(err, 'failedOp');
+    if (failedOpIndex !== undefined && failedOp !== undefined) {
+      const diagnostics = readDiagnostics(err);
+      return {
+        error: {
+          name,
+          message,
+          failed_op_index: failedOpIndex,
+          failed_op: failedOp,
+          ...(diagnostics !== undefined ? diagnosticsPayload(diagnostics) : {}),
+        },
+      };
+    }
+  }
 
   return { error: { name, message } };
 }

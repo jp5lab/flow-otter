@@ -176,12 +176,25 @@ export class ValidationFailedError extends Error {
   }
 }
 
+export class BatchOpError extends Error {
+  constructor(
+    message: string,
+    public readonly failedOpIndex: number,
+    public readonly failedOp: unknown,
+    public readonly diagnostics: readonly unknown[] = [],
+  ) {
+    super(message);
+    this.name = 'BatchOpError';
+  }
+}
+
 function classifyError(err: unknown): AuditResult {
   if (err === null || err === undefined) return 'error';
   if (typeof err === 'object' && err !== null && 'name' in err) {
     const name = (err as { name?: unknown }).name;
     if (name === 'DriftError') return 'drift_detected';
     if (name === 'ValidationFailedError') return 'validation_failed';
+    if (name === 'BatchOpError') return 'validation_failed';
     if (name === 'ToolBlockedError') return 'blocked';
     if (name === 'AuthFailedError') return 'error';
   }
