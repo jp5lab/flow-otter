@@ -1,0 +1,22 @@
+{
+  "e2": {
+    "phase1": {
+      "max_mcp_calls": 5,
+      "max_deploy_confirmations": 1,
+      "max_failed": 0,
+      "max_force": 0,
+      "max_oob": 0
+    }
+  },
+  "e1": {
+    "phase1": {
+      "max_mcp_calls": 30,
+      "max_deploy_confirmations": 3,
+      "max_failed": 0
+    },
+    "phase2": {
+      "max_authoring_calls": 3,
+      "deploy_confirmations": 1
+    }
+  }
+}

@@ -396,6 +396,54 @@ a drill or a budget is loud.
 The full audit re-run protocol (the FULLY FIXED declaration) lives in
 `scripts/eval/replay/AUDIT-RERUN.md`.
 
+## The audit replay gate (`npm run eval:replay`, EVAL-5)
+
+`npm run eval:replay` (`scripts/eval/replay/replay.mjs`) is the Phase-2
+audit-replay regression suite. It runs committed scenario steps through the
+EVAL-1 driver against the local sterile stack, always from committed audit
+fixtures under `tests/fixtures/audit-2026-06-10/`, and always with a fresh
+`ENVIRONMENT_NAME` plus per-run temp snapshot/staging/audit/render dirs. The
+previous runtime flows are restored afterwards (`--keep-flows` to inspect).
+
+Committed scenarios and budgets:
+
+- **e2 phase 1** (`scripts/eval/replay/e2-steps.json`) seeds
+  `e2-flows.json` and performs the spaghetti-tab reorganization as one
+  `stage_changes` batch, one `preview_flow_diff`, and one consented
+  `deploy_staged_change`. The budget is pinned in
+  `scripts/eval/replay/budgets.json` at **≤5 MCP calls, ≤1 deploy
+  confirmation, 0 failed, 0 force, 0 OOB**. This is the Phase-2 exit replay
+  gate: `npm run eval:replay -- --scenario e2 --phase 1`.
+- **e1 phase 1** (`e1-phase1-steps.json`) seeds `e1-flows.json` and records
+  the proposal-level ceiling: **≤30 MCP calls, ≤3 deploy confirmations,
+  0 failed**. Setup/read-discovery is unbudgeted per the glossary boundary.
+- **e1 phase 2** (`e1-phase2-steps.json`) is the Phase-3 target for the
+  future `stage_spec` surface: **≤3 authoring calls + 1 deploy
+  confirmation** in `budgets.json`. Until `stage_spec` exists, the runner
+  treats this scenario as expected-fail record mode by default; the
+  `layout-spec-authoring` section is flagged `layout_computed: true`, so the
+  driver's position-field anti-gaming lint mechanically enforces the
+  zero-coordinate path even while the scenario is still red.
+
+Every selected replay scenario runs **twice from identically seeded
+baselines**. The runner asserts the safety post-conditions outside the steps
+files: successful deploys equal deploy confirmations, every successful deploy
+has a non-null `snapshot_before`, `force_uses == 0`,
+`force_takeover_uses == 0`, and the two final flows are byte-identical by
+`canonicalFlowsHash`. For e2, it also asserts wiring-map byte-identity vs the
+seeded baseline with `compareWiring` — the reorganization must not change the
+logical graph.
+
+Exit codes mirror the driver: 0 = all selected scenarios and post-conditions
+pass (including recorded expected failures), 1 = replay gate fail, 2 = abort.
+Use `--json <path>` to record the verdict locally; never commit raw run files
+from `eval-results/`.
+
+S5 is deliberately **not duplicated** here. The visual-loop gate remains
+EVAL-2's single canonical runner and steps file:
+`npm run eval:s5` / `scripts/eval/steps/s5-steps.json`. Replay records that
+delegation in its verdict so the S5 budget has one source of truth.
+
 ## Iteration protocol
 
 1. Run a scenario → score it.

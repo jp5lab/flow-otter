@@ -2,6 +2,13 @@
 
 ## 1.5.0 (unreleased)
 
+### EVAL-5 — Audit-replay regression suite
+
+- Added `npm run eval:replay` (`scripts/eval/replay/replay.mjs`): the Phase-2 audit replay runner. It drives committed replay steps through the EVAL-1 MCP driver against the sterile stack, seeds each run from the canonical audit fixtures, uses a fresh `ENVIRONMENT_NAME` plus temp snapshot/staging/audit/render dirs, restores prior flows afterwards, and runs every selected scenario twice from identical baselines for `canonicalFlowsHash` idempotence.
+- Added pinned replay budgets and steps under `scripts/eval/replay/`: e2 phase 1 is the WSB-5 spaghetti-tab reorganization as ONE `stage_changes` batch + preview + ONE consented deploy within ≤5 MCP calls / 1 confirmation / 0 failed / 0 force / 0 OOB; e1 phase 1 records the proposal-level ≤30 MCP / ≤3 confirmation / 0 failed ceiling; e1 phase 2 records the future `stage_spec` target (≤3 authoring calls + 1 confirmation) and runs in expected-fail record mode until that tool exists.
+- Replay now asserts the cross-run safety post-conditions outside the steps files: successful deploys equal confirmations, every deploy has a non-null `snapshot_before`, force and force-takeover usage stay zero, e2 wiring-map byte-identity holds via `compareWiring`, and both seeded runs finish byte-identical by `canonicalFlowsHash`. S5 is not copied; replay records delegation to EVAL-2's canonical `scripts/eval/steps/s5-steps.json`.
+- Added unit pins for replay budgets, steps-file structure, WSB-5 op vocabulary (including `move_node.tab_id`), e1-phase2 `layout_computed` / no-position anti-gaming coverage, runner scenario selection, S5 delegation, and safety-post-condition parsing.
+
 ### EVAL-3 — S6 pre-registration corpus and frozen thresholds
 
 - Added the canonical 2026-06-10 audit fixture SHA-256 manifest plus a tiny loader that hard-fails on fixture hash drift; the EVAL-3 pins load both charter flow snapshots through `FlowsJsonSchema` without modifying the fixture bytes.

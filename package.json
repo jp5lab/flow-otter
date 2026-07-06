@@ -61,6 +61,7 @@
     "fidelity:editor": "tsx scripts/editor-fidelity-check.mjs",
     "eval:s5": "tsx scripts/eval/run-s5.mjs",
     "eval:canary": "node scripts/eval/run-canary.mjs",
+    "eval:replay": "node scripts/eval/replay/replay.mjs",
     "privacy:scan": "node scripts/privacy-scan.mjs",
     "privacy:scan:staged": "node scripts/privacy-scan.mjs --staged",
     "privacy:scan:history": "node scripts/privacy-scan.mjs --history",

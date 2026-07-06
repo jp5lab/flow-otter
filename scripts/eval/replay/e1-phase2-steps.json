@@ -1,0 +1,91 @@
+{
+  "version": 2,
+  "env": {},
+  "sections": [
+    {
+      "name": "setup-read-discovery",
+      "calls": [
+        {
+          "tool": "get_flow",
+          "args": { "tab_id": "f6f2187d.f17ca8" },
+          "expect": { "error": false, "match": "\"Flow 1\"" }
+        },
+        {
+          "tool": "analyze_flow",
+          "args": { "tab_id": "f6f2187d.f17ca8" },
+          "expect": { "error": false, "match": "\"layout\"" }
+        }
+      ]
+    },
+    {
+      "name": "layout-spec-authoring",
+      "layout_computed": true,
+      "budget": {
+        "max_mcp_calls": 3,
+        "max_failed": 0,
+        "max_deploy_confirmations": 1,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "stage_spec",
+          "args": {
+            "tab_id": "f6f2187d.f17ca8",
+            "reason": "audit e1 phase-2 computed layout replay",
+            "spec": {
+              "goal": "Recompute the e1 operator flow from semantic stages without hand-authored coordinates.",
+              "layout_strategy": "computed",
+              "stages": [
+                {
+                  "key": "acquire",
+                  "label": "ACQUIRE",
+                  "lane": "main",
+                  "members": ["mqtt_in", "inject_test"]
+                },
+                {
+                  "key": "condition",
+                  "label": "CONDITION",
+                  "lane": "main",
+                  "members": ["parse", "scale"]
+                },
+                {
+                  "key": "decide",
+                  "label": "DECIDE",
+                  "lane": "main",
+                  "members": ["tswitch"]
+                },
+                {
+                  "key": "act",
+                  "label": "ACT",
+                  "lane": "main",
+                  "members": ["debounce", "format_alarm", "notify"]
+                },
+                {
+                  "key": "indicate",
+                  "label": "INDICATE",
+                  "lane": "indicate",
+                  "members": ["current_temp"]
+                },
+                {
+                  "key": "error",
+                  "label": "ERROR LANE",
+                  "lane": "error",
+                  "members": ["catch_all", "format_error", "error_log"]
+                }
+              ],
+              "rules": [
+                "main flow left-to-right",
+                "switch port 0 stays above later ports",
+                "error lane below main path",
+                "groups enclose stage members"
+              ]
+            }
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        }
+      ]
+    }
+  ]
+}

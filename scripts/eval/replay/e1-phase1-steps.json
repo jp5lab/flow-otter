@@ -1,0 +1,124 @@
+{
+  "version": 2,
+  "env": {},
+  "sections": [
+    {
+      "name": "setup-read-discovery",
+      "calls": [
+        {
+          "tool": "get_flow",
+          "args": { "tab_id": "f6f2187d.f17ca8" },
+          "expect": { "error": false, "match": "\"Flow 1\"" }
+        },
+        {
+          "tool": "analyze_flow",
+          "args": { "tab_id": "f6f2187d.f17ca8" },
+          "expect": { "error": false, "match": "\"layout\"" }
+        },
+        {
+          "tool": "get_authoring_guide",
+          "args": { "categories": ["layout_conventions"] },
+          "expect": { "error": false, "match": "layout_conventions" }
+        }
+      ]
+    },
+    {
+      "name": "proposal-authoring",
+      "budget": {
+        "max_mcp_calls": 30,
+        "max_deploy_confirmations": 3,
+        "max_failed": 0,
+        "max_force": 0,
+        "max_force_takeover": 0,
+        "max_oob": 0
+      },
+      "calls": [
+        {
+          "tool": "stage_changes",
+          "args": {
+            "reason": "audit e1 phase-1 replay annotation 1",
+            "ops": [
+              {
+                "op": "add_comment",
+                "tab_id": "f6f2187d.f17ca8",
+                "key": "e1-phase1-title",
+                "text": "Audit replay: acquire -> condition -> decide -> act -> indicate",
+                "position": { "x": 520, "y": 60 }
+              }
+            ]
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": {
+            "error": false,
+            "match": "\"ok\": true[\\s\\S]*\"snapshot_before\": \""
+          }
+        },
+        {
+          "tool": "stage_changes",
+          "args": {
+            "reason": "audit e1 phase-1 replay annotation 2",
+            "ops": [
+              {
+                "op": "add_comment",
+                "tab_id": "f6f2187d.f17ca8",
+                "key": "e1-phase1-error-lane",
+                "text": "Error lane stays below the happy path and closes through catch/format/log.",
+                "position": { "x": 660, "y": 620 }
+              }
+            ]
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": {
+            "error": false,
+            "match": "\"ok\": true[\\s\\S]*\"snapshot_before\": \""
+          }
+        },
+        {
+          "tool": "stage_changes",
+          "args": {
+            "reason": "audit e1 phase-1 replay annotation 3",
+            "ops": [
+              {
+                "op": "add_comment",
+                "tab_id": "f6f2187d.f17ca8",
+                "key": "e1-phase1-operator-note",
+                "text": "Operator outputs are split into alarm notification and current-value indication.",
+                "position": { "x": 1120, "y": 60 }
+              }
+            ]
+          },
+          "expect": { "error": false, "match": "\"staged_hash\"" }
+        },
+        {
+          "tool": "deploy_staged_change",
+          "args": { "staged_hash": "$PREV.staged_hash" },
+          "elicitation": "accept",
+          "expect": {
+            "error": false,
+            "match": "\"ok\": true[\\s\\S]*\"snapshot_before\": \""
+          }
+        }
+      ]
+    },
+    {
+      "name": "post-deploy-verify",
+      "calls": [
+        {
+          "tool": "validate_flow",
+          "args": { "tab_id": "f6f2187d.f17ca8" },
+          "expect": { "error": false, "match": "\"has_errors\": false" }
+        }
+      ]
+    }
+  ]
+}
