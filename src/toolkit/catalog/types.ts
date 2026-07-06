@@ -12,6 +12,8 @@
  * file in src/toolkit/validate/rules/ has a catalog entry).
  */
 
+import type { Capability } from '../../adapters/nodered/capabilities.js';
+
 export type CatalogCategory =
   | 'node_red_concepts'
   | 'core_node_types'
@@ -80,6 +82,13 @@ export interface NodeTypeEntry {
   readonly type: string;
   readonly category: NodeTypeCategory;
   readonly purpose: string;
+  readonly min_node_red_version?: string;
+  /**
+   * Node-RED version-gated capabilities relevant to this node type. This is
+   * plural because some node types, especially `function`, span multiple
+   * independently-gated runtime/editor features.
+   */
+  readonly capabilities?: readonly Capability[];
   /** Tool name if a specialist exists (e.g., 'add_inject_node'). */
   readonly flow_otter_specialist?: string;
   /** Generic tool that always works (typically 'add_node'). */
