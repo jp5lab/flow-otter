@@ -85,6 +85,8 @@ describe('decompile', () => {
     expect(back.subflowDefs).toHaveLength(1);
     expect(back.subflowDefs?.[0]?.id).toBe('def-A');
     expect(back.subflowDefs?.[0]?.name).toBe('MySub');
+    expect(back.subflowDefs?.[0]?.info).toBe('doc');
+    expect(back.subflowDefs?.[0]?.passthrough?.['info']).toBeUndefined();
     expect(back.subflowDefs?.[0]?.nodes).toHaveLength(1);
     expect(back.subflowDefs?.[0]?.nodes[0]?.key).toBe('inner');
 
@@ -200,6 +202,45 @@ describe('decompile', () => {
     expect(mqttIn?.passthrough?.['qos']).toBe(1);
     const linkIn = back.tabs[0]?.nodes.find((n) => n.key === 'l-in');
     expect(linkIn?.passthrough?.['links']).toEqual(['l-out']);
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('round-trips regular node info as a top-level field, not passthrough', () => {
+    const spec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [
+            {
+              key: 'worker',
+              type: 'function',
+              label: 'Worker',
+              info: 'Stage purpose lives here.',
+              position: { x: 100, y: 100 },
+              passthrough: { func: 'return msg;', outputs: 1 },
+            },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+    } as unknown as AuthoringSpec;
+    const first = compile(spec);
+    const emitted = first.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'worker',
+    ) as Record<string, unknown>;
+    expect(emitted['info']).toBe('Stage purpose lives here.');
+
+    const back = decompile(first.flows);
+    const node = back.tabs[0]?.nodes[0] as
+      | { readonly info?: string; readonly passthrough?: Readonly<Record<string, unknown>> }
+      | undefined;
+    expect(node?.info).toBe('Stage purpose lives here.');
+    expect(node?.passthrough?.['info']).toBeUndefined();
+
     const second = compile(back, { prior: first.flows });
     expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
   });

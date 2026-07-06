@@ -552,12 +552,23 @@ describe('author tools (workflow node tools)', () => {
 
   it('update_node stages node updates', async () => {
     const out = (await updateNodeTool.handler(
-      { tab_id: 'tab1', node_key: 'source', label: 'Updated Source', position: { x: 120, y: 180 } },
+      {
+        tab_id: 'tab1',
+        node_key: 'source',
+        label: 'Updated Source',
+        position: { x: 120, y: 180 },
+        info: 'Updated source purpose.',
+      },
       ctx,
     )) as UpdateNodeOutput;
     expect(out.ok).toBe(true);
     expect(out.updated).toBe(true);
     expect(out.diff_summary.nodes_modified).toBe(1);
+    const staged = await ctx.staging.read();
+    const source = staged?.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'source',
+    ) as Record<string, unknown> | undefined;
+    expect(source?.['info']).toBe('Updated source purpose.');
   });
 
   it('move_node stages a cross-tab move', async () => {

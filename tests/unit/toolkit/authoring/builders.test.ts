@@ -52,15 +52,17 @@ describe('node-type builders', () => {
     expect(subflowInstance('abc123', { key: 'k', position: POS }).type).toBe('subflow:abc123');
   });
 
-  it('builders propagate label, groupKey, passthrough', () => {
+  it('builders propagate label, info, groupKey, passthrough', () => {
     const n = mqttIn({
       key: 'k',
       label: 'My MQTT',
+      info: 'Documents the MQTT input.',
       position: POS,
       groupKey: 'g1',
       passthrough: { topic: 'foo/bar', broker: 'b1' },
     });
     expect(n.label).toBe('My MQTT');
+    expect(n.info).toBe('Documents the MQTT input.');
     expect(n.groupKey).toBe('g1');
     expect(n.passthrough).toEqual({ topic: 'foo/bar', broker: 'b1' });
   });

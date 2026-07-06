@@ -40,12 +40,14 @@ interface NodeProto {
   kind: NodeKind;
   position: { x: number; y: number };
   label: string;
+  info: string | undefined;
 }
 
 const arbNodeProto: fc.Arbitrary<NodeProto> = fc.record({
   kind: fc.constantFrom<NodeKind>(...NODE_KINDS),
   position: arbPosition,
   label: arbLabel,
+  info: fc.option(alphaString(1, 12)).map((s) => s ?? undefined),
 });
 
 interface RawTab {
@@ -142,6 +144,7 @@ const arbTab: fc.Arbitrary<TabSpec> = fc
       key,
       type: proto.kind,
       label: proto.label,
+      ...(proto.info !== undefined ? { info: proto.info } : {}),
       position: proto.position,
     }));
     const nodeKeys = new Set(nodes.map((n) => n.key));
@@ -244,6 +247,7 @@ const arbSubflowDef: fc.Arbitrary<SubflowDefSpec> = fc
       key,
       type: proto.kind,
       label: proto.label,
+      ...(proto.info !== undefined ? { info: proto.info } : {}),
       position: proto.position,
     }));
     const validKeys = new Set(nodes.map((n) => n.key));

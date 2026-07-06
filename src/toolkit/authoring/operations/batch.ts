@@ -56,6 +56,7 @@ export interface AddNodeOp {
   readonly opts?: {
     readonly key?: string;
     readonly label?: string;
+    readonly info?: string;
     readonly position?: Position;
     readonly group_key?: string;
     readonly passthrough?: Record<string, unknown>;
@@ -136,6 +137,7 @@ export interface UpdateNodeOp {
   readonly tab_id: string;
   readonly node_id: string;
   readonly label?: string;
+  readonly info?: string | null;
   readonly position?: Position;
   readonly group_key?: string | null;
   readonly disabled?: boolean;
@@ -245,6 +247,7 @@ function applyOne(
       const opts: Parameters<typeof addNode>[3] = {};
       if (op.opts?.key !== undefined) opts.key = op.opts.key;
       if (op.opts?.label !== undefined) opts.label = op.opts.label;
+      if (op.opts?.info !== undefined) opts.info = op.opts.info;
       if (op.opts?.position !== undefined) opts.position = op.opts.position;
       if (op.opts?.group_key !== undefined) {
         opts.groupKey = resolveGroupKeyOnTab(spec, priorFlows, tabId, op.opts.group_key);
@@ -534,6 +537,7 @@ function buildUpdateNodeOpts(
 ): Parameters<typeof updateNode>[3] {
   const opts: Parameters<typeof updateNode>[3] = {};
   if (op.label !== undefined) opts.label = op.label;
+  if (op.info !== undefined) opts.info = op.info;
   if (op.position !== undefined) opts.position = op.position;
   if (op.group_key !== undefined) opts.groupKey = op.group_key;
   if (op.disabled !== undefined) opts.disabled = op.disabled;

@@ -46,6 +46,32 @@ describe('updateNode', () => {
     expect(spec.tabs[0]!.nodes[0]!.passthrough).toEqual({ func: 'return null;' });
   });
 
+  it('preserves existing node info when updating other fields', () => {
+    const withInfo = {
+      ...baseSpec,
+      tabs: [
+        {
+          ...baseSpec.tabs[0]!,
+          nodes: [{ ...baseSpec.tabs[0]!.nodes[0]!, info: 'Existing purpose.' }],
+        },
+      ],
+    } as unknown as AuthoringSpec;
+
+    const { spec } = updateNode(withInfo, 'tab-main', 'fn', { label: 'New' });
+    const node = spec.tabs[0]!.nodes[0] as { readonly info?: string };
+    expect(node.info).toBe('Existing purpose.');
+  });
+
+  it('updates and clears regular node info', () => {
+    const updated = updateNode(baseSpec, 'tab-main', 'fn', { info: 'New purpose.' });
+    expect((updated.spec.tabs[0]!.nodes[0] as { readonly info?: string }).info).toBe(
+      'New purpose.',
+    );
+
+    const cleared = updateNode(updated.spec, 'tab-main', 'fn', { info: null });
+    expect((cleared.spec.tabs[0]!.nodes[0] as { readonly info?: string }).info).toBeUndefined();
+  });
+
   it('clears groupKey when groupKey is null and leaves it when undefined', () => {
     const cleared = updateNode(baseSpec, 'tab-main', 'fn', { groupKey: null });
     expect(cleared.spec.tabs[0]!.nodes[0]!.groupKey).toBeUndefined();

@@ -11,6 +11,8 @@ import { findCanvasObject, updateSingleMemberGroupKey, withGroupKey } from './_m
 
 export interface UpdateNodeOpts {
   label?: string;
+  /** `null` clears the regular node info; `undefined` leaves it as-is. */
+  info?: string | null;
   position?: Position;
   /** `null` clears the group membership; `undefined` leaves it as-is. */
   groupKey?: string | null;
@@ -78,9 +80,9 @@ function applyTargetUpdate(
     return { ...tab, nodes };
   }
   if (kind === 'junction') {
-    if (opts.passthrough !== undefined) {
+    if (opts.passthrough !== undefined || opts.info !== undefined) {
       throw new UpdateNodeError(
-        `Junction '${key}' does not support passthrough updates; use label, position, group_key, or disabled.`,
+        `Junction '${key}' does not support passthrough or info updates; use label, position, group_key, or disabled.`,
       );
     }
     const junctions = (tab.junctions ?? []).map((j) =>
@@ -88,9 +90,9 @@ function applyTargetUpdate(
     );
     return { ...tab, junctions };
   }
-  if (opts.passthrough !== undefined || opts.disabled !== undefined) {
+  if (opts.passthrough !== undefined || opts.disabled !== undefined || opts.info !== undefined) {
     throw new UpdateNodeError(
-      `Comment '${key}' does not support passthrough or disabled updates; use update_comment for full comment fields.`,
+      `Comment '${key}' does not support passthrough, disabled, or info updates; use update_comment for full comment fields.`,
     );
   }
   const comments = tab.comments.map((c) => (c.key === key ? updateCommentViaNode(c, opts) : c));
@@ -99,6 +101,8 @@ function applyTargetUpdate(
 
 function updateRegularNode(existing: NodeSpec, opts: UpdateNodeOpts): NodeSpec {
   const nextLabel = opts.label !== undefined ? opts.label : existing.label;
+  const nextInfo =
+    opts.info !== undefined ? (opts.info === null ? undefined : opts.info) : existing.info;
   const nextPosition = opts.position ?? existing.position;
   let nextPassthrough = opts.passthrough !== undefined ? opts.passthrough : existing.passthrough;
   if (opts.disabled !== undefined) {
@@ -111,6 +115,7 @@ function updateRegularNode(existing: NodeSpec, opts: UpdateNodeOpts): NodeSpec {
     type: existing.type,
     position: nextPosition,
     ...(nextLabel !== undefined ? { label: nextLabel } : {}),
+    ...(nextInfo !== undefined ? { info: nextInfo } : {}),
     ...(nextGroupKey !== undefined ? { groupKey: nextGroupKey } : {}),
     ...(existing.widgetAnchor !== undefined ? { widgetAnchor: existing.widgetAnchor } : {}),
     ...(nextPassthrough !== undefined ? { passthrough: nextPassthrough } : {}),

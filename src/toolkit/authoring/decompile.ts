@@ -41,6 +41,7 @@ const STRUCTURAL_FIELDS = new Set([
   'wires',
   'name',
   'g',
+  'info',
   AUTHORING_KEY_FIELD,
   // Runtime-built artifacts that should never round-trip into the AuthoringSpec.
   // _users / _alias are added by the runtime; credentials get stripped to avoid
@@ -77,7 +78,7 @@ const STRUCTURAL_TAB_FIELDS = new Set([
   AUTHORING_KEY_FIELD,
 ]);
 
-const STRUCTURAL_SUBFLOW_DEF_FIELDS = new Set(['id', 'type', 'name', AUTHORING_KEY_FIELD]);
+const STRUCTURAL_SUBFLOW_DEF_FIELDS = new Set(['id', 'type', 'name', 'info', AUTHORING_KEY_FIELD]);
 
 const STRUCTURAL_CONFIG_FIELDS = new Set([
   'id',
@@ -258,6 +259,7 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     subflowDefs.push({
       id: authoringKey(defNode),
       name: defNode.name,
+      ...(typeof defNode.info === 'string' ? { info: defNode.info } : {}),
       nodes,
       connections,
       ...(junctions.length > 0 ? { junctions } : {}),
@@ -311,6 +313,7 @@ function buildNodeSpec(
     key: authoringKey(node),
     type: nodeType,
     ...(typeof node.name === 'string' ? { label: node.name } : {}),
+    ...(typeof node.info === 'string' ? { info: node.info } : {}),
     position: { x: node.x ?? 0, y: node.y ?? 0 },
     ...(groupKey !== undefined ? { groupKey } : {}),
     ...(Object.keys(passthrough).length > 0 ? { passthrough } : {}),

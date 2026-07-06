@@ -151,6 +151,27 @@ describe('add_node tool', () => {
     expect(result.type_had_schema).toBe(true);
   });
 
+  it('stages node info as a top-level Node-RED field', async () => {
+    const result = (await addNodeTool.handler(
+      {
+        tab_id: TAB_ID,
+        type: 'function',
+        opts: {
+          label: 'worker',
+          info: 'Documents the worker stage.',
+          passthrough: { func: 'return msg;', outputs: 1 },
+        },
+      },
+      ctx,
+    )) as { ok: boolean; added_node_id?: string };
+    expect(result.ok).toBe(true);
+    const staged = await ctx.staging.read();
+    const node = staged?.flows.find((n) => n.id === result.added_node_id) as
+      | Record<string, unknown>
+      | undefined;
+    expect(node?.['info']).toBe('Documents the worker stage.');
+  });
+
   it('places at next free slot when no source_node and no position', async () => {
     const result = (await addNodeTool.handler(
       {

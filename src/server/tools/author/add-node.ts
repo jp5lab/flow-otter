@@ -26,6 +26,7 @@ const InputSchema = z
       .object({
         key: z.string().min(1).optional(),
         label: z.string().max(24).optional(),
+        info: z.string().optional(),
         position: z.object({ x: z.number().int(), y: z.number().int() }).strict().optional(),
         group_key: z.string().min(1).optional(),
         passthrough: z.record(z.unknown()).optional(),
@@ -70,7 +71,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const addNodeTool: Tool<Input, Output> = {
   name: 'add_node',
   description: withStagedAuthorToolDescription(
-    'Generic node-add: stages a new node of any Node-RED type on a tab; known config-node types (e.g. "mqtt-broker") are staged globally without canvas fields. Pass `type` (e.g. "change", "switch", "http in") and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
+    'Generic node-add: stages a new node of any Node-RED type on a tab; known config-node types (e.g. "mqtt-broker") are staged globally without canvas fields. Pass `type` (e.g. "change", "switch", "http in"), optional `opts.info` for Node-RED info text, and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
   ),
   tier: 'author',
   inputZod: InputSchema,
@@ -92,6 +93,10 @@ export const addNodeTool: Tool<Input, Output> = {
         properties: {
           key: { type: 'string', minLength: 1 },
           label: { type: 'string', maxLength: 24 },
+          info: {
+            type: 'string',
+            description: 'Node info annotation shown in the Node-RED info sidebar.',
+          },
           position: {
             type: 'object',
             additionalProperties: false,
@@ -176,6 +181,7 @@ export const addNodeTool: Tool<Input, Output> = {
         const addOpts: Parameters<typeof addNode>[3] = {};
         if (input.opts?.key !== undefined) addOpts.key = input.opts.key;
         if (input.opts?.label !== undefined) addOpts.label = input.opts.label;
+        if (input.opts?.info !== undefined) addOpts.info = input.opts.info;
         if (input.opts?.position !== undefined) addOpts.position = input.opts.position;
         if (input.opts?.group_key !== undefined) addOpts.groupKey = input.opts.group_key;
         if (validatedPassthrough !== undefined) addOpts.passthrough = validatedPassthrough;

@@ -374,6 +374,7 @@ function emitNode(
   }
   const node: Record<string, unknown> = {
     ...(spec.passthrough ?? {}),
+    ...(spec.info !== undefined ? { info: spec.info } : {}),
     id,
     type: effectiveType,
     z: tabId,
@@ -506,6 +507,7 @@ function autoFitGroupGeometry(
 function emitSubflowDef(spec: SubflowDefSpec, id: string): FlowsJsonNode {
   return {
     ...(spec.passthrough ?? {}),
+    ...(spec.info !== undefined ? { info: spec.info } : {}),
     id,
     type: 'subflow',
     name: spec.name,
