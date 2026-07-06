@@ -2,6 +2,10 @@
 
 ## 2.0.0 (unreleased)
 
+### D-6 — plan_flow spatial scaffold and PlanRecord v2
+
+- `plan_flow` now emits a deterministic spatial scaffold (20px grid, 200px pitch, 1920/1420 viewport, monotonic per-stage x-centers, lane y-bands with the error band ≥120px below main) and accepts an optional per-stage `lane` hint (`main`/`indicate`/`error`); the plan sidecar is upgraded to PlanRecord schema v2 (v1 sidecars still read back-compatibly, `layout_strategy` remains `manual`).
+
 ### LAYO-4 slice A — Compound+ports ELK core
 
 - Rewrote `src/toolkit/layout/elk.ts` as the two-level engine's ELK core (slice A of three; kill-switch decision point before slices B/C per the fix plan): `layered` / direction from rankdir / `randomSeed=1` / `considerModelOrder: NODES_AND_EDGES` / `hierarchyHandling: INCLUDE_CHILDREN` / `nodePlacement: BRANDES_KOEPF`.

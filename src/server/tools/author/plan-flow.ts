@@ -2,8 +2,15 @@ import { randomUUID } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { writePlan, type PlanRecord } from '../../../toolkit/staging/plan-record.js';
+import { LANE_NAMES } from '../../../toolkit/lanes.js';
+import {
+  buildSpatialScaffold,
+  SpatialScaffoldSchema,
+} from '../../../toolkit/layout/spatial-scaffold.js';
+import { writePlan, type PlanRecordV2 } from '../../../toolkit/staging/plan-record.js';
 import type { Tool } from '../_tool.js';
+
+const LaneSchema = z.enum(LANE_NAMES);
 
 const StageInputSchema = z.object({
   name: z.string().min(1).max(64),
@@ -11,6 +18,7 @@ const StageInputSchema = z.object({
   estimated_nodes: z.number().int().positive().max(200),
   organization: z.enum(['inline', 'group', 'subflow', 'separate_tab']),
   organization_rationale: z.string().min(1).max(300),
+  lane: LaneSchema.optional(),
 });
 
 const InputSchema = z
@@ -33,6 +41,7 @@ const OutputSchema = z.object({
   total_estimated_nodes: z.number().int().nonnegative(),
   layout_strategy: z.enum(['dagre_auto', 'elk_layered', 'manual']),
   layout_rationale: z.string(),
+  spatial_scaffold: SpatialScaffoldSchema,
   next_actions: z.array(z.string()),
   warnings: z.array(z.string()),
 });
@@ -130,7 +139,7 @@ function buildWarnings(input: Input, total: number): string[] {
 export const planFlowTool: Tool<Input, Output> = {
   name: 'plan_flow',
   description:
-    'Records a structured authoring plan for the current flow: stages, organization decisions (group vs subflow vs link vs tab), estimated node count, and layout guidance. Writes ~/.flow-otter/<env>/staging/plan.json so soft-nudge guidance can later detect "you started adding nodes without planning." Use this BEFORE adding any nodes on a flow that will exceed ~10 nodes or contain operator dashboards.',
+    'Records a structured authoring plan for the current flow: stages, organization decisions (group vs subflow vs link vs tab), estimated node count, lane hints, and a deterministic spatial scaffold. Writes ~/.flow-otter/<env>/staging/plan.json so soft-nudge guidance can later detect "you started adding nodes without planning." Use this BEFORE adding any nodes on a flow that will exceed ~10 nodes or contain operator dashboards.',
   tier: 'author',
   inputZod: InputSchema,
   inputJsonSchema: {
@@ -159,6 +168,11 @@ export const planFlowTool: Tool<Input, Output> = {
               enum: ['inline', 'group', 'subflow', 'separate_tab'],
             },
             organization_rationale: { type: 'string', minLength: 1, maxLength: 300 },
+            lane: {
+              type: 'string',
+              enum: ['main', 'indicate', 'error'],
+              description: 'Optional lane hint for this stage. Omit for normal main-flow stages.',
+            },
           },
           required: [
             'name',
@@ -181,11 +195,12 @@ export const planFlowTool: Tool<Input, Output> = {
     const { strategy, rationale } = chooseLayoutStrategy(input.stages);
     const nextActions = buildNextActions(input);
     const warnings = buildWarnings(input, total);
+    const spatialScaffold = buildSpatialScaffold(input.stages);
     const planId = randomUUID();
     const recordedAt = ctx.clock().toISOString();
 
-    const record: PlanRecord = {
-      schema_version: 1,
+    const record: PlanRecordV2 = {
+      schema_version: 2,
       plan_id: planId,
       recorded_at: recordedAt,
       actor: ctx.config.ACTOR_NAME,
@@ -195,6 +210,7 @@ export const planFlowTool: Tool<Input, Output> = {
       layout_strategy: strategy,
       layout_rationale: rationale,
       next_actions: nextActions,
+      spatial_scaffold: spatialScaffold,
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
     };
 
@@ -209,6 +225,7 @@ export const planFlowTool: Tool<Input, Output> = {
       total_estimated_nodes: total,
       layout_strategy: strategy,
       layout_rationale: rationale,
+      spatial_scaffold: spatialScaffold,
       next_actions: nextActions,
       warnings,
     };
