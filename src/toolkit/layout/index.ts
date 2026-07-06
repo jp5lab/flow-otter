@@ -59,3 +59,9 @@ export async function layoutFlows(
 
 export { layoutFlowsWithDagre } from './dagre.js';
 export { layoutFlowsWithElk } from './elk.js';
+export {
+  deriveFlowsJsonSections,
+  deriveTabSpecSections,
+  type Section,
+  type SectionDerivation,
+} from './sections.js';

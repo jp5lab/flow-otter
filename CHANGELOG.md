@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0 (unreleased)
+
+### LAYO-3 — Pure section partitioning joins the shared lanes contract
+
+- Added `src/toolkit/layout/sections.ts`: pure, total, deterministic section partitioning alongside the landed `src/toolkit/lanes.ts` lane-derivation contract. Sections are the weakly-connected components of the wiring graph (regular nodes + junctions; comments, groups, and config-shaped nodes are never members), ordered by minimum declaration index with a stable section id, exposed through the same two adapters as lanes: `deriveTabSpecSections(tab)` and per-tab `deriveFlowsJsonSections(flows)`.
+- Groups do not define sections — group membership never merges or splits components; each group is instead mapped onto the section(s) its members belong to.
+- Header comment → group association resolves an explicit `headerFor` annotation first (spec `headerFor` / flows.json `_authoringHeaderFor`, matched against the group's authoring key with id fallback; unresolvable references fall back silently), else the layout-time-only heuristic for foreign flows: name-prefix match + horizontal overlap + comment sitting ≤80px above the group's top edge, nearest-edge with declaration-order tie-break. Comments with group membership (`g`) are never headers — header ≠ membership. Pinned against the e1 audit fixture's six same-named headers, including the 'DECIDE' case.
+- Added unit coverage (declaration-order partitioning, junction traversal, group non-merging, explicit-wins/fallback headerFor, membership exclusion, config-node exclusion) and fast-check totality + determinism properties for both adapters.
+
 ## 1.5.0 (unreleased)
 
 ### NR5-13 — Node-RED 5.0 compose leg and live capability assertion
