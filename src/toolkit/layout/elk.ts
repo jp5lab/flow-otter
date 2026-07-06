@@ -22,10 +22,17 @@ import type { ELK as ELKType, ELKConstructorArguments, ElkNode } from 'elkjs/lib
 type ElkConstructor = new (args?: ELKConstructorArguments) => ELKType;
 const ELK = elkPkg as unknown as ElkConstructor;
 
-import type { AuthoringSpec, NodeSpec, TabSpec } from '../authoring/types.js';
+import type { AuthoringSpec, TabSpec } from '../authoring/types.js';
 
+import {
+  applyPositions,
+  dimensionsForJunction,
+  dimensionsForNode,
+  type LayoutDiagnosticHandler,
+  type LayoutParticipantDimensions,
+} from './apply-positions.js';
 import { defaultBounds, type Bounds } from './bounds.js';
-import { DEFAULT_GRID, snapToGrid } from './grid.js';
+import { DEFAULT_GRID } from './grid.js';
 
 export interface ElkLayoutOpts {
   rankdir?: 'LR' | 'TB';
@@ -33,10 +40,8 @@ export interface ElkLayoutOpts {
   ranksep?: number;
   grid?: number;
   bounds?: Bounds;
+  onDiagnostic?: LayoutDiagnosticHandler;
 }
-
-const NODE_W = 120;
-const NODE_H = 30;
 
 const DEFAULTS = {
   rankdir: 'LR' as const,
@@ -50,6 +55,7 @@ interface ResolvedOpts {
   ranksep: number;
   grid: number;
   bounds: Bounds;
+  onDiagnostic?: LayoutDiagnosticHandler;
 }
 
 // The bundled file (`elkjs/lib/elk.bundled.js`) inlines the algorithm and
@@ -64,25 +70,32 @@ function elkDirection(rankdir: ResolvedOpts['rankdir']): 'RIGHT' | 'DOWN' {
   return rankdir === 'LR' ? 'RIGHT' : 'DOWN';
 }
 
-function clampToBounds(p: { x: number; y: number }, b: Bounds): { x: number; y: number } {
-  return {
-    x: Math.min(Math.max(p.x, b.xMin), b.xMax),
-    y: Math.min(Math.max(p.y, b.yMin), b.yMax),
-  };
-}
-
 async function layoutTab(tab: TabSpec, opts: ResolvedOpts): Promise<TabSpec> {
   // Deterministic input ordering: sort nodes by key, edges by from/port/to.
   // ELK's `considerModelOrder.strategy: NODES_AND_EDGES` honors this when
   // it doesn't add crossings — making layouts stable across small edits.
   const sortedNodes = [...tab.nodes].sort((a, b) => a.key.localeCompare(b.key));
+  const sortedJunctions = [...(tab.junctions ?? [])].sort((a, b) => a.key.localeCompare(b.key));
   const sortedConnections = [...tab.connections].sort((a, b) => {
     if (a.fromKey !== b.fromKey) return a.fromKey.localeCompare(b.fromKey);
     if (a.outputPort !== b.outputPort) return a.outputPort - b.outputPort;
     return a.toKey.localeCompare(b.toKey);
   });
 
-  if (sortedNodes.length === 0) return tab;
+  const dimensionsByKey = new Map<string, LayoutParticipantDimensions>();
+  const registeredKeys = new Set<string>();
+  for (const node of sortedNodes) {
+    const dims = dimensionsForNode(node);
+    dimensionsByKey.set(node.key, dims);
+    registeredKeys.add(node.key);
+  }
+  for (const junction of sortedJunctions) {
+    const dims = dimensionsForJunction();
+    dimensionsByKey.set(junction.key, dims);
+    registeredKeys.add(junction.key);
+  }
+
+  if (registeredKeys.size === 0) return tab;
 
   const graph: ElkNode = {
     id: tab.id,
@@ -94,13 +107,17 @@ async function layoutTab(tab: TabSpec, opts: ResolvedOpts): Promise<TabSpec> {
       'elk.spacing.nodeNode': String(opts.nodesep),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(opts.ranksep),
     },
-    children: sortedNodes.map((n) => ({
-      id: n.key,
-      width: NODE_W,
-      height: NODE_H,
-    })),
+    children: [...registeredKeys].map((key) => {
+      const dims = dimensionsByKey.get(key)!;
+      return {
+        id: key,
+        width: dims.w,
+        height: dims.h,
+      };
+    }),
     edges: sortedConnections
       .filter((c) => c.fromKey !== c.toKey)
+      .filter((c) => registeredKeys.has(c.fromKey) && registeredKeys.has(c.toKey))
       .map((c, i) => ({
         id: `e${i}:${c.fromKey}-${c.outputPort}-${c.toKey}`,
         sources: [c.fromKey],
@@ -110,21 +127,18 @@ async function layoutTab(tab: TabSpec, opts: ResolvedOpts): Promise<TabSpec> {
 
   const laid = await elk.layout(graph);
 
-  const positionByKey = new Map<string, { x: number; y: number }>();
+  const centerByKey = new Map<string, { x: number; y: number }>();
   for (const child of laid.children ?? []) {
     if (typeof child.x !== 'number' || typeof child.y !== 'number') continue;
-    const snapped = snapToGrid({ x: child.x, y: child.y }, opts.grid);
-    const clamped = clampToBounds(snapped, opts.bounds);
-    positionByKey.set(child.id, snapToGrid(clamped, opts.grid));
+    const dims = dimensionsByKey.get(child.id);
+    if (dims === undefined) continue;
+    centerByKey.set(child.id, {
+      x: child.x + dims.w / 2,
+      y: child.y + dims.h / 2,
+    });
   }
 
-  const nodes: NodeSpec[] = tab.nodes.map((n) => {
-    const pos = positionByKey.get(n.key);
-    if (pos === undefined) return n;
-    return { ...n, position: pos };
-  });
-
-  return { ...tab, nodes };
+  return applyPositions(tab, centerByKey, dimensionsByKey, opts);
 }
 
 /**
@@ -141,6 +155,7 @@ export async function layoutFlowsWithElk(
     ranksep: opts.ranksep ?? DEFAULTS.ranksep,
     grid: opts.grid ?? DEFAULT_GRID,
     bounds: opts.bounds ?? defaultBounds,
+    ...(opts.onDiagnostic !== undefined ? { onDiagnostic: opts.onDiagnostic } : {}),
   };
   // Sort tabs for determinism, mirroring dagre.ts.
   const sortedTabs = [...spec.tabs].sort((a, b) => a.id.localeCompare(b.id));

@@ -58,6 +58,31 @@ function specWithManyOutputs(): AuthoringSpec {
   };
 }
 
+function specWithRulesOnlySwitch(): AuthoringSpec {
+  return {
+    tabs: [
+      {
+        id: 'tabA',
+        label: 'Tab A',
+        nodes: [
+          {
+            key: 'router',
+            type: 'switch',
+            position: { x: 0, y: 0 },
+            passthrough: {
+              rules: [{ t: 'eq' }, { t: 'neq' }, { t: 'lt' }, { t: 'else' }],
+            },
+          },
+          { key: 'a', type: 'debug', position: { x: 0, y: 0 } },
+        ],
+        connections: [{ fromKey: 'router', outputPort: 0, toKey: 'a' }],
+        groups: [],
+        comments: [],
+      },
+    ],
+  };
+}
+
 describe('layoutFlows auto-engine selection', () => {
   it('returns a laid-out spec for small flows (dagre path)', async () => {
     const out = await layoutFlows(specWithNodes(3), { engine: 'auto' });
@@ -81,6 +106,13 @@ describe('layoutFlows auto-engine selection', () => {
   it('escalates to ELK when a node has >= 4 outputs', async () => {
     const out = await layoutFlows(specWithManyOutputs(), { engine: 'auto' });
     expect(out.tabs[0]!.nodes).toHaveLength(2);
+  });
+
+  it('counts switch rules when auto-selecting for many outputs', async () => {
+    const spec = specWithRulesOnlySwitch();
+    const auto = await layoutFlows(spec, { engine: 'auto' });
+    const explicit = await layoutFlows(spec, { engine: 'elk' });
+    expect(JSON.stringify(auto)).toBe(JSON.stringify(explicit));
   });
 
   it('respects explicit engine:"dagre" override even on a large flow', async () => {

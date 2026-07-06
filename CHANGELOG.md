@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### LAYO-1 — Layout engines keep junctions and center coordinates honest
+
+- Dagre and ELK now register junctions as 10×10 layout participants and write positions back through one shared center-coordinate path, fixing the ELK `JsonImportException` on junction endpoints and the dagre case where junctions stayed stranded at their prior coordinates.
+- Removed per-node bounds clamping from both engines. Layout output is translated at the tab level when possible, and over-wide tabs now surface a non-blocking `layout/width-overflow` diagnostic through the layout callback instead of piling long chains at `x=2400`.
+- `auto` engine selection now uses the shared `getOutputPortCount` resolver, so switch nodes whose output count is implied by `rules` escalate to ELK the same way explicit `outputs` nodes do. Added junction-bearing unit/property pins across both engines plus reviewed center-coordinate snapshot churn.
+
 ### D-4 — Width-aware default placement
 
 - `placeRightOf` now spaces chained default placements from editor-true provider widths (`sourceWidth/2 + 60 + newWidth/2`, grid-ceiled with a 140px floor) and uses deterministic 60px y-bumps when the target box is occupied, so source-driven `add_node` / `add_debug_node` / specialist spawns no longer overlap by construction.

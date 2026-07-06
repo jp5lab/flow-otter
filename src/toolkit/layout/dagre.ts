@@ -1,9 +1,16 @@
 import dagre from '@dagrejs/dagre';
 
-import type { AuthoringSpec, NodeSpec, TabSpec } from '../authoring/types.js';
+import type { AuthoringSpec, TabSpec } from '../authoring/types.js';
 
+import {
+  applyPositions,
+  dimensionsForJunction,
+  dimensionsForNode,
+  type LayoutDiagnosticHandler,
+  type LayoutParticipantDimensions,
+} from './apply-positions.js';
 import { defaultBounds, type Bounds } from './bounds.js';
-import { DEFAULT_GRID, snapToGrid } from './grid.js';
+import { DEFAULT_GRID } from './grid.js';
 
 export interface LayoutOpts {
   rankdir?: 'LR' | 'TB';
@@ -12,10 +19,8 @@ export interface LayoutOpts {
   ranksep?: number;
   grid?: number;
   bounds?: Bounds;
+  onDiagnostic?: LayoutDiagnosticHandler;
 }
-
-const LAYOUT_NODE_WIDTH = 120;
-const LAYOUT_NODE_HEIGHT = 30;
 
 const LAYOUT_DEFAULTS = {
   rankdir: 'LR' as const,
@@ -31,17 +36,12 @@ interface ResolvedOpts {
   ranksep: number;
   grid: number;
   bounds: Bounds;
-}
-
-function clampToBounds(p: { x: number; y: number }, bounds: Bounds): { x: number; y: number } {
-  return {
-    x: Math.min(Math.max(p.x, bounds.xMin), bounds.xMax),
-    y: Math.min(Math.max(p.y, bounds.yMin), bounds.yMax),
-  };
+  onDiagnostic?: LayoutDiagnosticHandler;
 }
 
 function layoutTab(tab: TabSpec, opts: ResolvedOpts): TabSpec {
   const sortedNodes = [...tab.nodes].sort((a, b) => a.key.localeCompare(b.key));
+  const sortedJunctions = [...(tab.junctions ?? [])].sort((a, b) => a.key.localeCompare(b.key));
   const sortedConnections = [...tab.connections].sort((a, b) => {
     if (a.fromKey !== b.fromKey) return a.fromKey.localeCompare(b.fromKey);
     if (a.outputPort !== b.outputPort) return a.outputPort - b.outputPort;
@@ -59,44 +59,43 @@ function layoutTab(tab: TabSpec, opts: ResolvedOpts): TabSpec {
   });
   g.setDefaultEdgeLabel(() => ({}));
 
+  const dimensionsByKey = new Map<string, LayoutParticipantDimensions>();
+  const registeredKeys = new Set<string>();
   for (const node of sortedNodes) {
-    g.setNode(node.key, { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT });
+    const dims = dimensionsForNode(node);
+    dimensionsByKey.set(node.key, dims);
+    registeredKeys.add(node.key);
+    g.setNode(node.key, { width: dims.w, height: dims.h });
+  }
+  for (const junction of sortedJunctions) {
+    const dims = dimensionsForJunction();
+    dimensionsByKey.set(junction.key, dims);
+    registeredKeys.add(junction.key);
+    g.setNode(junction.key, { width: dims.w, height: dims.h });
   }
   for (const conn of sortedConnections) {
     if (conn.fromKey === conn.toKey) continue;
+    if (!registeredKeys.has(conn.fromKey) || !registeredKeys.has(conn.toKey)) continue;
     g.setEdge(conn.fromKey, conn.toKey);
   }
 
-  if (sortedNodes.length > 0) {
+  if (registeredKeys.size > 0) {
     // @dagrejs/dagre@3 types are stricter than the old `dagre` types; the
     // graph we built above is correctly shaped at runtime even if TS can't
     // verify the parameterized Graph<G,N,E> equivalence.
     dagre.layout(g as Parameters<typeof dagre.layout>[0]);
   }
 
-  const positionByKey = new Map<string, { x: number; y: number }>();
-  for (const node of sortedNodes) {
-    const dn = g.node(node.key) as
+  const centerByKey = new Map<string, { x: number; y: number }>();
+  for (const key of registeredKeys) {
+    const dn = g.node(key) as
       | { x?: number; y?: number; width?: number; height?: number }
       | undefined;
     if (dn === undefined || typeof dn.x !== 'number' || typeof dn.y !== 'number') continue;
-    const topLeft = {
-      x: dn.x - LAYOUT_NODE_WIDTH / 2,
-      y: dn.y - LAYOUT_NODE_HEIGHT / 2,
-    };
-    const snapped = snapToGrid(topLeft, opts.grid);
-    const clamped = clampToBounds(snapped, opts.bounds);
-    const final = snapToGrid(clamped, opts.grid);
-    positionByKey.set(node.key, final);
+    centerByKey.set(key, { x: dn.x, y: dn.y });
   }
 
-  const nodes: NodeSpec[] = tab.nodes.map((n) => {
-    const pos = positionByKey.get(n.key);
-    if (pos === undefined) return n;
-    return { ...n, position: pos };
-  });
-
-  return { ...tab, nodes };
+  return applyPositions(tab, centerByKey, dimensionsByKey, opts);
 }
 
 export function layoutFlowsWithDagre(spec: AuthoringSpec, opts: LayoutOpts = {}): AuthoringSpec {
@@ -107,6 +106,7 @@ export function layoutFlowsWithDagre(spec: AuthoringSpec, opts: LayoutOpts = {})
     ranksep: opts.ranksep ?? LAYOUT_DEFAULTS.ranksep,
     grid: opts.grid ?? DEFAULT_GRID,
     bounds: opts.bounds ?? defaultBounds,
+    ...(opts.onDiagnostic !== undefined ? { onDiagnostic: opts.onDiagnostic } : {}),
   };
 
   const sortedTabs = [...spec.tabs].sort((a, b) => a.id.localeCompare(b.id));

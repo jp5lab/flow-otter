@@ -14,7 +14,7 @@
  * to ELK.
  */
 
-import type { AuthoringSpec, GroupSpec } from '../authoring/types.js';
+import { getOutputPortCount, type AuthoringSpec } from '../authoring/types.js';
 
 import { layoutFlowsWithDagre, type LayoutOpts as DagreOpts } from './dagre.js';
 import { layoutFlowsWithElk, type ElkLayoutOpts } from './elk.js';
@@ -38,12 +38,10 @@ function autoEngine(spec: AuthoringSpec): 'dagre' | 'elk' {
     totalNodes += tab.nodes.length;
     if (tab.groups.length > 0) hasGroups = true;
     for (const n of tab.nodes) {
-      const passthrough = n.passthrough as { outputs?: unknown } | undefined;
-      const outputs = typeof passthrough?.outputs === 'number' ? passthrough.outputs : 0;
+      const outputs = getOutputPortCount(n.type, n.passthrough);
       if (outputs >= 4) hasManyOutputs = true;
     }
   }
-  void ({} as GroupSpec); // silence unused-import lint while still type-anchoring GroupSpec via dagre.ts
   if (hasGroups || hasManyOutputs || totalNodes >= 30) return 'elk';
   return 'dagre';
 }

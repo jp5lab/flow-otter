@@ -281,6 +281,38 @@ export const arbitraryAuthoringSpec: fc.Arbitrary<AuthoringSpec> = fc
   })
   .filter((spec) => spec.tabs.length > 0);
 
+export const arbitraryJunctionBearingAuthoringSpec: fc.Arbitrary<AuthoringSpec> =
+  arbitraryAuthoringSpec.map((spec): AuthoringSpec => {
+    const first = spec.tabs[0]!;
+    const src: NodeSpec = {
+      key: 'layo1_src',
+      type: 'inject',
+      label: 'LAYO1 src',
+      position: { x: 0, y: 0 },
+    };
+    const sink: NodeSpec = {
+      key: 'layo1_sink',
+      type: 'debug',
+      label: 'LAYO1 sink',
+      position: { x: 0, y: 0 },
+    };
+    const junction: JunctionSpec = {
+      key: 'layo1_junction',
+      position: { x: 0, y: 0 },
+    };
+    const tab: TabSpec = {
+      ...first,
+      nodes: [...first.nodes, src, sink],
+      junctions: [...(first.junctions ?? []), junction],
+      connections: [
+        ...first.connections,
+        { fromKey: src.key, outputPort: 0, toKey: junction.key },
+        { fromKey: junction.key, outputPort: 0, toKey: sink.key },
+      ],
+    };
+    return { ...spec, tabs: [tab, ...spec.tabs.slice(1)] };
+  });
+
 function compareConnections(a: ConnectionSpec, b: ConnectionSpec): number {
   if (a.fromKey !== b.fromKey) return a.fromKey.localeCompare(b.fromKey);
   if (a.outputPort !== b.outputPort) return a.outputPort - b.outputPort;
