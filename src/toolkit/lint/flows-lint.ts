@@ -1,6 +1,12 @@
 import { hasCanvasPosition, type FlowsJson } from '../../shared/flows-json.js';
+import type { RuntimeCapabilities } from '../../adapters/nodered/capabilities.js';
 import type { NamingContract } from '../naming/schema.js';
-import { runValidators, type Diagnostic, type ValidationReport } from '../validate/index.js';
+import {
+  runValidators,
+  type Diagnostic,
+  type ValidateOptions,
+  type ValidationReport,
+} from '../validate/index.js';
 import { buildReport } from '../validate/report.js';
 
 import {
@@ -29,6 +35,7 @@ export interface LintOptions {
   /** Include v1.5 additive scored layout lint diagnostics and summary. */
   layout?: boolean;
   namingContract?: NamingContract;
+  runtime?: RuntimeCapabilities;
 }
 
 export interface LayoutRuleScoreSummary {
@@ -89,10 +96,11 @@ function boxForOverlap(object: LayoutObject, opts: LintOptions): Rect {
 }
 
 export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): FlowLintReport {
-  const validateOpts: { labelCap?: number; grid?: number; namingContract?: NamingContract } = {};
+  const validateOpts: ValidateOptions = {};
   if (opts.labelCap !== undefined) validateOpts.labelCap = opts.labelCap;
   if (opts.grid !== undefined) validateOpts.grid = opts.grid;
   if (opts.namingContract !== undefined) validateOpts.namingContract = opts.namingContract;
+  if (opts.runtime !== undefined) validateOpts.runtime = opts.runtime;
   const baseReport = runValidators(flows, validateOpts);
   const diagnostics: Diagnostic[] = [...baseReport.diagnostics];
 

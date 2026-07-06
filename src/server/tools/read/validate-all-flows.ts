@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
-import type { NamingContract } from '../../../toolkit/naming/schema.js';
+import { lintFlows, type LintOptions } from '../../../toolkit/lint/flows-lint.js';
 import type { Tool } from '../_tool.js';
+import { runtimeCapabilitiesForTool } from '../_runtime-options.js';
 
 const InputSchema = z.object({}).strict();
 type Input = z.infer<typeof InputSchema>;
@@ -47,14 +47,7 @@ export const validateAllFlowsTool: Tool<Input, Output> = {
   handler: async (_input, ctx) => {
     void _input;
     const { flows, rev } = await ctx.flowSource.load();
-    const validateOpts: {
-      labelCap: number;
-      canvasMaxX: number;
-      canvasMaxY: number;
-      lintViewportWindowWidth: number;
-      layout: true;
-      namingContract?: NamingContract;
-    } = {
+    const validateOpts: LintOptions = {
       labelCap: ctx.config.LABEL_CAP_CHARS,
       canvasMaxX: ctx.config.CANVAS_MAX_X,
       canvasMaxY: ctx.config.CANVAS_MAX_Y,
@@ -62,6 +55,8 @@ export const validateAllFlowsTool: Tool<Input, Output> = {
       layout: true,
     };
     if (ctx.namingContract !== undefined) validateOpts.namingContract = ctx.namingContract;
+    const runtime = await runtimeCapabilitiesForTool(ctx);
+    if (runtime !== undefined) validateOpts.runtime = runtime;
     const report = lintFlows(flows, validateOpts);
     if (report.layout === undefined) throw new Error('layout lint report missing');
     return {

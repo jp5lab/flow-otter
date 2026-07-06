@@ -30,10 +30,12 @@ export { addDebugNode } from './authoring/operations/add-debug-node.js';
 export {
   runValidators,
   type Diagnostic,
+  type ValidateOptions,
   type ValidationReport,
   type DiagnosticSeverity,
+  type RuntimeCapabilities,
 } from './validate/index.js';
-export { lintFlows } from './lint/flows-lint.js';
+export { lintFlows, type FlowLintReport, type LintOptions } from './lint/flows-lint.js';
 export { layoutLint, type LayoutLintOptions, type LayoutLintReport } from './lint/layout-lint.js';
 export {
   collectLayoutGeometry,

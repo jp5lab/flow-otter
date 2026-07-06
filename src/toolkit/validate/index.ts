@@ -1,7 +1,13 @@
 import type { FlowsJson } from '../../shared/flows-json.js';
+import type { RuntimeCapabilities } from '../../adapters/nodered/capabilities.js';
 import type { NamingContract } from '../naming/schema.js';
 
-import { type Diagnostic, type ValidationReport, buildReport } from './report.js';
+import {
+  type Diagnostic,
+  type DiagnosticSeverity,
+  type ValidationReport,
+  buildReport,
+} from './report.js';
 import * as credentialLeak from './rules/credential-leak.js';
 import * as dashboard2DestructiveNeedsConfirm from './rules/dashboard-2-destructive-needs-confirm.js';
 import * as dashboard2GroupWidthFits from './rules/dashboard-2-group-width-fits.js';
@@ -30,38 +36,83 @@ export interface ValidateOptions {
   labelCap?: number;
   grid?: number;
   namingContract?: NamingContract;
+  runtime?: RuntimeCapabilities;
+}
+
+export interface ValidationRuleContext {
+  readonly runtime?: RuntimeCapabilities;
+}
+
+type ValidationCheck = (flows: FlowsJson, context: ValidationRuleContext) => Diagnostic[];
+
+function ruleContext(opts: ValidateOptions): ValidationRuleContext {
+  return opts.runtime !== undefined ? { runtime: opts.runtime } : {};
+}
+
+function invokeCheck(
+  check: ValidationCheck,
+  flows: FlowsJson,
+  context: ValidationRuleContext,
+): Diagnostic[] {
+  return check(flows, context);
+}
+
+function withRuleContext<T extends object>(
+  opts: T,
+  context: ValidationRuleContext,
+): T & ValidationRuleContext {
+  if (context.runtime === undefined) return opts;
+  return { ...opts, runtime: context.runtime };
 }
 
 export function runValidators(flows: FlowsJson, opts: ValidateOptions = {}): ValidationReport {
+  const context = ruleContext(opts);
   const diagnostics: Diagnostic[] = [
-    ...idUniqueness.check(flows),
-    ...wireTargets.check(flows),
-    ...labelCap.check(flows, opts.labelCap !== undefined ? { cap: opts.labelCap } : {}),
-    ...onGrid.check(flows, opts.grid !== undefined ? { grid: opts.grid } : {}),
-    ...groupConsistency.check(flows),
-    ...functionSyntax.check(flows),
-    ...linkResolution.check(flows),
-    ...subflowPorts.check(flows),
-    ...dashboardHierarchy.check(flows),
-    ...dashboard2Hierarchy.check(flows),
-    ...dashboard2RequiredFields.check(flows),
-    ...dashboard2GroupWidthFits.check(flows),
-    ...dashboard2MixedVersions.check(flows),
-    ...dashboard2DestructiveNeedsConfirm.check(flows),
-    ...tabDivergence.check(flows),
+    ...invokeCheck(idUniqueness.check, flows, context),
+    ...invokeCheck(wireTargets.check, flows, context),
+    ...labelCap.check(
+      flows,
+      withRuleContext(opts.labelCap !== undefined ? { cap: opts.labelCap } : {}, context),
+    ),
+    ...onGrid.check(
+      flows,
+      withRuleContext(opts.grid !== undefined ? { grid: opts.grid } : {}, context),
+    ),
+    ...invokeCheck(groupConsistency.check, flows, context),
+    ...invokeCheck(functionSyntax.check, flows, context),
+    ...invokeCheck(linkResolution.check, flows, context),
+    ...invokeCheck(subflowPorts.check, flows, context),
+    ...invokeCheck(dashboardHierarchy.check, flows, context),
+    ...invokeCheck(dashboard2Hierarchy.check, flows, context),
+    ...invokeCheck(dashboard2RequiredFields.check, flows, context),
+    ...invokeCheck(dashboard2GroupWidthFits.check, flows, context),
+    ...invokeCheck(dashboard2MixedVersions.check, flows, context),
+    ...invokeCheck(dashboard2DestructiveNeedsConfirm.check, flows, context),
+    ...invokeCheck(tabDivergence.check, flows, context),
     ...namingContract.check(
       flows,
-      opts.namingContract !== undefined ? { contract: opts.namingContract } : {},
+      withRuleContext(
+        opts.namingContract !== undefined ? { contract: opts.namingContract } : {},
+        context,
+      ),
     ),
-    ...credentialLeak.check(flows),
-    ...functionSideEffects.check(flows),
+    ...invokeCheck(credentialLeak.check, flows, context),
+    ...invokeCheck(functionSideEffects.check, flows, context),
     // ISA-101 enforcement (Item 11):
-    ...unboundedChartAppend.check(flows),
-    ...screenClutter.check(flows),
-    ...saturatedColorOutsideAlarm.check(flows),
-    ...buttonGroupColorDecoration.check(flows),
+    ...invokeCheck(unboundedChartAppend.check, flows, context),
+    ...screenClutter.check(
+      flows,
+      withRuleContext<NonNullable<Parameters<typeof screenClutter.check>[1]>>({}, context),
+    ),
+    ...invokeCheck(saturatedColorOutsideAlarm.check, flows, context),
+    ...invokeCheck(buttonGroupColorDecoration.check, flows, context),
   ];
   return buildReport(diagnostics);
 }
 
-export { type Diagnostic, type ValidationReport, type DiagnosticSeverity } from './report.js';
+export {
+  type Diagnostic,
+  type ValidationReport,
+  type DiagnosticSeverity,
+  type RuntimeCapabilities,
+};

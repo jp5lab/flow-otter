@@ -8,10 +8,11 @@ import { compile, type CompileIdTombstone } from '../../../toolkit/authoring/com
 import { decompile } from '../../../toolkit/authoring/decompile.js';
 import type { AuthoringSpec } from '../../../toolkit/authoring/types.js';
 import { diffFlows, summarizeDiff } from '../../../toolkit/diff/semantic.js';
-import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
-import { runValidators } from '../../../toolkit/validate/index.js';
+import { lintFlows, type LintOptions } from '../../../toolkit/lint/flows-lint.js';
+import { runValidators, type ValidateOptions } from '../../../toolkit/validate/index.js';
 import { enforceMaxFlowSize, enforceNodeTypePolicy } from '../../policy/flow-policy.js';
 import { ToolBlockedError, ValidationFailedError, type ToolContext } from '../_tool.js';
+import { runtimeCapabilitiesForTool } from '../_runtime-options.js';
 
 import { buildStageRenderEnrichment, type StageRender } from './_stage-render.js';
 
@@ -252,18 +253,23 @@ export async function compileValidateAndStage(
     ctx.config.BLOCKED_NODE_TYPES,
   );
 
-  const validateReport = runValidators(compiled.flows, {
+  const runtime = await runtimeCapabilitiesForTool(ctx);
+  const validateOpts: ValidateOptions = {
     labelCap: ctx.config.LABEL_CAP_CHARS,
-    ...(ctx.namingContract !== undefined ? { namingContract: ctx.namingContract } : {}),
-  });
-  const lintReport = lintFlows(compiled.flows, {
+  };
+  if (ctx.namingContract !== undefined) validateOpts.namingContract = ctx.namingContract;
+  if (runtime !== undefined) validateOpts.runtime = runtime;
+  const lintOpts: LintOptions = {
     labelCap: ctx.config.LABEL_CAP_CHARS,
     canvasMaxX: ctx.config.CANVAS_MAX_X,
     canvasMaxY: ctx.config.CANVAS_MAX_Y,
     lintViewportWindowWidth: ctx.config.LINT_VIEWPORT_WINDOW_WIDTH,
     layout: true,
-    ...(ctx.namingContract !== undefined ? { namingContract: ctx.namingContract } : {}),
-  });
+  };
+  if (ctx.namingContract !== undefined) lintOpts.namingContract = ctx.namingContract;
+  if (runtime !== undefined) lintOpts.runtime = runtime;
+  const validateReport = runValidators(compiled.flows, validateOpts);
+  const lintReport = lintFlows(compiled.flows, lintOpts);
   if (lintReport.hasErrors) {
     throw new ValidationFailedError(
       `${meta.toolName} produced flows with ${lintReport.errors.length} validation error(s).`,

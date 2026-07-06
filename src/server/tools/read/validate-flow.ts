@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 import { isTab } from '../../../shared/flows-json.js';
-import { lintFlows } from '../../../toolkit/lint/flows-lint.js';
-import type { NamingContract } from '../../../toolkit/naming/schema.js';
+import { lintFlows, type LintOptions } from '../../../toolkit/lint/flows-lint.js';
 import { ValidationFailedError, type Tool } from '../_tool.js';
+import { runtimeCapabilitiesForTool } from '../_runtime-options.js';
 
 const InputSchema = z
   .object({
@@ -64,14 +64,7 @@ export const validateFlowTool: Tool<Input, Output> = {
     const scoped = flows.filter((n) =>
       isTab(n) ? n.id === input.tab_id : (n as { z?: unknown }).z === input.tab_id,
     );
-    const validateOpts: {
-      labelCap: number;
-      canvasMaxX: number;
-      canvasMaxY: number;
-      lintViewportWindowWidth: number;
-      layout: true;
-      namingContract?: NamingContract;
-    } = {
+    const validateOpts: LintOptions = {
       labelCap: ctx.config.LABEL_CAP_CHARS,
       canvasMaxX: ctx.config.CANVAS_MAX_X,
       canvasMaxY: ctx.config.CANVAS_MAX_Y,
@@ -79,6 +72,8 @@ export const validateFlowTool: Tool<Input, Output> = {
       layout: true,
     };
     if (ctx.namingContract !== undefined) validateOpts.namingContract = ctx.namingContract;
+    const runtime = await runtimeCapabilitiesForTool(ctx);
+    if (runtime !== undefined) validateOpts.runtime = runtime;
     const report = lintFlows(scoped, validateOpts);
     if (report.layout === undefined) throw new Error('layout lint report missing');
     return {

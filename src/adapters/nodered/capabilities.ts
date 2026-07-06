@@ -227,14 +227,27 @@ export function allCapabilities(): readonly Capability[] {
 }
 
 /**
+ * Runtime capability context threaded into toolkit validation/lint paths.
+ * This is intentionally slimmer than RuntimeInfo: rules need the target
+ * version and capability map, not probe timestamps or health-check display
+ * fields.
+ */
+export interface RuntimeCapabilities {
+  readonly version: string;
+  readonly capabilities: Record<Capability, boolean>;
+}
+
+/**
  * Cached runtime information about the connected Node-RED instance.
  * Populated lazily by getOrProbeRuntimeInfo() (server/runtime-info.ts).
  */
-export interface RuntimeInfo {
+export interface RuntimeInfo extends RuntimeCapabilities {
   readonly name: 'node-red';
-  readonly version: string;
   readonly is_prerelease: boolean;
   readonly node_js_version?: string;
   readonly detected_at: string;
-  readonly capabilities: Record<Capability, boolean>;
+}
+
+export function runtimeCapabilitiesFromInfo(info: RuntimeInfo): RuntimeCapabilities {
+  return { version: info.version, capabilities: info.capabilities };
 }

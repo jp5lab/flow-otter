@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### NR5-1 — Runtime capabilities reach validation and authoring
+
+- Added a slim runtime capability context (`{version, capabilities}`) from the Node-RED capability matrix and threaded it through `ValidateOptions` / `LintOptions`, including the validator rule invocation context, without changing any current rule behavior or report bytes.
+- `validate_flow`, `validate_all_flows`, and the shared staging choke point now reuse the existing lazy runtime probe/cache to pass probed Node-RED capabilities into validation/lint options for admin-api targets. File-source targets skip probing and omit the field, preserving offline/file-mode behavior.
+- Added NR5-1 unit coverage for option forwarding, admin-api probe threading through read/stage paths, and file-mode byte-stable reports with runtime context absent.
+
 ### EVAL-5 — Audit-replay regression suite
 
 - Added `npm run eval:replay` (`scripts/eval/replay/replay.mjs`): the Phase-2 audit replay runner. It drives committed replay steps through the EVAL-1 MCP driver against the sterile stack, seeds each run from the canonical audit fixtures, uses a fresh `ENVIRONMENT_NAME` plus temp snapshot/staging/audit/render dirs, restores prior flows afterwards, and runs every selected scenario twice from identical baselines for `canonicalFlowsHash` idempotence.
