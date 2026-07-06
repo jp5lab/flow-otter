@@ -24,9 +24,12 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'create_subflow_definition',
   'instantiate_template',
   'move_node',
+  'remove_group',
   'remove_node',
   'set_links',
   'set_wires',
+  'update_comment',
+  'update_group',
   'update_node',
   'wire_nodes',
 ] as const;

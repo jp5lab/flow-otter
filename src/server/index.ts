@@ -20,9 +20,12 @@ import { discardStagedChangeTool } from './tools/author/discard-staged-change.js
 import { instantiateTemplateTool } from './tools/author/instantiate-template.js';
 import { moveNodeTool } from './tools/author/move-node.js';
 import { planFlowTool } from './tools/author/plan-flow.js';
+import { removeGroupTool } from './tools/author/remove-group.js';
 import { removeNodeTool } from './tools/author/remove-node.js';
 import { setLinksTool } from './tools/author/set-links.js';
 import { setWiresTool } from './tools/author/set-wires.js';
+import { updateCommentTool } from './tools/author/update-comment.js';
+import { updateGroupTool } from './tools/author/update-group.js';
 import { updateNodeTool } from './tools/author/update-node.js';
 import { wireNodesTool } from './tools/author/wire-nodes.js';
 import { createFlowTool } from './tools/dangerous/create-flow.js';
@@ -161,6 +164,9 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   removeNodeTool as unknown as Tool<unknown, unknown>,
   updateNodeTool as unknown as Tool<unknown, unknown>,
   moveNodeTool as unknown as Tool<unknown, unknown>,
+  updateGroupTool as unknown as Tool<unknown, unknown>,
+  removeGroupTool as unknown as Tool<unknown, unknown>,
+  updateCommentTool as unknown as Tool<unknown, unknown>,
   createSubflowDefinitionTool as unknown as Tool<unknown, unknown>,
   discardStagedChangeTool as unknown as Tool<unknown, unknown>,
   instantiateTemplateTool as unknown as Tool<unknown, unknown>,

@@ -202,8 +202,7 @@ export async function compileValidateAndStage(
   if (compiled.hash === priorHash) {
     throw new ValidationFailedError(
       `${meta.toolName} produced no change — the compiled flows are byte-identical to the current runtime flows, so nothing was staged. ` +
-        `Check the kind of object you addressed: node tools only match regular nodes, not junctions, comments, or groups ` +
-        `(a key of another kind is silently ignored at the op layer), and check that the new values actually differ from the current ones.`,
+        `Check the object kind and key you addressed (node vs junction vs comment vs group), and check that the new values actually differ from the current ones.`,
       [],
     );
   }

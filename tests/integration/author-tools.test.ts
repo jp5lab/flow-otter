@@ -54,6 +54,35 @@ const BASE_FLOWS: FlowsJson = [
     links: [],
     _authoringKey: 'link-in-target',
   },
+  {
+    id: '7777777777777777',
+    type: 'group',
+    z: TAB_1,
+    name: 'Existing',
+    nodes: [],
+    x: 40,
+    y: 40,
+    w: 420,
+    h: 220,
+    style: {
+      stroke: '#a4a4a4',
+      'stroke-opacity': '1',
+      fill: 'none',
+      'fill-opacity': '1',
+      label: true,
+      'label-position': 'nw',
+    },
+    _authoringKey: 'existing-group',
+  },
+  {
+    id: '8888888888888888',
+    type: 'comment',
+    z: TAB_1,
+    x: 120,
+    y: 320,
+    name: 'Existing note',
+    _authoringKey: 'existing-note',
+  },
 ];
 
 const AUTHOR_TOOL_CASES: readonly {
@@ -89,6 +118,26 @@ const AUTHOR_TOOL_CASES: readonly {
       node_key: 'source',
       dest_tab_id: TAB_2,
       position: { x: 120, y: 120 },
+    },
+  },
+  {
+    name: 'update_group',
+    input: {
+      tab_id: TAB_1,
+      group_key: 'existing-group',
+      name: 'Updated Group',
+      node_keys: ['source', 'existing-note'],
+      refit: true,
+    },
+  },
+  { name: 'remove_group', input: { tab_id: TAB_1, group_key: 'existing-group' } },
+  {
+    name: 'update_comment',
+    input: {
+      tab_id: TAB_1,
+      comment_key: 'existing-note',
+      text: 'Updated note',
+      position: { x: 140, y: 340 },
     },
   },
   { name: 'create_subflow_definition', input: { name: 'Created Subflow' } },
@@ -222,5 +271,52 @@ describe('author tools end-to-end', () => {
     );
     expect(groups).toHaveLength(2);
     expect(new Set(groups.map((g) => g.id)).size).toBe(2);
+  });
+
+  it('runs the group/comment lifecycle tools end-to-end through MCP calls', async () => {
+    const initial = await fetchRuntimeFlows();
+    const sourceBefore = initial.find((n) => n.id === SOURCE_ID);
+    expect(sourceBefore).toBeDefined();
+
+    const grouped = (await callTool(rig.registry, rig.container, 'update_group', {
+      tab_id: TAB_1,
+      group_key: 'existing-group',
+      node_keys: ['source', 'existing-note'],
+      refit: true,
+    })) as StageResult;
+    expect(grouped.ok).toBe(true);
+    await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
+      staged_hash: grouped.staged_hash,
+    });
+
+    const updatedComment = (await callTool(rig.registry, rig.container, 'update_comment', {
+      tab_id: TAB_1,
+      comment_key: 'existing-note',
+      text: 'Lifecycle note',
+      group_key: null,
+    })) as StageResult;
+    expect(updatedComment.ok).toBe(true);
+    await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
+      staged_hash: updatedComment.staged_hash,
+    });
+
+    const removedGroup = (await callTool(rig.registry, rig.container, 'remove_group', {
+      tab_id: TAB_1,
+      group_key: 'existing-group',
+    })) as StageResult;
+    expect(removedGroup.ok).toBe(true);
+    await callTool(rig.registry, rig.container, 'deploy_staged_change', {
+      confirm: true,
+      staged_hash: removedGroup.staged_hash,
+    });
+
+    const final = await fetchRuntimeFlows();
+    expect(final.find((n) => n.id === SOURCE_ID)).toBeDefined();
+    expect(final.find((n) => n.type === 'comment' && n.id === '8888888888888888')).toMatchObject({
+      name: 'Lifecycle note',
+    });
+    expect(final.some((n) => n.type === 'group' && n.id === '7777777777777777')).toBe(false);
   });
 });

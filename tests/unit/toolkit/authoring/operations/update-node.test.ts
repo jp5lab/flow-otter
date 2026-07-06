@@ -19,8 +19,11 @@ const baseSpec: AuthoringSpec = {
         },
       ],
       connections: [],
-      groups: [{ key: 'g1', name: 'G', nodeKeys: ['fn'] }],
-      comments: [],
+      groups: [{ key: 'g1', name: 'G', nodeKeys: ['fn', 'j1', 'note'] }],
+      comments: [{ key: 'note', text: 'Old note', position: { x: 180, y: 180 }, groupKey: 'g1' }],
+      junctions: [
+        { key: 'j1', position: { x: 200, y: 160 }, name: 'Old junction', groupKey: 'g1' },
+      ],
     },
   ],
 };
@@ -46,14 +49,60 @@ describe('updateNode', () => {
   it('clears groupKey when groupKey is null and leaves it when undefined', () => {
     const cleared = updateNode(baseSpec, 'tab-main', 'fn', { groupKey: null });
     expect(cleared.spec.tabs[0]!.nodes[0]!.groupKey).toBeUndefined();
+    expect(cleared.spec.tabs[0]!.groups[0]!.nodeKeys).toEqual(['j1', 'note']);
     const left = updateNode(baseSpec, 'tab-main', 'fn', { label: 'X' });
     expect(left.spec.tabs[0]!.nodes[0]!.groupKey).toBe('g1');
   });
 
-  it('returns updated:false when the node is absent', () => {
-    const { spec, updated } = updateNode(baseSpec, 'tab-main', 'missing', { label: 'X' });
-    expect(updated).toBe(false);
-    expect(spec).toBe(baseSpec);
+  it('updates junction fields and keeps junction connections addressable', () => {
+    const { spec, updated } = updateNode(baseSpec, 'tab-main', 'j1', {
+      label: 'New junction',
+      position: { x: 260, y: 180 },
+      disabled: true,
+      groupKey: null,
+    });
+
+    expect(updated).toBe(true);
+    expect(spec.tabs[0]!.junctions?.[0]).toEqual({
+      key: 'j1',
+      position: { x: 260, y: 180 },
+      name: 'New junction',
+      disabled: true,
+    });
+    expect(spec.tabs[0]!.groups[0]!.nodeKeys).toEqual(['fn', 'note']);
+  });
+
+  it('rejects passthrough updates on junctions', () => {
+    expect(() =>
+      updateNode(baseSpec, 'tab-main', 'j1', { passthrough: { unexpected: true } }),
+    ).toThrow(/passthrough/i);
+  });
+
+  it('updates comment text and position through the legacy node updater', () => {
+    const { spec, updated } = updateNode(baseSpec, 'tab-main', 'note', {
+      label: 'New note',
+      position: { x: 220, y: 220 },
+      groupKey: null,
+    });
+
+    expect(updated).toBe(true);
+    expect(spec.tabs[0]!.comments[0]).toMatchObject({
+      key: 'note',
+      text: 'New note',
+      position: { x: 220, y: 220 },
+    });
+    expect(spec.tabs[0]!.comments[0]!.groupKey).toBeUndefined();
+    expect(spec.tabs[0]!.groups[0]!.nodeKeys).toEqual(['fn', 'j1']);
+  });
+
+  it('rejects passthrough updates on comments', () => {
+    expect(() =>
+      updateNode(baseSpec, 'tab-main', 'note', { passthrough: { unexpected: true } }),
+    ).toThrow(/passthrough/i);
+  });
+
+  it('throws when the object is absent', () => {
+    expect(() => updateNode(baseSpec, 'tab-main', 'missing', { label: 'X' })).toThrow();
   });
 
   it('throws when the tab is missing', () => {

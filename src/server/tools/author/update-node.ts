@@ -6,7 +6,7 @@ import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import {
   attachNodeKeyResolutionGuidance,
-  resolveNodeKeyOnTab,
+  resolveCanvasObjectKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
 import {
@@ -40,6 +40,7 @@ const InputSchema = z
     label: z.string().max(24).optional(),
     position: PositionSchema.optional(),
     group_key: z.string().min(1).optional(),
+    disabled: z.boolean().optional(),
     passthrough: z.record(z.unknown()).optional(),
     /**
      * Line-based patches applied to existing passthrough string fields.
@@ -105,6 +106,11 @@ export const updateNodeTool: Tool<Input, Output> = {
         additionalProperties: false,
       },
       group_key: { type: 'string', minLength: 1 },
+      disabled: {
+        type: 'boolean',
+        description:
+          'Disabled flag. For junctions this maps to the native junction d field; for regular nodes it merges d into passthrough.',
+      },
       passthrough: { type: 'object', additionalProperties: true },
       patches: {
         type: 'array',
@@ -140,18 +146,18 @@ export const updateNodeTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
-        const nodeKey = resolveNodeKeyOnTab({
+        const nodeKey = resolveCanvasObjectKeyOnTab({
           spec: priorSpec,
           priorFlows,
           tabId,
           value: input.node_key,
           field: 'node_key',
         });
-        if (!nodeKey.ok && nodeKey.reason !== 'key-not-found') {
+        if (!nodeKey.ok) {
           throw new ValidationFailedError(nodeKey.message, []);
         }
-        const resolvedNodeKey = nodeKey.ok ? nodeKey.key : input.node_key;
-        const guidance = nodeKey.ok && nodeKey.guidance !== undefined ? [nodeKey.guidance] : [];
+        const resolvedNodeKey = nodeKey.key;
+        const guidance = nodeKey.guidance !== undefined ? [nodeKey.guidance] : [];
 
         // Compute the passthrough patches first — apply `patches[]` on top of
         // whatever passthrough merge the agent supplied (or the existing
@@ -160,8 +166,11 @@ export const updateNodeTool: Tool<Input, Output> = {
         let effectivePassthrough = input.passthrough;
         let patchesApplied = 0;
         if (input.patches && input.patches.length > 0) {
-          if (!nodeKey.ok) {
-            throw new ValidationFailedError(nodeKey.message, []);
+          if (nodeKey.kind !== 'node') {
+            throw new ValidationFailedError(
+              `patches are only supported for regular nodes; '${input.node_key}' resolved to a ${nodeKey.kind}.`,
+              [],
+            );
           }
           const byProperty = new Map<string, typeof input.patches>();
           for (const p of input.patches) {
@@ -170,7 +179,7 @@ export const updateNodeTool: Tool<Input, Output> = {
             byProperty.set(p.property, list);
           }
           const merged: Record<string, unknown> = {
-            ...(nodeKey.node.passthrough ?? {}),
+            ...(('passthrough' in nodeKey.object ? nodeKey.object.passthrough : undefined) ?? {}),
             ...(input.passthrough ?? {}),
           };
           for (const [property, propPatches] of byProperty) {
@@ -196,6 +205,7 @@ export const updateNodeTool: Tool<Input, Output> = {
         if (input.label !== undefined) opts.label = input.label;
         if (input.position !== undefined) opts.position = input.position;
         if (input.group_key !== undefined) opts.groupKey = input.group_key;
+        if (input.disabled !== undefined) opts.disabled = input.disabled;
         if (effectivePassthrough !== undefined) opts.passthrough = effectivePassthrough;
 
         const { spec: nextSpec, updated } = updateNode(priorSpec, tabId, resolvedNodeKey, opts);

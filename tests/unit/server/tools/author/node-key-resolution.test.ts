@@ -189,7 +189,7 @@ describe('author node-key resolution from Node-RED ids', () => {
         built.ctx,
       ),
     ).rejects.toThrow(
-      `Node '${OTHER_ID}' is a Node-RED node id on tab 'tab-other', not tab 'tab-main'.`,
+      `Node, junction, or comment '${OTHER_ID}' is a Node-RED node id on tab 'tab-other', not tab 'tab-main'.`,
     );
   });
 
@@ -203,7 +203,7 @@ describe('author node-key resolution from Node-RED ids', () => {
         built.ctx,
       ),
     ).rejects.toThrow(
-      `Node '${MISSING_ID}' looks like a Node-RED node id, but no node with that id was found. Author tools take node authoring keys; get_flow shows both id and _authoringKey.`,
+      `Node, junction, or comment '${MISSING_ID}' looks like a Node-RED node id, but no node, junction, or comment with that id was found. Author tools take node authoring keys; get_flow shows both id and _authoringKey.`,
     );
   });
 

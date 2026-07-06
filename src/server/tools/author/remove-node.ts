@@ -5,7 +5,7 @@ import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import {
   attachNodeKeyResolutionGuidance,
-  resolveNodeKeyOnTab,
+  resolveCanvasObjectKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
 import {
@@ -76,23 +76,23 @@ export const removeNodeTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
-        const nodeKey = resolveNodeKeyOnTab({
+        const nodeKey = resolveCanvasObjectKeyOnTab({
           spec: priorSpec,
           priorFlows,
           tabId,
           value: input.node_key,
           field: 'node_key',
         });
-        if (!nodeKey.ok && nodeKey.reason !== 'key-not-found') {
+        if (!nodeKey.ok) {
           throw new ValidationFailedError(nodeKey.message, []);
         }
-        const resolvedNodeKey = nodeKey.ok ? nodeKey.key : input.node_key;
+        const resolvedNodeKey = nodeKey.key;
         const { spec: nextSpec, removed } = removeNode(priorSpec, tabId, resolvedNodeKey);
         return {
           nextSpec,
           extras: {
             removed,
-            guidance: nodeKey.ok && nodeKey.guidance !== undefined ? [nodeKey.guidance] : [],
+            guidance: nodeKey.guidance !== undefined ? [nodeKey.guidance] : [],
           },
         };
       },

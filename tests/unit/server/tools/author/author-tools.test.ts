@@ -26,7 +26,10 @@ import { createSubflowDefinitionTool } from '../../../../../src/server/tools/aut
 import { instantiateTemplateTool } from '../../../../../src/server/tools/author/instantiate-template.js';
 import { moveNodeTool } from '../../../../../src/server/tools/author/move-node.js';
 import { removeNodeTool } from '../../../../../src/server/tools/author/remove-node.js';
+import { removeGroupTool } from '../../../../../src/server/tools/author/remove-group.js';
 import { updateNodeTool } from '../../../../../src/server/tools/author/update-node.js';
+import { updateCommentTool } from '../../../../../src/server/tools/author/update-comment.js';
+import { updateGroupTool } from '../../../../../src/server/tools/author/update-group.js';
 import { wireNodesTool } from '../../../../../src/server/tools/author/wire-nodes.js';
 import { isComment, isGroup } from '../../../../../src/shared/flows-json.js';
 import { createLogger } from '../../../../../src/shared/logger.js';
@@ -75,6 +78,35 @@ const FIXTURE_FLOWS = [
     links: [],
     _authoringKey: 'link-in-target',
   },
+  {
+    id: 'group1',
+    type: 'group',
+    z: 'tab1',
+    name: 'Existing',
+    nodes: [],
+    x: 40,
+    y: 40,
+    w: 420,
+    h: 220,
+    style: {
+      stroke: '#a4a4a4',
+      'stroke-opacity': '1',
+      fill: 'none',
+      'fill-opacity': '1',
+      label: true,
+      'label-position': 'nw',
+    },
+    _authoringKey: 'existing-group',
+  },
+  {
+    id: 'comment1',
+    type: 'comment',
+    z: 'tab1',
+    x: 120,
+    y: 320,
+    name: 'Existing note',
+    _authoringKey: 'existing-note',
+  },
 ];
 
 interface AddNodeOutput {
@@ -93,6 +125,24 @@ interface AddCommentOutput {
   ok: boolean;
   diff_summary: { nodes_added: number };
   added_comment_id?: string;
+}
+
+interface UpdateGroupOutput {
+  ok: boolean;
+  diff_summary: { nodes_modified: number };
+  updated: boolean;
+}
+
+interface RemoveGroupOutput {
+  ok: boolean;
+  diff_summary: { nodes_removed: number };
+  removed: boolean;
+}
+
+interface UpdateCommentOutput {
+  ok: boolean;
+  diff_summary: { nodes_modified: number };
+  updated: boolean;
 }
 
 interface WireNodesOutput {
@@ -437,6 +487,47 @@ describe('author tools (workflow node tools)', () => {
       (n) => isComment(n) && (n as Record<string, unknown>)['_authoringKey'] === 'explicit-comment',
     );
     expect(comment?.id).toBe(out.added_comment_id);
+  });
+
+  it('update_group stages group updates and refit', async () => {
+    const out = (await updateGroupTool.handler(
+      {
+        tab_id: 'tab1',
+        group_key: 'existing-group',
+        name: 'Updated Group',
+        node_keys: ['source', 'existing-note'],
+        refit: true,
+      },
+      ctx,
+    )) as UpdateGroupOutput;
+    expect(out.ok).toBe(true);
+    expect(out.updated).toBe(true);
+    expect(out.diff_summary.nodes_modified).toBeGreaterThan(0);
+  });
+
+  it('remove_group stages Node-RED ungroup removal', async () => {
+    const out = (await removeGroupTool.handler(
+      { tab_id: 'tab1', group_key: 'existing-group' },
+      ctx,
+    )) as RemoveGroupOutput;
+    expect(out.ok).toBe(true);
+    expect(out.removed).toBe(true);
+    expect(out.diff_summary.nodes_removed).toBe(1);
+  });
+
+  it('update_comment stages comment updates', async () => {
+    const out = (await updateCommentTool.handler(
+      {
+        tab_id: 'tab1',
+        comment_key: 'existing-note',
+        text: 'Updated note',
+        position: { x: 140, y: 340 },
+      },
+      ctx,
+    )) as UpdateCommentOutput;
+    expect(out.ok).toBe(true);
+    expect(out.updated).toBe(true);
+    expect(out.diff_summary.nodes_modified).toBe(1);
   });
 
   it('wire_nodes stages a new wire', async () => {

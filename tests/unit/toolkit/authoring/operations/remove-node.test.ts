@@ -17,9 +17,14 @@ const baseSpec: AuthoringSpec = {
         { fromKey: 'a', outputPort: 0, toKey: 'b' },
         { fromKey: 'b', outputPort: 0, toKey: 'c' },
         { fromKey: 'a', outputPort: 0, toKey: 'c' },
+        { fromKey: 'a', outputPort: 0, toKey: 'j1' },
+        { fromKey: 'j1', outputPort: 0, toKey: 'c' },
       ],
-      groups: [{ key: 'g1', name: 'G1', nodeKeys: ['b', 'c'] }],
-      comments: [],
+      groups: [{ key: 'g1', name: 'G1', nodeKeys: ['b', 'c', 'j1', 'note'] }],
+      comments: [
+        { key: 'note', text: 'operator note', position: { x: 220, y: 180 }, groupKey: 'g1' },
+      ],
+      junctions: [{ key: 'j1', position: { x: 250, y: 100 }, groupKey: 'g1' }],
     },
   ],
 };
@@ -30,18 +35,41 @@ describe('removeNode', () => {
     expect(removed).toBe(true);
     const tab = spec.tabs[0]!;
     expect(tab.nodes.map((n) => n.key)).toEqual(['a', 'c']);
-    expect(tab.connections).toEqual([{ fromKey: 'a', outputPort: 0, toKey: 'c' }]);
+    expect(tab.connections).toEqual([
+      { fromKey: 'a', outputPort: 0, toKey: 'c' },
+      { fromKey: 'a', outputPort: 0, toKey: 'j1' },
+      { fromKey: 'j1', outputPort: 0, toKey: 'c' },
+    ]);
   });
 
   it('scrubs the removed key from group nodeKeys', () => {
     const { spec } = removeNode(baseSpec, 'tab-main', 'b');
-    expect(spec.tabs[0]!.groups[0]!.nodeKeys).toEqual(['c']);
+    expect(spec.tabs[0]!.groups[0]!.nodeKeys).toEqual(['c', 'j1', 'note']);
   });
 
-  it('returns removed:false when node is not present', () => {
-    const { spec, removed } = removeNode(baseSpec, 'tab-main', 'missing');
-    expect(removed).toBe(false);
-    expect(spec).toBe(baseSpec);
+  it('removes a junction and every connection referencing it', () => {
+    const { spec, removed } = removeNode(baseSpec, 'tab-main', 'j1');
+    expect(removed).toBe(true);
+    const tab = spec.tabs[0]!;
+    expect(tab.junctions).toEqual([]);
+    expect(tab.connections).toEqual([
+      { fromKey: 'a', outputPort: 0, toKey: 'b' },
+      { fromKey: 'b', outputPort: 0, toKey: 'c' },
+      { fromKey: 'a', outputPort: 0, toKey: 'c' },
+    ]);
+    expect(tab.groups[0]!.nodeKeys).toEqual(['b', 'c', 'note']);
+  });
+
+  it('removes a comment and scrubs group membership', () => {
+    const { spec, removed } = removeNode(baseSpec, 'tab-main', 'note');
+    expect(removed).toBe(true);
+    const tab = spec.tabs[0]!;
+    expect(tab.comments).toEqual([]);
+    expect(tab.groups[0]!.nodeKeys).toEqual(['b', 'c', 'j1']);
+  });
+
+  it('throws when the object is not present', () => {
+    expect(() => removeNode(baseSpec, 'tab-main', 'missing')).toThrow();
   });
 
   it('throws when tab is not found', () => {

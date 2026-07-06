@@ -3,9 +3,9 @@
  *
  * 1. NO-OP REFUSAL — an author op whose compiled output is byte-identical to
  *    the current runtime flows is refused at stage time (ValidationFailedError)
- *    and writes NOTHING to the staging slot. This kills the e1 poison cascade
- *    where silent-false ops (node tools addressed at junctions/comments) staged
- *    no-change stages that later tripped REQUIRE_DIFF_BEFORE_DEPLOY.
+ *    and writes NOTHING to the staging slot. WSB-4 later made junction/comment
+ *    node-tool addressing real changes; this guard still pins value-identical
+ *    author ops.
  *
  * 2. AUTO-CLEAR — a pending stage whose staged_hash is byte-identical to the
  *    current runtime flows carries no undeployed work; it is auto-cleared
@@ -38,8 +38,8 @@ import { StagedStore } from '../../../../../src/toolkit/staging/staged-store.js'
 // The runtime fixture must be a compile fixed point (decompile→compile is
 // byte-identical only for compiler-shaped flows), so the no-op guard's hash
 // comparison is exercised for real. Build it by compiling a spec that holds
-// a regular node, a comment, AND a junction — the kinds the silent-false op
-// bug confused.
+// a regular node, a comment, AND a junction — the kinds WSB-4 lifecycle tools
+// address through the legacy node-tool surface.
 const SPEC: AuthoringSpec = {
   tabs: [
     {
@@ -126,18 +126,29 @@ function staleStage(overrides: { agent_id?: string } = {}): Parameters<StagedSto
 }
 
 describe('stage-time no-op refusal (WSB-3)', () => {
-  it('remove_node addressing a comment key is refused and the slot stays empty', async () => {
-    await expect(
-      removeNodeTool.handler({ tab_id: 'tab1', node_key: 'note1' }, ctx),
-    ).rejects.toThrow(/produced no change/);
-    expect(await staging.read()).toBeNull();
+  it('remove_node addressing a comment key now stages a real removal', async () => {
+    const out = (await removeNodeTool.handler({ tab_id: 'tab1', node_key: 'note1' }, ctx)) as {
+      ok: boolean;
+      staged_hash: string;
+      removed: boolean;
+    };
+    expect(out.ok).toBe(true);
+    expect(out.removed).toBe(true);
+    expect((await staging.read())?.stagedHash).toBe(out.staged_hash);
   });
 
-  it('update_node addressing a junction key is refused and the slot stays empty', async () => {
-    await expect(
-      updateNodeTool.handler({ tab_id: 'tab1', node_key: 'j1', position: { x: 300, y: 140 } }, ctx),
-    ).rejects.toThrow(/produced no change/);
-    expect(await staging.read()).toBeNull();
+  it('update_node addressing a junction key now stages a real update', async () => {
+    const out = (await updateNodeTool.handler(
+      { tab_id: 'tab1', node_key: 'j1', position: { x: 300, y: 140 } },
+      ctx,
+    )) as {
+      ok: boolean;
+      staged_hash: string;
+      updated: boolean;
+    };
+    expect(out.ok).toBe(true);
+    expect(out.updated).toBe(true);
+    expect((await staging.read())?.stagedHash).toBe(out.staged_hash);
   });
 
   it('value-identical update_node is refused and the slot stays empty', async () => {
@@ -150,10 +161,13 @@ describe('stage-time no-op refusal (WSB-3)', () => {
     expect(await staging.read()).toBeNull();
   });
 
-  it('the refusal points at the object-kind confusion (node vs junction vs comment vs group)', async () => {
+  it('the refusal points at object kind and key checks', async () => {
     await expect(
-      removeNodeTool.handler({ tab_id: 'tab1', node_key: 'note1' }, ctx),
-    ).rejects.toThrow(/junction|comment|group/);
+      updateNodeTool.handler(
+        { tab_id: 'tab1', node_key: 'source', label: 'Source', position: { x: 100, y: 100 } },
+        ctx,
+      ),
+    ).rejects.toThrow(/node vs junction vs comment vs group/);
   });
 
   it('a real change still stages normally', async () => {

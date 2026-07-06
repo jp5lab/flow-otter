@@ -5,7 +5,7 @@ import { type Tool, ValidationFailedError } from '../_tool.js';
 
 import {
   attachNodeKeyResolutionGuidance,
-  resolveNodeKeyOnTab,
+  resolveCanvasObjectKeyOnTab,
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
 import {
@@ -164,7 +164,7 @@ export const moveNodeTool: Tool<Input, Output> = {
             [],
           );
         }
-        const nodeKey = resolveNodeKeyOnTab({
+        const nodeKey = resolveCanvasObjectKeyOnTab({
           spec: priorSpec,
           priorFlows,
           tabId: sourceTabId,
