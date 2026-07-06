@@ -2,6 +2,8 @@
 
 ## 2.0.0 (unreleased)
 
+- **`version-compat` lint family (NR5-2)**: validation now warns when a flow uses a feature the target Node-RED runtime lacks — delay burst mode (<5.0.0-beta.2), tls-config `pfx`/`env` cert modes, `node:`-prefixed function modules (<4.1), and `node.linkcall(...)` calls detected via AST (<5.0.0-beta.6). Messages state the required version range and the probed target version. File-source targets have no runtime to compare against, so the rule stays silent there — no false positives, reports unchanged.
+
 ### D-6 — plan_flow spatial scaffold and PlanRecord v2
 
 - `plan_flow` now emits a deterministic spatial scaffold (20px grid, 200px pitch, 1920/1420 viewport, monotonic per-stage x-centers, lane y-bands with the error band ≥120px below main) and accepts an optional per-stage `lane` hint (`main`/`indicate`/`error`); the plan sidecar is upgraded to PlanRecord schema v2 (v1 sidecars still read back-compatibly, `layout_strategy` remains `manual`).

@@ -25,6 +25,7 @@ import * as namingContract from './rules/naming-contract.js';
 import * as onGrid from './rules/on-grid.js';
 import * as subflowPorts from './rules/subflow-ports.js';
 import * as tabDivergence from './rules/tab-divergence.js';
+import * as versionCompat from './rules/version-compat.js';
 import * as wireTargets from './rules/wire-targets.js';
 // ISA-101 enforcement rules added in v1.3.0 (Item 11 of the v1.3.0 plan in docs/DESIGN.md):
 import * as buttonGroupColorDecoration from './rules/button-group-color-decoration.js';
@@ -98,6 +99,7 @@ export function runValidators(flows: FlowsJson, opts: ValidateOptions = {}): Val
     ),
     ...invokeCheck(credentialLeak.check, flows, context),
     ...invokeCheck(functionSideEffects.check, flows, context),
+    ...invokeCheck(versionCompat.check, flows, context),
     // ISA-101 enforcement (Item 11):
     ...invokeCheck(unboundedChartAppend.check, flows, context),
     ...screenClutter.check(
