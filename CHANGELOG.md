@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased (v1.4.0)
+## 1.4.0 (unreleased)
+
+### PHASE1-EXIT fixes
+
+- **`scripts/check-tool-coverage.mjs`** (36759aa): tool coverage no longer counts phantom tools from any `name:'...'` literal in `toolsets.ts`; the scanner now counts only files exporting an MCP Tool definition, and real coverage closes the gate: `get_authoring_guide` unit+integration plus toolset-discovery integration coverage for `plan_flow` / `enable_toolset` / `list_available_toolsets` (**66 tools, 0 missing**).
+- **`SERVER_INSTRUCTIONS` / `review_my_flow`** (cc36809): dropped unshipped Phase-2 claims (`stage_changes` batching, `validate_flow` layout scores) that caused Unknown-tool failures and wasted invocation budget; instructions now describe the real staged-change lifecycle (pending-stage guard, `get_staged_change` `staged_hash`, `preview_flow_diff` before deploy) and actual `validate_flow` diagnostics, with pins updated and all D-5 numeric layout tokens kept.
+- **Compile identity fallback** (6f70281): fast-check found a cross-tab move losing a node's materialized id when the same authoring key existed inside a subflow definition; the global `kind:key` fallback is now scoped by global/tab/subflow, exact container matching stays unchanged so previously compiled specs keep their ids, and deterministic regression tests encode the counterexample.
 
 ### EVAL-6 — Safety-spine canary + per-batch verification protocol + AUDIT-RERUN anchors (`npm run eval:canary`)
 
@@ -16,7 +22,7 @@
 
 ### D-5 — Layout conventions taught in-band, with numbers (R6, F4)
 
-- **`SERVER_INSTRUCTIONS` rewritten** (sole owner per the fix plan's triple-contention resolution; 1972/2000 chars, ceiling pinned by `tests/unit/server/instructions.test.ts`). New `LAYOUT CONVENTIONS` line carries the numbers an agent previously had to invent: **20px grid; stages left-to-right at a 140-220px column pitch; error lane ≥120px BELOW the happy path (the shared `LANE_GAP` constant); switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport ≈ 1920 window − 180 palette − 320 sidebar); minimize crossings, no backward wires**. Also lands the two handed-over mentions: REND-5's `render_flow_png` ("returns `png_path` — Read the file", `against:'staged'`) and WSB-5's `stage_changes` phase-3 sentence. Funded by the named trims (SPECIALISTS examples, CREDENTIALS/DASHBOARDS compression — open question #3 resolved as specced). Forward references on purpose: `stage_changes` and "validate_flow returns layout scores" describe Phase-2 capability landing in v1.5.0 (WSB-5/D-3) — written once now so the 2000-char budget is spent once.
+- **`SERVER_INSTRUCTIONS` rewritten** (sole owner per the fix plan's triple-contention resolution; 1972/2000 chars, ceiling pinned by `tests/unit/server/instructions.test.ts`). New `LAYOUT CONVENTIONS` line carries the numbers an agent previously had to invent: **20px grid; stages left-to-right at a 140-220px column pitch; error lane ≥120px BELOW the happy path (the shared `LANE_GAP` constant); switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport ≈ 1920 window − 180 palette − 320 sidebar); minimize crossings, no backward wires**. Also lands the two handed-over mentions: REND-5's `render_flow_png` ("returns `png_path` — Read the file", `against:'staged'`) and WSB-5's `stage_changes` phase-3 sentence. Funded by the named trims (SPECIALISTS examples, CREDENTIALS/DASHBOARDS compression — open question #3 resolved as specced). The D-5 draft deliberately forward-referenced `stage_changes` and layout scores (Phase-2 capability) to spend the 2000-char budget once; PHASE1-EXIT superseded that call — unshipped-capability claims cost real agents Unknown-tool failures — and removed them (see PHASE1-EXIT fixes); the sentences return with WSB-5/D-3 in v1.5.0.
 - **New catalog category `layout_conventions`** (`get_authoring_guide`): EIGHT entries 1:1 with the 2026-06-10 audit criteria (lifecycle left-to-right, stages grouped, stage headers, error lane below, affirmative output on top, minimal crossings, no backward wires, grid-aligned within viewport), each stating its numeric convention and naming its **frozen scored lint rule id** (`layout-stage-order`, `layout-group-overlap`, `layout-header-presence`, `layout-error-lane-below`, `layout-affirmative-on-top`, `layout-wire-crossings`, `layout-backward-wires`, `layout-viewport-overflow` — fix-plan D-1/D-2 names; the rules register with the v1.5.0 layout lint). `tests/unit/catalog/layout-conventions.test.ts` pins the eight frozen pairs now and carries a **bidirectional completeness suite (catalog ↔ registered rule ids) that auto-activates when `src/toolkit/lint/layout-lint.ts` lands**, with an always-on guard test recording the dormancy until then. The methodology `layout`/`review` phases reference the criteria and the PNG channel.
 - **Prompt recipes**: `new_flow` step 5 now teaches the same numeric conventions; `review_my_flow` gains a layout-scores step (`get_authoring_guide(['layout_conventions'])` + report validate_flow's per-rule layout scores when present). Convention tokens are pinned in both the instructions and prompt test suites ('20px', '140-220', 'BELOW', 'port 0', '1420', '120').
 
@@ -107,6 +113,65 @@
 - `docs/DESIGN.md` Part I is now **ratified as amended** by the 2026-06-10 layout-audit fix plan: a ratification record binds the fix-plan phases (Phase 1 → v1.4.0, Phase 2 → v1.5.0, Phase 3 → v2.0.0, Phase 4 FULLY FIXED) to their work-item ids, names the five frozen cross-stream contracts, and records deferrals (e1#13 debug-buffer laziness with owner on record; e2#12 and e2#13 wontfixes). Amendments recorded: the stage-over-stage refusal already exists at HEAD (Phase-0 item 2 corrected — the remaining Phase-1 staging guards are WSB-1/WSB-3/WSB-6); the Phase-0 live half-day spike is restored as the binding Phase-1 live-session exit requirement; `stage_spec` moves to fix-plan Phase 3 so the flagship never ships with naive placement; fix-plan D-3's output-schema growth is versioned v1.5.0 additive.
 - Committed the full sanitized audit report as `docs/audits/2026-06-10-layout-audit.md` and the fix plan as `docs/plans/2026-06-10-fix-plan.md` (both privacy-scanned; sterile-stack artifacts only).
 - Fixed the stale `docs/EVALUATION.md` claim that npm `files` ships `docs/` — the tarball ships only `dist`, `README.md`, `CHANGELOG.md`, `LICENSE`; docs hygiene remains release hygiene via the public GitHub repo.
+
+### Eval-driven hardening + Node-RED 5.0 GA support
+
+Driven by the first full evaluation campaign (real MCP stdio sessions against live Node-RED 4.1.11 and 5.0.0 stacks; see docs/EVALUATION.md). Every item below traces to an empirically observed failure.
+
+#### Safety
+
+- **`deploy_staged_change` consent split** — new `confirm:true` flag records explicit user consent for clients without elicitation support, with the drift check FULLY ACTIVE. Previously those clients had to pass `force:true`, which also waived drift protection — the eval demonstrated a forced deploy silently overwriting a concurrent out-of-band edit. `force:true` remains the explicit drift override (implies consent). Drift refusals now name the remediation (`discard_staged_change` + re-stage, or `force`).
+- **Stage-overwrite refusal** — author tools refuse to stage over an undeployed staged change instead of silently discarding it (the eval lost a staged node to this footgun with zero warning). New `discard_staged_change` tool (author tier) is the explicit escape hatch, with the same cross-agent `force_takeover` guard as deploy.
+
+#### Authoring correctness
+
+- **Group geometry auto-fit** — groups authored without explicit `position`/`size` now compile to a deterministic, grid-snapped bounding box computed from their members. Authored groups also receive the Node-RED editor's default visible style (`stroke:#a4a4a4`) when none is supplied — a group with no style (or the `style:null` Node-RED normalizes it to) renders an INVISIBLE box, so the group was structurally present but unseeable by reviewers; the renderer fix was confirmed live in the editor. `decompile` strips the default so re-staging stays idempotent. Node-RED does NOT auto-fit dimension-less groups on import (verified live: the runtime stores null geometry and the editor renders nothing — the eval's group was invisible in both the editor and `render_flow_svg`). Explicit geometry is preserved verbatim; groups with no positioned members keep the legacy omit behavior.
+- **11 new per-type passthrough schemas** — inject, debug, function, mqtt in/out, link in/out/call, catch, status, complete. These common types previously had NO validation on any path (the specialist tools accept passthrough verbatim — contrary to what the docs claimed). Registered in the generic `add_node` registry; when `passthrough` is omitted and defaults satisfy the schema, runtime-required defaults (inject `repeat`, complete `scope`, link `links`) materialize automatically.
+- **Diagnostics dedup** — staged-op responses no longer repeat identical validator/lint findings.
+
+#### Node-RED 5.0 GA (released 2026-06-09)
+
+- **Capability matrix corrections** — `functionLinkCall` and `adminCorsDefault` both gate on `5.0.0-beta.6` (the betas where PR #5494 / #5652 actually shipped; previous ranges misclassified beta.1–beta.5).
+- **9 new capabilities** — `delayBurstMode` (≥5.0.0-beta.2), `tlsPfx`, `tlsEnvVars`, `credsAlongsideFlows`, `oauthCodeExchange`, `httpRequestSni`, `esmNodeModules` (GA-only), `nodeDefaultsOverride` (≥4.1.9 — a 4.1 feature commonly misattributed to 5.0), `markdownGhAlerts`.
+- **Delay `pauseType: 'burst'`** accepted by the delay schema — previously a valid 5.0 burst-mode flow failed FlowOtter validation (the only hard 5.0 break found).
+- **Support statement** — Node-RED 4.0 minimum / 4.1.x recommended / 5.0 GA supported. Verified empirically: the full author→deploy→validate loop and the integration suite run unchanged against 5.0.0. Password-grant/Bearer auth confirmed unaffected by 5.0's exchange-code change.
+- **Test stack bumped** `nodered/node-red:3.1` → `4.1` (3.1 was below the project's own documented minimum).
+
+#### Test suite repairs (pre-existing breaks; 82/82 integration tests now pass on a clean checkout)
+
+- Integration rig now enables the `author_specialists` toolset (tests were never migrated when v1.3.0 moved specialists out of the default surface — 19 tests failed `Tool not in registry`).
+- Integration deploys pass `confirm:true` (the suite predated v1.3.0 elicitation; every deploy was blocked in a rig without an MCP client).
+- `agent-journey` / `multi-target-swap` state dirs moved from `os.tmpdir()` (outside `$HOME`, rejected by the v1.2 path policy on macOS) to `~/.flow-otter/integration-tmp/`.
+- `read-tools` re-seeds its fixture instead of trusting the global-setup seed to survive earlier test files' deploys.
+
+#### Review & test hardening
+
+A 33-agent adversarial review (5 lenses → verify → synthesize) over this session's diff found 0 critical / 0 high; 15 confirmed (all medium/low/nit), 12 refuted. All confirmed findings fixed:
+
+- Docs: AGENT_QUICKSTART deploy-flag guidance corrected (confirm vs force), stage-pending + DriftError + group auto-fit/style notes added; README/TOOL_REFERENCE tool counts (~47 default-visible / 66 total) and test counts refreshed; `discard_staged_change` listed in README.
+- Tests: diagnostics-dedup; group auto-fit with junction/comment members and nested-group omit; `force:true` still bypasses drift (backward-compat); `add_node` default-materialization for a schema WITH defaults (inject) and one with required fields/no default (change must not throw); delay burst mode; plus a live integration round-trip proving the inject `repeat` default survives a real deploy.
+
+#### Tooling
+
+- `npm run privacy:scan` (+ `:staged`, `:history`) — repo hygiene scanner for the public repo; generic patterns ship in-repo, personal patterns stay in `~/.flow-otter/privacy-patterns.txt` (never committed). See docs/EVALUATION.md.
+- `docs/EVALUATION.md` — scenario-driven evaluation playbook with phase gates; `eval-results/` is gitignored.
+- npm `files` no longer ships `docs/` (npm pack publishes the live worktree — untracked drafts under docs/ would publish silently).
+
+### Dev-dep refresh: vitest 2 → 4, vite 5 → 8, esbuild 0.21 → 0.27
+
+Cleared the two open Dependabot advisories (esbuild dev-server CVE, vite `.map` path traversal) by bumping the test toolchain in lockstep. No production-dep changes; the published `dist/` tarball is unchanged. `npm audit` (with and without `--omit=dev`) now reports 0 vulnerabilities.
+
+#### Test config changes
+
+- **`vitest.integration.config.ts`**: dropped `pool: 'forks'` + `poolOptions: { forks: { singleFork: true } }`. Vitest 4 removed `poolOptions` from `InlineConfig`. The existing `fileParallelism: false` (combined with vitest 4's default fork pool) preserves the "one shared Docker Node-RED runtime across all integration files" guarantee.
+- **`vi.fn()` typing**: vitest 4 narrowed the default `Mock<Procedure>` type so it no longer assigns to a typed function slot. Two test files were updated to `vi.fn<typeof fetch>()` with matching variable annotation.
+
+#### Verification
+
+- `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
+- `npm run test:unit`: 579 tests (unchanged count, all pass under vitest 4).
+- `npm run test:property`: 17 tests (unchanged, pass under vitest 4 with `numRuns: 1000`).
+- `npm audit`: 0 vulnerabilities (was 2 moderate dev-only).
 
 ## 1.3.0 — 2026-05-19 — Architectural redesign: methodology, catalog, layout, dashboards, ISA-101
 
@@ -203,65 +268,6 @@ Per Decision 1 of REDESIGN_PLAN.md, generic add_node handles every case; special
 - `npm run test:property`: 17 tests pass.
 - `npm run build`: clean.
 - New deps: `@dagrejs/dagre@^3`, `elkjs@^0.11`. Removed: `dagre@0.8.5`, `@types/dagre`.
-
-## Unreleased — Eval-driven hardening + Node-RED 5.0 GA support
-
-Driven by the first full evaluation campaign (real MCP stdio sessions against live Node-RED 4.1.11 and 5.0.0 stacks; see docs/EVALUATION.md). Every item below traces to an empirically observed failure.
-
-### Safety
-
-- **`deploy_staged_change` consent split** — new `confirm:true` flag records explicit user consent for clients without elicitation support, with the drift check FULLY ACTIVE. Previously those clients had to pass `force:true`, which also waived drift protection — the eval demonstrated a forced deploy silently overwriting a concurrent out-of-band edit. `force:true` remains the explicit drift override (implies consent). Drift refusals now name the remediation (`discard_staged_change` + re-stage, or `force`).
-- **Stage-overwrite refusal** — author tools refuse to stage over an undeployed staged change instead of silently discarding it (the eval lost a staged node to this footgun with zero warning). New `discard_staged_change` tool (author tier) is the explicit escape hatch, with the same cross-agent `force_takeover` guard as deploy.
-
-### Authoring correctness
-
-- **Group geometry auto-fit** — groups authored without explicit `position`/`size` now compile to a deterministic, grid-snapped bounding box computed from their members. Authored groups also receive the Node-RED editor's default visible style (`stroke:#a4a4a4`) when none is supplied — a group with no style (or the `style:null` Node-RED normalizes it to) renders an INVISIBLE box, so the group was structurally present but unseeable by reviewers; the renderer fix was confirmed live in the editor. `decompile` strips the default so re-staging stays idempotent. Node-RED does NOT auto-fit dimension-less groups on import (verified live: the runtime stores null geometry and the editor renders nothing — the eval's group was invisible in both the editor and `render_flow_svg`). Explicit geometry is preserved verbatim; groups with no positioned members keep the legacy omit behavior.
-- **11 new per-type passthrough schemas** — inject, debug, function, mqtt in/out, link in/out/call, catch, status, complete. These common types previously had NO validation on any path (the specialist tools accept passthrough verbatim — contrary to what the docs claimed). Registered in the generic `add_node` registry; when `passthrough` is omitted and defaults satisfy the schema, runtime-required defaults (inject `repeat`, complete `scope`, link `links`) materialize automatically.
-- **Diagnostics dedup** — staged-op responses no longer repeat identical validator/lint findings.
-
-### Node-RED 5.0 GA (released 2026-06-09)
-
-- **Capability matrix corrections** — `functionLinkCall` and `adminCorsDefault` both gate on `5.0.0-beta.6` (the betas where PR #5494 / #5652 actually shipped; previous ranges misclassified beta.1–beta.5).
-- **9 new capabilities** — `delayBurstMode` (≥5.0.0-beta.2), `tlsPfx`, `tlsEnvVars`, `credsAlongsideFlows`, `oauthCodeExchange`, `httpRequestSni`, `esmNodeModules` (GA-only), `nodeDefaultsOverride` (≥4.1.9 — a 4.1 feature commonly misattributed to 5.0), `markdownGhAlerts`.
-- **Delay `pauseType: 'burst'`** accepted by the delay schema — previously a valid 5.0 burst-mode flow failed FlowOtter validation (the only hard 5.0 break found).
-- **Support statement** — Node-RED 4.0 minimum / 4.1.x recommended / 5.0 GA supported. Verified empirically: the full author→deploy→validate loop and the integration suite run unchanged against 5.0.0. Password-grant/Bearer auth confirmed unaffected by 5.0's exchange-code change.
-- **Test stack bumped** `nodered/node-red:3.1` → `4.1` (3.1 was below the project's own documented minimum).
-
-### Test suite repairs (pre-existing breaks; 82/82 integration tests now pass on a clean checkout)
-
-- Integration rig now enables the `author_specialists` toolset (tests were never migrated when v1.3.0 moved specialists out of the default surface — 19 tests failed `Tool not in registry`).
-- Integration deploys pass `confirm:true` (the suite predated v1.3.0 elicitation; every deploy was blocked in a rig without an MCP client).
-- `agent-journey` / `multi-target-swap` state dirs moved from `os.tmpdir()` (outside `$HOME`, rejected by the v1.2 path policy on macOS) to `~/.flow-otter/integration-tmp/`.
-- `read-tools` re-seeds its fixture instead of trusting the global-setup seed to survive earlier test files' deploys.
-
-### Review & test hardening
-
-A 33-agent adversarial review (5 lenses → verify → synthesize) over this session's diff found 0 critical / 0 high; 15 confirmed (all medium/low/nit), 12 refuted. All confirmed findings fixed:
-
-- Docs: AGENT_QUICKSTART deploy-flag guidance corrected (confirm vs force), stage-pending + DriftError + group auto-fit/style notes added; README/TOOL_REFERENCE tool counts (~47 default-visible / 66 total) and test counts refreshed; `discard_staged_change` listed in README.
-- Tests: diagnostics-dedup; group auto-fit with junction/comment members and nested-group omit; `force:true` still bypasses drift (backward-compat); `add_node` default-materialization for a schema WITH defaults (inject) and one with required fields/no default (change must not throw); delay burst mode; plus a live integration round-trip proving the inject `repeat` default survives a real deploy.
-
-### Tooling
-
-- `npm run privacy:scan` (+ `:staged`, `:history`) — repo hygiene scanner for the public repo; generic patterns ship in-repo, personal patterns stay in `~/.flow-otter/privacy-patterns.txt` (never committed). See docs/EVALUATION.md.
-- `docs/EVALUATION.md` — scenario-driven evaluation playbook with phase gates; `eval-results/` is gitignored.
-- npm `files` no longer ships `docs/` (npm pack publishes the live worktree — untracked drafts under docs/ would publish silently).
-
-## Unreleased — Dev-dep refresh: vitest 2 → 4, vite 5 → 8, esbuild 0.21 → 0.27
-
-Cleared the two open Dependabot advisories (esbuild dev-server CVE, vite `.map` path traversal) by bumping the test toolchain in lockstep. No production-dep changes; the published `dist/` tarball is unchanged. `npm audit` (with and without `--omit=dev`) now reports 0 vulnerabilities.
-
-### Test config changes
-
-- **`vitest.integration.config.ts`**: dropped `pool: 'forks'` + `poolOptions: { forks: { singleFork: true } }`. Vitest 4 removed `poolOptions` from `InlineConfig`. The existing `fileParallelism: false` (combined with vitest 4's default fork pool) preserves the "one shared Docker Node-RED runtime across all integration files" guarantee.
-- **`vi.fn()` typing**: vitest 4 narrowed the default `Mock<Procedure>` type so it no longer assigns to a typed function slot. Two test files were updated to `vi.fn<typeof fetch>()` with matching variable annotation.
-
-### Verification
-
-- `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
-- `npm run test:unit`: 579 tests (unchanged count, all pass under vitest 4).
-- `npm run test:property`: 17 tests (unchanged, pass under vitest 4 with `numRuns: 1000`).
-- `npm audit`: 0 vulnerabilities (was 2 moderate dev-only).
 
 ## 1.2.0 - 2026-05-16 — Security hardening + non-idempotent-retry guard + correctness audit
 
