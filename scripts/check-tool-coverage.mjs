@@ -31,6 +31,9 @@ async function walk(dir) {
 }
 
 function extractToolName(src) {
+  // Only exported MCP Tool definitions count. This intentionally ignores
+  // nearby data files such as toolsets.ts that also contain `name: '...'`.
+  if (!/\bexport\s+const\s+\w+Tool\s*:\s*Tool\b/.test(src)) return null;
   // Matches `name: 'something'` in a tool definition; only one per file.
   const m = src.match(/name:\s*'([a-z_][a-z0-9_]*)'/);
   return m ? m[1] : null;
