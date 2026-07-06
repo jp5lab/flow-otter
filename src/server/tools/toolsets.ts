@@ -22,6 +22,7 @@ export type ToolsetName =
   | 'author'
   | 'author_specialists'
   | 'layout'
+  | 'spec_authoring'
   | 'deploy'
   | 'dangerous';
 
@@ -152,6 +153,13 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
       'Opt-in layout authoring: layout_flow stages deterministic geometry-only changes. Default-off; flips to default-on when the S6 evaluation gate passes.',
     default_enabled: false,
     tool_names: ['layout_flow'],
+  },
+  spec_authoring: {
+    name: 'spec_authoring',
+    description:
+      'Opt-in declarative spec authoring: stage_spec stages geometry-free AuthoringSpec JSON and validate_spec reports the same computed-placement diagnostics without staging. Default-off; flips to default-on when the S6 evaluation gate passes.',
+    default_enabled: false,
+    tool_names: ['stage_spec', 'validate_spec'],
   },
   deploy: {
     name: 'deploy',

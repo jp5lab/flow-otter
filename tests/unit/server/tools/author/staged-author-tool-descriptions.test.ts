@@ -31,6 +31,7 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'set_links',
   'set_wires',
   'stage_changes',
+  'stage_spec',
   'update_comment',
   'update_group',
   'update_node',

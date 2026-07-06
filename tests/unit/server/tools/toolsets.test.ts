@@ -22,15 +22,17 @@ describe('toolsets', () => {
         'author',
         'author_specialists',
         'layout',
+        'spec_authoring',
         'deploy',
         'dangerous',
       ]),
     );
   });
 
-  it('default toolsets exclude author_specialists, layout, and dangerous', () => {
+  it('default toolsets exclude author_specialists, layout, spec_authoring, and dangerous', () => {
     expect(DEFAULT_TOOLSETS).not.toContain('author_specialists');
     expect(DEFAULT_TOOLSETS).not.toContain('layout');
+    expect(DEFAULT_TOOLSETS).not.toContain('spec_authoring');
     expect(DEFAULT_TOOLSETS).not.toContain('dangerous');
     expect(DEFAULT_TOOLSETS).toContain('core');
     expect(DEFAULT_TOOLSETS).toContain('author');
@@ -76,6 +78,13 @@ describe('toolsets', () => {
     expect(toolsetOf('layout_flow')).toBe('layout');
     expect(TOOLSETS.layout.default_enabled).toBe(false);
     expect(TOOLSETS.layout.description).toContain('S6 evaluation gate');
+  });
+
+  it('spec authoring tools are in the default-off spec_authoring toolset', () => {
+    expect(toolsetOf('stage_spec')).toBe('spec_authoring');
+    expect(toolsetOf('validate_spec')).toBe('spec_authoring');
+    expect(TOOLSETS.spec_authoring.default_enabled).toBe(false);
+    expect(TOOLSETS.spec_authoring.description).toContain('S6 evaluation gate');
   });
 
   it('no tool appears in more than one toolset', () => {
