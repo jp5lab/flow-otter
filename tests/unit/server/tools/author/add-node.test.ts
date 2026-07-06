@@ -214,6 +214,24 @@ describe('add_node tool', () => {
     }
   });
 
+  it('rejects credentials passthrough for legacy config-node adds', async () => {
+    await expect(
+      addNodeTool.handler(
+        {
+          tab_id: TAB_ID,
+          type: 'mqtt-broker',
+          opts: {
+            key: 'broker-secret',
+            passthrough: { credentials: { password: 'secret' } },
+          },
+        },
+        ctx,
+      ),
+    ).rejects.toThrow(/credentials.*not authored/i);
+
+    expect(await ctx.staging.read()).toBeNull();
+  });
+
   it('does NOT throw when passthrough is omitted for a schema with required fields (change)', async () => {
     // change.rules is required with no default → safeParse({}) fails, so no
     // defaults materialize, but omitting passthrough must NEVER error.

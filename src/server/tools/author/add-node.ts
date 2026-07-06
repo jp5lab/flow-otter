@@ -126,6 +126,7 @@ export const addNodeTool: Tool<Input, Output> = {
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
+        rejectCredentialsPassthrough(input.type, input.opts?.passthrough);
 
         // Validate passthrough against per-type schema if registered. When
         // the caller omits passthrough entirely, ATTEMPT parse({}) so the
@@ -222,3 +223,15 @@ export const addNodeTool: Tool<Input, Output> = {
       },
     ),
 };
+
+function rejectCredentialsPassthrough(
+  type: string,
+  passthrough: Record<string, unknown> | undefined,
+): void {
+  if (passthrough === undefined) return;
+  if (!Object.prototype.hasOwnProperty.call(passthrough, 'credentials')) return;
+  throw new ValidationFailedError(
+    `passthrough for type '${type}' includes 'credentials'. FlowOtter credentials are not authored; omit the credentials key and fill credential fields in the Node-RED editor after deploy.`,
+    [],
+  );
+}

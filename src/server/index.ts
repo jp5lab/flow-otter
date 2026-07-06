@@ -2,6 +2,7 @@ import { buildContainer, rehydrateFromPersistedTarget } from './container.js';
 import { addCatchNodeTool } from './tools/author/add-catch-node.js';
 import { addCommentTool } from './tools/author/add-comment.js';
 import { addCompleteNodeTool } from './tools/author/add-complete-node.js';
+import { addConfigNodeTool } from './tools/author/add-config-node.js';
 import { addDashboardWidgetTool } from './tools/author/add-dashboard-widget.js';
 import { addDebugNodeTool } from './tools/author/add-debug-node.js';
 import { addFunctionNodeTool } from './tools/author/add-function-node.js';
@@ -159,6 +160,7 @@ export const ALL_TOOLS: readonly Tool<unknown, unknown>[] = [
   addGroupTool as unknown as Tool<unknown, unknown>,
   addCommentTool as unknown as Tool<unknown, unknown>,
   addNodeTool as unknown as Tool<unknown, unknown>,
+  addConfigNodeTool as unknown as Tool<unknown, unknown>,
   addDashboardWidgetTool as unknown as Tool<unknown, unknown>,
   wireNodesTool as unknown as Tool<unknown, unknown>,
   setLinksTool as unknown as Tool<unknown, unknown>,

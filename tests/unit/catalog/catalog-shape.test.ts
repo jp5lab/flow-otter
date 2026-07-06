@@ -73,6 +73,7 @@ describe('capability catalog', () => {
       'get_flow',
       'create_flow',
       'add_node',
+      'add_config_node',
       'get_node',
       'update_node',
       'remove_node',
