@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "frozen_for": "EVAL-3 S6 pre-registration",
+  "generated_at": "2026-07-06",
+  "layout_lint_contract": {
+    "implementation": "src/toolkit/lint/layout-lint.ts",
+    "score_range": [0, 1],
+    "rule_result_shape": ["rule", "score", "weight", "offender_count"],
+    "rules": [
+      {
+        "rule": "layout-stage-order",
+        "weight": 2
+      },
+      {
+        "rule": "layout-group-overlap",
+        "weight": 2
+      },
+      {
+        "rule": "layout-header-presence",
+        "weight": 1
+      },
+      {
+        "rule": "layout-error-lane-below",
+        "weight": 2
+      },
+      {
+        "rule": "layout-affirmative-on-top",
+        "weight": 1
+      },
+      {
+        "rule": "layout-wire-crossings",
+        "weight": 3
+      },
+      {
+        "rule": "layout-backward-wires",
+        "weight": 3
+      },
+      {
+        "rule": "layout-viewport-overflow",
+        "weight": 1
+      }
+    ]
+  },
+  "first_benchmark_run": {
+    "command": "layoutLint(FlowsJsonSchema.parse(snapshot.flows))",
+    "viewport_window_width": 1920,
+    "entries": [
+      {
+        "id": "audit-2026-06-10-e1",
+        "source": "../../tests/fixtures/audit-2026-06-10/e1-flows.json",
+        "source_sha256": "ba8ac47e906a7c0a34ee31c1a18a86787a0780456dfbb677870593bb313111f1",
+        "overall": 0.9333333333333333,
+        "rules": [
+          {
+            "rule": "layout-stage-order",
+            "score": 1,
+            "weight": 2,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-group-overlap",
+            "score": 1,
+            "weight": 2,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-header-presence",
+            "score": 1,
+            "weight": 1,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-error-lane-below",
+            "score": 1,
+            "weight": 2,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-affirmative-on-top",
+            "score": 1,
+            "weight": 1,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-wire-crossings",
+            "score": 1,
+            "weight": 3,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-backward-wires",
+            "score": 1,
+            "weight": 3,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-viewport-overflow",
+            "score": 0,
+            "weight": 1,
+            "offender_count": 1
+          }
+        ]
+      },
+      {
+        "id": "audit-2026-06-10-e2",
+        "source": "../../tests/fixtures/audit-2026-06-10/e2-flows.json",
+        "source_sha256": "21dce7e6ad41d9e3777e4f129808a08f14d0741d10c4d6be4e0c8b358ef2f4ff",
+        "overall": 0.6083916083916083,
+        "rules": [
+          {
+            "rule": "layout-stage-order",
+            "score": 1,
+            "weight": 2,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-group-overlap",
+            "score": 1,
+            "weight": 2,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-header-presence",
+            "score": 1,
+            "weight": 1,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-error-lane-below",
+            "score": 1,
+            "weight": 2,
+            "offender_count": 0
+          },
+          {
+            "rule": "layout-affirmative-on-top",
+            "score": 0,
+            "weight": 1,
+            "offender_count": 1
+          },
+          {
+            "rule": "layout-wire-crossings",
+            "score": 0.8461538461538461,
+            "weight": 3,
+            "offender_count": 8
+          },
+          {
+            "rule": "layout-backward-wires",
+            "score": 0.18181818181818177,
+            "weight": 3,
+            "offender_count": 9
+          },
+          {
+            "rule": "layout-viewport-overflow",
+            "score": 1,
+            "weight": 1,
+            "offender_count": 0
+          }
+        ]
+      }
+    ]
+  },
+  "r4_separation": {
+    "score_ordering_margin": 0.15,
+    "spag_raw": {
+      "layout-backward-wires": {
+        "offender_count": 8
+      },
+      "layout-wire-crossings": {
+        "minimum_offender_count": 1
+      }
+    },
+    "engine_outputs": {
+      "layout-group-overlap": {
+        "minimum_offender_count": 2
+      },
+      "comment-pile": {
+        "offender_count": 6
+      },
+      "off-canvas-groups": {
+        "offender_count": 2
+      },
+      "layout-error-lane-below": {
+        "fires": true
+      }
+    },
+    "e1_agent": {
+      "occlusion": {
+        "maximum_offender_count": 3,
+        "maximum_severity": "warning"
+      },
+      "f11_true_positives_expected": true
+    }
+  }
+}

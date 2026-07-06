@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "benchmark": "s6-layout-preregistration",
+  "created": "2026-07-06",
+  "fixture_manifest": {
+    "path": "../../tests/fixtures/audit-2026-06-10/sha256-manifest.json",
+    "algorithm": "sha256"
+  },
+  "entry_source_schema": {
+    "fixture": {
+      "required": ["path", "sha256"]
+    },
+    "community_remote": {
+      "required": ["url", "sha256", "license"],
+      "fetch_policy": "fetch-by-manifest-only"
+    }
+  },
+  "entries": [
+    {
+      "id": "audit-2026-06-10-e1",
+      "kind": "charter",
+      "title": "2026-06-10 audit e1 operator layout",
+      "source": {
+        "type": "fixture",
+        "path": "../../tests/fixtures/audit-2026-06-10/e1-flows.json",
+        "sha256": "ba8ac47e906a7c0a34ee31c1a18a86787a0780456dfbb677870593bb313111f1"
+      },
+      "legs": {
+        "A": {
+          "type": "stripped-positions"
+        },
+        "B": {
+          "type": "zero-coordinate-annotated-spec",
+          "spec_status": "pending-layo-2"
+        }
+      },
+      "operator_semantics_criteria": [
+        {
+          "id": "temperature-chain",
+          "description": "Temperature sensor input and simulated pulse both feed parse, validation, scaling, and threshold decision in order."
+        },
+        {
+          "id": "alarm-and-normal-branches",
+          "description": "Threshold true path debounces and formats the alarm for operator notification plus MQTT alerting; false path reports the current temperature."
+        },
+        {
+          "id": "error-lane",
+          "description": "Catch-all errors route through error formatting into the error log path."
+        }
+      ]
+    },
+    {
+      "id": "audit-2026-06-10-e2",
+      "kind": "charter",
+      "title": "2026-06-10 audit e2 spaghetti line B",
+      "source": {
+        "type": "fixture",
+        "path": "../../tests/fixtures/audit-2026-06-10/e2-flows.json",
+        "sha256": "21dce7e6ad41d9e3777e4f129808a08f14d0741d10c4d6be4e0c8b358ef2f4ff"
+      },
+      "legs": {
+        "A": {
+          "type": "stripped-positions"
+        },
+        "B": {
+          "type": "zero-coordinate-annotated-spec",
+          "spec_status": "pending-layo-2"
+        }
+      },
+      "operator_semantics_criteria": [
+        {
+          "id": "dual-input-convergence",
+          "description": "Sim temperature and test pulse inputs both converge into scale and smoothing before the switch."
+        },
+        {
+          "id": "junction-alarm-branch",
+          "description": "The switch alarm output routes through the junction, sets the alarm flag, formats the alarm, and reaches the alarm debug output."
+        },
+        {
+          "id": "normal-and-tap-branches",
+          "description": "The normal branch reaches normal formatting and debug output, while the smooth tap debug remains wired from the smoothing step."
+        }
+      ]
+    }
+  ],
+  "community_entries": []
+}

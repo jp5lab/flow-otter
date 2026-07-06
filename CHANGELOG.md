@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### EVAL-3 — S6 pre-registration corpus and frozen thresholds
+
+- Added the canonical 2026-06-10 audit fixture SHA-256 manifest plus a tiny loader that hard-fails on fixture hash drift; the EVAL-3 pins load both charter flow snapshots through `FlowsJsonSchema` without modifying the fixture bytes.
+- Added `eval/benchmark/` with the S6 corpus manifest, leg-B spec placeholder directory, protocol, and frozen `thresholds.json`. The manifest keeps the two audit fixtures as charter members, requires operator-semantics criteria, and supports future fetch-by-manifest community entries with `{url, sha256, license}` while recording licensing as still open.
+- Pre-registered both S6 legs, blinded seeded A/B judging, the maintainer + fresh no-context agent judging panel with third-judge tie-break, the leg-B zero-coordinate disqualification rule with the junction waypoint exemption, and D-7's R4 constants. `PROTOCOL.md` records the threshold hash; `DESIGN.md` records both threshold and protocol hashes for EVAL-4 scored-mode refusal.
+
 ### LAYO-1 — Layout engines keep junctions and center coordinates honest
 
 - Dagre and ELK now register junctions as 10×10 layout participants and write positions back through one shared center-coordinate path, fixing the ELK `JsonImportException` on junction endpoints and the dagre case where junctions stayed stranded at their prior coordinates.

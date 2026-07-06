@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "algorithm": "sha256",
+  "files": {
+    "e1-flows.json": "ba8ac47e906a7c0a34ee31c1a18a86787a0780456dfbb677870593bb313111f1",
+    "e2-flows.json": "21dce7e6ad41d9e3777e4f129808a08f14d0741d10c4d6be4e0c8b358ef2f4ff",
+    "e1-tab.golden.png": "9957bd64609aca62a6442b04833102924fdcfbe3969ff3106b4de8ac10f3dc3d"
+  }
+}

@@ -152,6 +152,7 @@ The 2026-06-10 layout audit ([`docs/audits/2026-06-10-layout-audit.md`](audits/2
 2. **The Phase-0 live half-day spike (item 4) is restored as BINDING, not superseded.** The live unscripted Claude Code session demonstrating the stage → see → adjust → re-see loop within budget is the fix plan's Phase-1 exit requirement; the scripted `eval:s5` run is the standing regression, never a substitute.
 3. **`stage_spec` (decision D1) moves from this document's Phase 1 to fix-plan Phase 3 (v2.0.0).** Supersedes Sequencing item 5's "naive placement" stopgap: the flagship declarative surface ships only with real computed placement, fixing the audit report's §5.6 critique ("Phase-1 sequencing ships the flagship claim regressed").
 4. **Fix-plan work item D-3 (layout lint wired into the read surface — distinct from this document's decision D3) grows tool output schemas in v1.5.0, additive only.** Recorded here so the schema growth is a versioned, priced migration bill (fix-plan risk #8), not silent drift.
+5. **2026-07-06 EVAL-3 pre-registration hashes recorded.** S6's frozen corpus/protocol contract landed with `eval/benchmark/thresholds.json` sha256 `e61d7bb58d94ccebf7915a6e6f0cdaff49ec8272d25183ab20070231458d2380` and `eval/benchmark/PROTOCOL.md` sha256 `dc29a8d4047a3de2ce48fe8398b617c1d95a826a8419e70fb100207cdb0103a9`. `PROTOCOL.md` records only the threshold hash; its own hash is recorded here to avoid a self-referential digest.
 
 #### Five frozen cross-stream contracts (frozen in week 1 of execution)
 
