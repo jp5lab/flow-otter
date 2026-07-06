@@ -156,11 +156,97 @@ const HttpRequestPassthrough = z
     ret: z.enum(['txt', 'bin', 'obj']).default('txt'),
     paytoqs: z.enum(['ignore', 'query', 'body']).default('ignore'),
     url: z.string().optional(),
+    /** tls-config config-node id. TLS options, including SNI, come from that
+     *  node; SNI is tls-config.servername. http-request itself has no SNI field. */
     tls: z.string().optional(),
     persist: z.boolean().optional(),
     proxy: z.string().optional(),
     authType: z.enum(['none', 'basic', 'digest', 'bearer']).optional(),
     senderr: z.boolean().optional(),
+  })
+  .passthrough();
+
+const MqttRetainHandling = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal('0'),
+  z.literal('1'),
+  z.literal('2'),
+]);
+const MqttInputCount = z.union([z.literal(0), z.literal(1)]);
+const MqttProtocolVersion = z.union([
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal('3'),
+  z.literal('4'),
+  z.literal('5'),
+]);
+const MqttLifecycleQos = z.enum(['0', '1', '2']);
+const MqttLifecycleRetain = z.enum(['true', 'false']);
+const MqttLifecycleMessage = z.record(z.unknown());
+
+// === Config nodes ===
+
+const MqttBrokerPassthrough = z
+  .object({
+    name: z.string().default(''),
+    broker: z.string().default(''),
+    port: z.union([z.number(), z.string()]).default(1883),
+    /** tls-config config-node id for broker TLS settings. */
+    tls: z.string().optional(),
+    clientid: z.string().default(''),
+    autoConnect: z.boolean().default(true),
+    usetls: z.boolean().default(false),
+    verifyservercert: z.boolean().default(false),
+    compatmode: z.boolean().default(false),
+    protocolVersion: MqttProtocolVersion.default(4),
+    keepalive: z.union([z.number(), z.string()]).default(60),
+    cleansession: z.boolean().default(true),
+    autoUnsubscribe: z.boolean().default(true),
+    birthTopic: z.string().default(''),
+    birthQos: MqttLifecycleQos.default('0'),
+    birthRetain: MqttLifecycleRetain.default('false'),
+    birthPayload: z.string().default(''),
+    birthMsg: MqttLifecycleMessage.default({}),
+    closeTopic: z.string().default(''),
+    closeQos: MqttLifecycleQos.default('0'),
+    closeRetain: MqttLifecycleRetain.default('false'),
+    closePayload: z.string().default(''),
+    closeMsg: MqttLifecycleMessage.default({}),
+    willTopic: z.string().default(''),
+    willQos: MqttLifecycleQos.default('0'),
+    willRetain: MqttLifecycleRetain.default('false'),
+    willPayload: z.string().default(''),
+    willMsg: MqttLifecycleMessage.default({}),
+    userProps: z.string().default(''),
+    sessionExpiry: z.union([z.number(), z.string()]).default(0),
+  })
+  .passthrough();
+
+const TlsConfigPassthrough = z
+  .object({
+    name: z.string().default(''),
+    /** Editor default is "files" (plural); the runtime falls back to "files"
+     *  when certType is absent. */
+    certType: z.enum(['files', 'pfx', 'env']).default('files'),
+    cert: z.string().default(''),
+    key: z.string().default(''),
+    ca: z.string().default(''),
+    certname: z.string().default(''),
+    keyname: z.string().default(''),
+    caname: z.string().default(''),
+    p12: z.string().default(''),
+    p12name: z.string().default(''),
+    /** Env-var expressions evaluated by Node-RED when certType is "env". */
+    certEnv: z.string().default(''),
+    keyEnv: z.string().default(''),
+    caEnv: z.string().default(''),
+    /** SNI server name; the runtime trims this before use. */
+    servername: z.string().default(''),
+    verifyservercert: z.boolean().default(true),
+    alpnprotocol: z.string().default(''),
   })
   .passthrough();
 
@@ -305,6 +391,12 @@ const MqttInPassthrough = z
     /** mqtt-broker config-node id. NOT auto-created by add_node — the agent
      *  must add the broker config node and reference it here. */
     broker: z.string().optional(),
+    nl: z.boolean().default(false),
+    rap: z.boolean().default(true),
+    rh: MqttRetainHandling.default(0),
+    inputs: MqttInputCount.default(0),
+    // subscriptionIdentifier is intentionally excluded: Node-RED 5.0 does not
+    // persist it in editor defaults or read it from node config.
   })
   .passthrough();
 
@@ -315,6 +407,11 @@ const MqttOutPassthrough = z
     retain: z.union([z.boolean(), z.string()]).default(''),
     /** mqtt-broker config-node id — see MqttInPassthrough.broker. */
     broker: z.string().optional(),
+    respTopic: z.string().default(''),
+    contentType: z.string().default(''),
+    correl: z.string().default(''),
+    expiry: z.string().default(''),
+    userProps: z.string().default(''),
   })
   .passthrough();
 
@@ -374,6 +471,8 @@ export const NODE_SCHEMAS: Readonly<Record<string, z.ZodTypeAny>> = Object.freez
   'http in': HttpInPassthrough,
   'http response': HttpResponsePassthrough,
   'http request': HttpRequestPassthrough,
+  'mqtt-broker': MqttBrokerPassthrough,
+  'tls-config': TlsConfigPassthrough,
   csv: CsvPassthrough,
   json: JsonPassthrough,
   xml: XmlPassthrough,
