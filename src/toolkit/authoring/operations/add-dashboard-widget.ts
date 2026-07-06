@@ -1,6 +1,9 @@
 import { generateNodeId } from '../../../shared/ids.js';
 import { snapToGrid } from '../../layout/grid.js';
+import { placeOnLeftMarginNewRow } from '../../layout/placement.js';
 import type { AuthoringSpec, ConfigNodeSpec, NodeSpec, TabSpec, WidgetAnchor } from '../types.js';
+
+import { placementAreasForTab } from './_placement.js';
 
 /**
  * Mirror of the compiler's deterministic config-node ID derivation.
@@ -118,10 +121,7 @@ export function addDashboardWidget(
   if (opts.position) {
     position = snapToGrid(opts.position);
   } else {
-    const usedY = new Set(tab.nodes.map((n) => n.position.y));
-    let y = 100;
-    while (usedY.has(y)) y += 80;
-    position = snapToGrid({ x: 160, y });
+    position = placeOnLeftMarginNewRow(placementAreasForTab(tab));
   }
 
   // Resolve anchor.

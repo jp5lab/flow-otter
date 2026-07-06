@@ -1,7 +1,9 @@
 import { isKnownConfigNodeType } from '../../../shared/flows-json.js';
 import { snapToGrid } from '../../layout/grid.js';
-import { placeRightOf } from '../../layout/placement.js';
+import { placeOnLeftMarginNewRow, placeRightOf } from '../../layout/placement.js';
 import type { AuthoringSpec, ConfigNodeSpec, ConnectionSpec, NodeSpec, TabSpec } from '../types.js';
+
+import { nodePlacementDimensions, placementAreasForTab } from './_placement.js';
 
 export interface AddNodeOpts {
   /** Caller-supplied stable key. If omitted, derives from type. */
@@ -100,13 +102,20 @@ export function addNode(
     if (!source) {
       throw new AddNodeError(`Source node '${opts.sourceNodeKey}' not found on tab '${tabId}'.`);
     }
-    position = placeRightOf(source.position);
+    const sourceDims = nodePlacementDimensions(source);
+    const newDims = nodePlacementDimensions({
+      type,
+      ...(opts.label !== undefined ? { label: opts.label } : {}),
+      ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
+    });
+    position = placeRightOf(source.position, {
+      sourceWidth: sourceDims.w,
+      newWidth: newDims.w,
+      newHeight: newDims.h,
+      occupied: placementAreasForTab(tab),
+    });
   } else {
-    // Place at next free slot — simple top-down lane stack.
-    const usedY = new Set(tab.nodes.map((n) => n.position.y));
-    let y = 100;
-    while (usedY.has(y)) y += 80;
-    position = snapToGrid({ x: 160, y });
+    position = placeOnLeftMarginNewRow(placementAreasForTab(tab));
   }
 
   const newNode: NodeSpec = {

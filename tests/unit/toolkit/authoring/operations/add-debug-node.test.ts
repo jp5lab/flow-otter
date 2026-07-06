@@ -25,10 +25,10 @@ describe('addDebugNode', () => {
     expect(tab.nodes.find((n) => n.key === newNodeKey)?.type).toBe('debug');
   });
 
-  it('places new node 70px right of source, snapped to grid', () => {
+  it('places new node one width-aware pitch right of source', () => {
     const { spec } = addDebugNode(baseSpec, 'tab-main', 'inj');
     const debugNode = spec.tabs[0]!.nodes.find((n) => n.type === 'debug')!;
-    expect(debugNode.position.x).toBe(180); // 100 + 70 = 170, snapped to 180
+    expect(debugNode.position.x).toBe(260);
     expect(debugNode.position.y).toBe(100);
   });
 

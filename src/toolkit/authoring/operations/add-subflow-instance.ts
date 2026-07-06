@@ -48,12 +48,18 @@ export function addSubflowInstance(
 
   const taken = new Set(tab.nodes.map((n) => n.key));
   const newKey = uniqueKey(opts.key ?? `subflow-${defId}`, taken);
-  const position = defaultSpawnPosition(tab);
+  const type = `subflow:${defId}`;
+  const label = opts.label ?? DEFAULTS.label;
+  const position = defaultSpawnPosition(tab, {
+    type,
+    label,
+    ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
+  });
 
   const newNode: NodeSpec = {
     key: newKey,
-    type: `subflow:${defId}`,
-    label: opts.label ?? DEFAULTS.label,
+    type,
+    label,
     position,
     ...(opts.groupKey !== undefined ? { groupKey: opts.groupKey } : {}),
     ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),

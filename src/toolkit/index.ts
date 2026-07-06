@@ -58,7 +58,13 @@ export {
 export { diffFlows, summarizeDiff, type SemanticDiff } from './diff/semantic.js';
 export { normalize } from './diff/normalize.js';
 export { snapToGrid, isOnGrid, DEFAULT_GRID } from './layout/grid.js';
-export { placeRightOf, DEFAULT_RIGHT_OFFSET } from './layout/placement.js';
+export {
+  placeOnLeftMarginNewRow,
+  placeRightOf,
+  DEFAULT_RIGHT_GAP,
+  DEFAULT_RIGHT_OFFSET,
+  type PlacementArea,
+} from './layout/placement.js';
 export { defaultBounds, inBounds, type Bounds } from './layout/bounds.js';
 export { FilesystemSnapshotStore } from './snapshot/filesystem.js';
 export { type SnapshotStore } from './snapshot/store.js';

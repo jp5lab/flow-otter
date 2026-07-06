@@ -48,12 +48,17 @@ export function addStatusNode(
 
   const taken = new Set(tab.nodes.map((n) => n.key));
   const newKey = uniqueKey(opts.key ?? DEFAULTS.baseKey, taken);
-  const position = defaultSpawnPosition(tab);
+  const label = opts.label ?? DEFAULTS.label;
+  const position = defaultSpawnPosition(tab, {
+    type: 'status',
+    label,
+    ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
+  });
 
   const newNode: NodeSpec = {
     key: newKey,
     type: 'status',
-    label: opts.label ?? DEFAULTS.label,
+    label,
     position,
     ...(opts.groupKey !== undefined ? { groupKey: opts.groupKey } : {}),
     ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),

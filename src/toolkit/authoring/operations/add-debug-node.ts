@@ -1,6 +1,8 @@
 import { placeRightOf } from '../../layout/placement.js';
 import type { AuthoringSpec, ConnectionSpec, NodeSpec, TabSpec } from '../types.js';
 
+import { nodePlacementDimensions, placementAreasForTab } from './_placement.js';
+
 export interface AddDebugNodeOpts {
   /** Visible label (≤ 24 chars). Defaults to 'Debug'. */
   label?: string;
@@ -66,7 +68,14 @@ export function addDebugNode(
   const baseKey = `${sourceNodeKey}__debug`;
   const newKey = uniqueKey(baseKey, takenKeys);
 
-  const position = placeRightOf(source.position);
+  const sourceDims = nodePlacementDimensions(source);
+  const newDims = nodePlacementDimensions({ type: 'debug', label });
+  const position = placeRightOf(source.position, {
+    sourceWidth: sourceDims.w,
+    newWidth: newDims.w,
+    newHeight: newDims.h,
+    occupied: placementAreasForTab(tab),
+  });
 
   const newNode: NodeSpec = {
     key: newKey,

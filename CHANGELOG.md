@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### D-4 — Width-aware default placement
+
+- `placeRightOf` now spaces chained default placements from editor-true provider widths (`sourceWidth/2 + 60 + newWidth/2`, grid-ceiled with a 140px floor) and uses deterministic 60px y-bumps when the target box is occupied, so source-driven `add_node` / `add_debug_node` / specialist spawns no longer overlap by construction.
+- Replaced the generic no-position x=160 stack with reusable left-margin new-row placement (`x >= 120`, below content maxY + 80, grid-snapped), also used by dashboard widgets. Explicit positions still snap exactly as before and bypass default placement.
+- Added D-4 pins for narrow/wide step math, collision rows, fallback rows, explicit-position byte identity, and a 12-node random-label chained `add_node` property with zero `bbox-overlap` offenders.
+
 ### D-3 — Layout lint read-surface wiring and layout-score guidance
 
 - `validate_flow` and `validate_all_flows` now run the layout-aware lint path and add an additive `layout` block with `overall` plus eight per-rule scores, weights, true `offender_count`, and offender samples capped at 10 per rule. Existing diagnostics/error/warning fields are preserved; layout diagnostics are warning/info at the wiring layer so the stage gate cannot newly block on layout findings.
