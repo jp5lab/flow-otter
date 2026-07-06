@@ -1113,6 +1113,10 @@ For each call site, the elicitation request and the fallback behavior are item-s
 
 **Status:** DONE (commit 771b191) — `@dagrejs/dagre@3` swap + `elkjs@^0.11` opt-in via `src/toolkit/layout/index.ts` dispatcher.
 
+**Supersession note (LAYO-4 slice C):** the toolkit `auto` default is now the
+two-level ELK engine. Dagre remains available as the explicit `dagre` engine for
+simple-chain legacy fallback only, matching fix-plan open question #10.
+
 #### Rationale
 
 FlowOtter uses `dagre` 0.8.5 (abandoned 2019). The maintained replacement is `@dagrejs/dagre@3` (TS-native, March 2026 v3 ship). For 30+ node flows or any with groups/multi-output nodes, dagre struggles. ELK (`elkjs`) is the likely path once groups and ports are modeled explicitly, but the current MCP workflow stays manual/agent-guided.

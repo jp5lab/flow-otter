@@ -17,6 +17,7 @@ import {
 } from '../../../../src/toolkit/layout/apply-positions.js';
 import { DEFAULT_GRID, isOnGrid } from '../../../../src/toolkit/layout/grid.js';
 import { layoutFlowsWithElk } from '../../../../src/toolkit/layout/elk.js';
+import { SPATIAL_SCAFFOLD_VIEWPORT } from '../../../../src/toolkit/layout/spatial-scaffold.js';
 
 interface Rect {
   readonly x1: number;
@@ -141,6 +142,16 @@ function maxY(rects: readonly Rect[]): number {
   return Math.max(...rects.map((rect) => rect.y2));
 }
 
+function contentWidth(out: AuthoringSpec): number {
+  const rects = [
+    ...firstTab(out).nodes.map((found) => nodeRect(out, found.key)),
+    ...(firstTab(out).junctions ?? []).map((found) => junctionRect(out, found.key)),
+    ...firstTab(out).groups.map((found) => groupRect(out, found.key)),
+    ...firstTab(out).comments.map((found) => commentRect(out, found.key)),
+  ];
+  return Math.max(...rects.map((rect) => rect.x2)) - Math.min(...rects.map((rect) => rect.x1));
+}
+
 function minY(rects: readonly Rect[]): number {
   return Math.min(...rects.map((rect) => rect.y1));
 }
@@ -180,6 +191,41 @@ function groupedFixture(): AuthoringSpec {
         { key: 'sibling', name: 'Sibling', nodeKeys: ['sibling_a', 'sibling_b'] },
       ],
       comments: [header('parent_header', 'Parent header', 'parent')],
+    }),
+  );
+}
+
+function chainFixture(count: number): AuthoringSpec {
+  return spec(
+    tab({
+      nodes: Array.from({ length: count }, (_, index) =>
+        node(`n${index.toString().padStart(2, '0')}`, 'function', { label: `N${index}` }),
+      ),
+      connections: Array.from({ length: count - 1 }, (_, index) => ({
+        fromKey: `n${index.toString().padStart(2, '0')}`,
+        outputPort: 0,
+        toKey: `n${(index + 1).toString().padStart(2, '0')}`,
+      })),
+      groups: [],
+      comments: [],
+    }),
+  );
+}
+
+function groupedChainFixture(count: number): AuthoringSpec {
+  const keys = Array.from({ length: count }, (_, index) => `g${index.toString().padStart(2, '0')}`);
+  return spec(
+    tab({
+      nodes: keys.map((key, index) =>
+        node(key, 'function', { label: `G${index}`, groupKey: 'wide_group' }),
+      ),
+      connections: keys.slice(0, -1).map((key, index) => ({
+        fromKey: key,
+        outputPort: 0,
+        toKey: keys[index + 1]!,
+      })),
+      groups: [{ key: 'wide_group', name: 'Wide Group', nodeKeys: keys }],
+      comments: [header('wide_group_header', 'Wide Group header', 'wide_group')],
     }),
   );
 }
@@ -380,6 +426,43 @@ describe('layoutFlowsWithElk two-level stacking', () => {
     expect(diagnostics).toContainEqual(
       expect.objectContaining({ rule: 'layout/group-spans-lanes' }),
     );
+  });
+
+  it('compacts a moderately long chain toward the visible viewport width', async () => {
+    const uncompacted = await layoutFlowsWithElk(chainFixture(10), { targetWidth: 10_000 });
+    const compacted = await layoutFlowsWithElk(chainFixture(10));
+    const budget = SPATIAL_SCAFFOLD_VIEWPORT.visible_width;
+
+    expect(contentWidth(uncompacted)).toBeGreaterThan(budget);
+    expect(contentWidth(compacted)).toBeLessThanOrEqual(budget);
+    expect(contentWidth(compacted)).toBeLessThan(contentWidth(uncompacted));
+  });
+
+  it('keeps the frozen width-overflow diagnostic when compaction cannot reach the budget', async () => {
+    const diagnostics: Array<{ rule: string; tabId?: string }> = [];
+    const out = await layoutFlowsWithElk(chainFixture(20), {
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+
+    expect(contentWidth(out)).toBeGreaterThan(SPATIAL_SCAFFOLD_VIEWPORT.visible_width);
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({ rule: 'layout/width-overflow', tabId: 'tabA' }),
+    );
+  });
+
+  it('preserves group containment and header placement while compacting width', async () => {
+    const out = await layoutFlowsWithElk(groupedChainFixture(10));
+    const groupBox = groupRect(out, 'wide_group');
+    const headerBox = commentRect(out, 'wide_group_header');
+
+    expect(contentWidth(out)).toBeLessThanOrEqual(SPATIAL_SCAFFOLD_VIEWPORT.visible_width);
+    for (const found of firstTab(out).nodes)
+      expect(contains(groupBox, nodeRect(out, found.key))).toBe(true);
+    expect(headerBox.y2).toBeLessThan(groupBox.y1);
+    expect(horizontalOverlap(headerBox, groupBox)).toBeGreaterThan(0);
+    expect(isOnGrid(groupByKey(out, 'wide_group').position!)).toBe(true);
+    expect(groupByKey(out, 'wide_group').size!.w).toBeGreaterThanOrEqual(DEFAULT_GRID * 2);
+    expect(groupByKey(out, 'wide_group').size!.h).toBeGreaterThanOrEqual(DEFAULT_GRID * 2);
   });
 
   it('is a fixed point after the first two-level layout pass', async () => {

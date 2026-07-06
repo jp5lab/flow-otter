@@ -49,6 +49,7 @@ import {
 } from './apply-positions.js';
 import { defaultBounds, type Bounds } from './bounds.js';
 import { DEFAULT_GRID } from './grid.js';
+import { SPATIAL_SCAFFOLD_VISIBLE_WIDTH } from './spatial-scaffold.js';
 import { layoutTabWithTwoLevel } from './two-level.js';
 
 export interface ElkLayoutOpts {
@@ -57,6 +58,7 @@ export interface ElkLayoutOpts {
   ranksep?: number;
   grid?: number;
   bounds?: Bounds;
+  targetWidth?: number;
   onDiagnostic?: LayoutDiagnosticHandler;
 }
 
@@ -85,6 +87,7 @@ export interface ElkResolvedLayoutOpts {
   ranksep: number;
   grid: number;
   bounds: Bounds;
+  targetWidth: number;
   onDiagnostic?: LayoutDiagnosticHandler;
 }
 
@@ -103,6 +106,18 @@ export type ElkLayoutCore = (
   tab: TabSpec,
   opts: ElkResolvedLayoutOpts,
 ) => Promise<ElkCoreLayoutResult | undefined>;
+
+export function resolveElkLayoutOpts(opts: ElkLayoutOpts = {}): ElkResolvedLayoutOpts {
+  return {
+    rankdir: opts.rankdir ?? DEFAULTS.rankdir,
+    nodesep: opts.nodesep ?? DEFAULTS.nodesep,
+    ranksep: opts.ranksep ?? DEFAULTS.ranksep,
+    grid: opts.grid ?? DEFAULT_GRID,
+    bounds: opts.bounds ?? defaultBounds,
+    targetWidth: opts.targetWidth ?? SPATIAL_SCAFFOLD_VISIBLE_WIDTH,
+    ...(opts.onDiagnostic !== undefined ? { onDiagnostic: opts.onDiagnostic } : {}),
+  };
+}
 
 // The bundled file (`elkjs/lib/elk.bundled.js`) inlines the algorithm and
 // runs synchronously when no workerFactory is provided. On Node 22+/Bun
@@ -545,14 +560,7 @@ export async function layoutFlowsWithElk(
   spec: AuthoringSpec,
   opts: ElkLayoutOpts = {},
 ): Promise<AuthoringSpec> {
-  const resolved: ElkResolvedLayoutOpts = {
-    rankdir: opts.rankdir ?? DEFAULTS.rankdir,
-    nodesep: opts.nodesep ?? DEFAULTS.nodesep,
-    ranksep: opts.ranksep ?? DEFAULTS.ranksep,
-    grid: opts.grid ?? DEFAULT_GRID,
-    bounds: opts.bounds ?? defaultBounds,
-    ...(opts.onDiagnostic !== undefined ? { onDiagnostic: opts.onDiagnostic } : {}),
-  };
+  const resolved = resolveElkLayoutOpts(opts);
   // Sort tabs for determinism, mirroring dagre.ts.
   const sortedTabs = [...spec.tabs].sort((a, b) => a.id.localeCompare(b.id));
   const newTabs: TabSpec[] = [];

@@ -59,6 +59,16 @@ export {
 } from './render/png.js';
 export { diffFlows, summarizeDiff, type SemanticDiff } from './diff/semantic.js';
 export { normalize } from './diff/normalize.js';
+export {
+  layoutFlows,
+  layoutFlowsJson,
+  layoutTabs,
+  layoutFlowsWithDagre,
+  layoutFlowsWithElk,
+  type LayoutEngine,
+  type LayoutFlowsOpts,
+  type LayoutTabsOpts,
+} from './layout/index.js';
 export { snapToGrid, isOnGrid, DEFAULT_GRID } from './layout/grid.js';
 export {
   placeOnLeftMarginNewRow,

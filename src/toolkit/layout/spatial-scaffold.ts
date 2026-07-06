@@ -6,9 +6,10 @@ import { DEFAULT_GRID, snapToGrid } from './grid.js';
 
 export const SPATIAL_SCAFFOLD_GRID = DEFAULT_GRID;
 export const SPATIAL_SCAFFOLD_PITCH = 200;
+export const SPATIAL_SCAFFOLD_VISIBLE_WIDTH = 1420;
 export const SPATIAL_SCAFFOLD_VIEWPORT = {
   width: 1920,
-  visible_width: 1420,
+  visible_width: SPATIAL_SCAFFOLD_VISIBLE_WIDTH,
 } as const;
 
 const LANE_BAND_HEIGHT = 120;

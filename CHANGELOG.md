@@ -14,6 +14,12 @@
 
 - `plan_flow` now emits a deterministic spatial scaffold (20px grid, 200px pitch, 1920/1420 viewport, monotonic per-stage x-centers, lane y-bands with the error band ≥120px below main) and accepts an optional per-stage `lane` hint (`main`/`indicate`/`error`); the plan sidecar is upgraded to PlanRecord schema v2 (v1 sidecars still read back-compatibly, `layout_strategy` remains `manual`).
 
+### LAYO-4 slice C — Layout entry points and width compaction
+
+- `layoutFlowsWithElk` now compacts over-wide lane sublayouts toward the shared 1420px visible-viewport budget from `spatial-scaffold.ts`: it preserves ELK layer order, reduces excessive horizontal inter-layer gaps deterministically, refits group/header geometry from the compacted participant positions, and still emits the frozen `layout/width-overflow` warning when the target width is not topologically reachable.
+- Added toolkit entry points `layoutTabs(spec, opts?)` and `layoutFlowsJson(flows, opts?)`. `layoutTabs` runs the two-level ELK engine with optional tab-id scope and deterministic tab ordering; `layoutFlowsJson` decompiles, lays out, then recompiles with `prior` flows so existing ids and wiring survive.
+- The `layoutFlows` auto/default path now uses the two-level ELK engine. Dagre remains exported and accepted only as explicit `engine:'dagre'` legacy fallback; no MCP layout tool or `plan_flow` behavior changed.
+
 ### LAYO-4 slice B — Two-level lane/section stacking
 
 - `layoutFlowsWithElk` is now the two-level engine (slice B of three): each tab is partitioned into sections (`layout/sections.ts`) and lanes (`main`/`indicate`/`error` from the shared `src/toolkit/lanes.ts`), the slice-A ELK compound+ports core runs per (section, lane) subgraph, lanes stack vertically in `LANE_ORDER` separated by `LANE_GAP` imported from `lanes.ts` (empty lanes skipped — no phantom gaps), and sections stack in declaration order. New pure modules: `layout/two-level.ts` (orchestrator) and `layout/stack.ts` (rect/extent/stacking math), barrel-exported from `layout/index.ts`.

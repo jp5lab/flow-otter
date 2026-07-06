@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AuthoringSpec } from '../../../../src/toolkit/authoring/types.js';
-import { layoutFlows } from '../../../../src/toolkit/layout/index.js';
+import { layoutFlows, layoutTabs } from '../../../../src/toolkit/layout/index.js';
 
 function specWithNodes(count: number): AuthoringSpec {
   return {
@@ -84,38 +84,41 @@ function specWithRulesOnlySwitch(): AuthoringSpec {
 }
 
 describe('layoutFlows auto-engine selection', () => {
-  it('returns a laid-out spec for small flows (dagre path)', async () => {
-    const out = await layoutFlows(specWithNodes(3), { engine: 'auto' });
-    expect(out.tabs[0]!.nodes).toHaveLength(3);
-  });
+  it('routes auto through the two-level ELK engine even for small flows', async () => {
+    const source = specWithNodes(3);
+    const auto = await layoutFlows(source, { engine: 'auto' });
+    const explicit = await layoutTabs(source);
 
-  it('escalates to ELK when nodes >= 30', async () => {
-    const out = await layoutFlows(specWithNodes(30), { engine: 'auto' });
-    expect(out.tabs[0]!.nodes).toHaveLength(30);
-    // ELK runs async; if dispatch went wrong this would throw or return
-    // unchanged positions. Sanity check: some node got a non-zero x.
-    expect(out.tabs[0]!.nodes.some((n) => n.position.x !== 0)).toBe(true);
-  });
-
-  it('escalates to ELK when a group is present', async () => {
-    const out = await layoutFlows(specWithGroup(), { engine: 'auto' });
-    expect(out.tabs[0]!.nodes).toHaveLength(2);
-    expect(out.tabs[0]!.nodes.some((n) => n.position.x !== 0)).toBe(true);
-  });
-
-  it('escalates to ELK when a node has >= 4 outputs', async () => {
-    const out = await layoutFlows(specWithManyOutputs(), { engine: 'auto' });
-    expect(out.tabs[0]!.nodes).toHaveLength(2);
-  });
-
-  it('counts switch rules when auto-selecting for many outputs', async () => {
-    const spec = specWithRulesOnlySwitch();
-    const auto = await layoutFlows(spec, { engine: 'auto' });
-    const explicit = await layoutFlows(spec, { engine: 'elk' });
     expect(JSON.stringify(auto)).toBe(JSON.stringify(explicit));
   });
 
-  it('respects explicit engine:"dagre" override even on a large flow', async () => {
+  it('routes large flows through the same two-level ELK default', async () => {
+    const source = specWithNodes(30);
+    const auto = await layoutFlows(source, { engine: 'auto' });
+    const explicit = await layoutTabs(source);
+
+    expect(JSON.stringify(auto)).toBe(JSON.stringify(explicit));
+  });
+
+  it('keeps grouped and many-output flows on the two-level ELK default', async () => {
+    const groupedAuto = await layoutFlows(specWithGroup(), { engine: 'auto' });
+    const groupedExplicit = await layoutTabs(specWithGroup());
+    const manyOutputsAuto = await layoutFlows(specWithManyOutputs(), { engine: 'auto' });
+    const manyOutputsExplicit = await layoutTabs(specWithManyOutputs());
+
+    expect(JSON.stringify(groupedAuto)).toBe(JSON.stringify(groupedExplicit));
+    expect(JSON.stringify(manyOutputsAuto)).toBe(JSON.stringify(manyOutputsExplicit));
+  });
+
+  it('does not need output-count heuristics for rules-only switches on auto', async () => {
+    const source = specWithRulesOnlySwitch();
+    const auto = await layoutFlows(source, { engine: 'auto' });
+    const explicit = await layoutTabs(source);
+
+    expect(JSON.stringify(auto)).toBe(JSON.stringify(explicit));
+  });
+
+  it('respects explicit engine:"dagre" as the legacy fallback even on a large flow', async () => {
     const out = await layoutFlows(specWithNodes(40), { engine: 'dagre' });
     expect(out.tabs[0]!.nodes).toHaveLength(40);
   });

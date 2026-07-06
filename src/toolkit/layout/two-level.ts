@@ -54,6 +54,13 @@ interface MutableLayout {
   readonly headerDimensionsByKey: Map<string, LayoutParticipantDimensions>;
 }
 
+interface ParticipantColumn {
+  readonly memberKeys: string[];
+  readonly anchorX: number;
+  x1: number;
+  x2: number;
+}
+
 function compareString(a: string, b: string): number {
   if (a < b) return -1;
   if (a > b) return 1;
@@ -452,6 +459,156 @@ function layoutExtent(layout: MutableLayout): LayoutRect | undefined {
   return unionRects(rects);
 }
 
+function rectWidth(rect: LayoutRect): number {
+  return rect.x2 - rect.x1;
+}
+
+function mutableLayoutFromPartial(layout: PartialLayout): MutableLayout {
+  return {
+    centersByKey: new Map(layout.centersByKey),
+    dimensionsByKey: new Map(layout.dimensionsByKey),
+    groupRectsByKey: new Map(layout.groupRectsByKey),
+    headerCentersByKey: new Map(layout.headerCentersByKey),
+    headerDimensionsByKey: new Map(layout.headerDimensionsByKey),
+  };
+}
+
+function buildParticipantColumns(layout: PartialLayout, grid: number): ParticipantColumn[] {
+  const entries = [...layout.centersByKey]
+    .map(([key, center]) => {
+      const dims = layout.dimensionsByKey.get(key);
+      if (dims === undefined) return undefined;
+      return { key, center, rect: centeredRect(center, dims) };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+    .sort((a, b) => {
+      if (a.center.x !== b.center.x) return a.center.x - b.center.x;
+      if (a.center.y !== b.center.y) return a.center.y - b.center.y;
+      return compareString(a.key, b.key);
+    });
+
+  const columns: ParticipantColumn[] = [];
+  for (const entry of entries) {
+    const current = columns[columns.length - 1];
+    if (current !== undefined && Math.abs(entry.center.x - current.anchorX) <= grid) {
+      current.memberKeys.push(entry.key);
+      current.x1 = Math.min(current.x1, entry.rect.x1);
+      current.x2 = Math.max(current.x2, entry.rect.x2);
+      continue;
+    }
+    columns.push({
+      memberKeys: [entry.key],
+      anchorX: entry.center.x,
+      x1: entry.rect.x1,
+      x2: entry.rect.x2,
+    });
+  }
+  return columns;
+}
+
+function participantColumnDeltas(
+  columns: readonly ParticipantColumn[],
+  minGap: number,
+): ReadonlyMap<string, number> {
+  const deltas = new Map<string, number>();
+  let cursorRight: number | undefined;
+  for (const column of columns) {
+    const desiredX1 = cursorRight === undefined ? column.x1 : cursorRight + minGap;
+    const dx = column.x1 > desiredX1 ? desiredX1 - column.x1 : 0;
+    for (const key of column.memberKeys) deltas.set(key, dx);
+    cursorRight = column.x2 + dx;
+  }
+  return deltas;
+}
+
+function refitGroupRectsForCompaction(
+  tab: TabSpec,
+  layout: MutableLayout,
+  plan: PartitionPlan,
+  opts: ElkResolvedLayoutOpts,
+): void {
+  const groups = orderedGroupsByDepth(tab, plan.facts).reverse();
+  for (const group of groups) {
+    if (!layout.groupRectsByKey.has(group.key)) continue;
+    let required: LayoutRect | undefined;
+    for (const key of plan.facts.descendantKeysByGroupKey.get(group.key) ?? []) {
+      const center = layout.centersByKey.get(key);
+      const dims = layout.dimensionsByKey.get(key);
+      if (center !== undefined && dims !== undefined) {
+        required = unionRect(required, centeredRect(center, dims));
+      }
+    }
+    for (const childKey of plan.facts.childrenByParentKey.get(group.key) ?? []) {
+      const childRect = layout.groupRectsByKey.get(childKey);
+      if (childRect !== undefined) required = unionRect(required, childRect);
+    }
+    if (required !== undefined) {
+      layout.groupRectsByKey.set(group.key, snapRectOutward(required, opts.grid, GROUP_MIN_EXTENT));
+    }
+  }
+}
+
+function replaceHeaderPositions(
+  tab: TabSpec,
+  layout: MutableLayout,
+  sectionDerivation: ReturnType<typeof deriveTabSpecSections>,
+  opts: ElkResolvedLayoutOpts,
+): void {
+  const groupBoundsByKey = new Map<string, ElkGroupBounds>();
+  for (const [key, rect] of layout.groupRectsByKey) {
+    groupBoundsByKey.set(key, {
+      position: { x: rect.x1, y: rect.y1 },
+      size: { w: rect.x2 - rect.x1, h: rect.y2 - rect.y1 },
+    });
+  }
+  const headers = placeHeaders(
+    tab,
+    {
+      centerByKey: layout.centersByKey,
+      dimensionsByKey: layout.dimensionsByKey,
+      groupBoundsByKey,
+    },
+    layout.groupRectsByKey,
+    sectionDerivation,
+    opts,
+  );
+  layout.headerCentersByKey.clear();
+  for (const [key, value] of headers.headerCentersByKey) layout.headerCentersByKey.set(key, value);
+  layout.headerDimensionsByKey.clear();
+  for (const [key, value] of headers.headerDimensionsByKey) {
+    layout.headerDimensionsByKey.set(key, value);
+  }
+}
+
+function compactLayoutWidth(
+  tab: TabSpec,
+  layout: PartialLayout,
+  plan: PartitionPlan,
+  sectionDerivation: ReturnType<typeof deriveTabSpecSections>,
+  opts: ElkResolvedLayoutOpts,
+): PartialLayout {
+  if (rectWidth(layout.extent) <= opts.targetWidth) return layout;
+
+  const columns = buildParticipantColumns(layout, opts.grid);
+  if (columns.length <= 1) return layout;
+
+  const minGap = Math.max(opts.grid, opts.nodesep);
+  const deltas = participantColumnDeltas(columns, minGap);
+  if ([...deltas.values()].every((dx) => dx === 0)) return layout;
+
+  const compacted = mutableLayoutFromPartial(layout);
+  for (const [key, dx] of deltas) {
+    const center = compacted.centersByKey.get(key);
+    if (center !== undefined) compacted.centersByKey.set(key, { ...center, x: center.x + dx });
+  }
+
+  refitGroupRectsForCompaction(tab, compacted, plan, opts);
+  replaceHeaderPositions(tab, compacted, sectionDerivation, opts);
+
+  const extent = layoutExtent(compacted);
+  return extent === undefined ? layout : { ...compacted, extent };
+}
+
 function placeHeaders(
   tab: TabSpec,
   core: ElkCoreLayoutResult,
@@ -574,7 +731,9 @@ async function layoutLane(
   if (laneTab === undefined) return undefined;
   const laid = await core(laneTab, opts);
   if (laid === undefined) return 'engine-error';
-  return mutableLayoutFromCore(tab, laid, sectionDerivation, opts);
+  const layout = mutableLayoutFromCore(tab, laid, sectionDerivation, opts);
+  if (layout === undefined) return undefined;
+  return compactLayoutWidth(tab, layout, plan, sectionDerivation, opts);
 }
 
 function stackLayouts(layouts: readonly PartialLayout[], gap: number): PartialLayout[] {
@@ -663,16 +822,17 @@ function expandGroupRectsForContainment(
 
 function emitWidthOverflow(tab: TabSpec, rect: LayoutRect, opts: ElkResolvedLayoutOpts): void {
   const width = rect.x2 - rect.x1;
-  const boundsWidth = opts.bounds.xMax - opts.bounds.xMin;
+  const boundsWidth = opts.targetWidth;
   if (width <= boundsWidth) return;
   opts.onDiagnostic?.({
     severity: 'warning',
     rule: 'layout/width-overflow',
     tabId: tab.id,
-    message: `Layout for tab '${tab.label}' is ${Math.round(width)}px wide, exceeding the ${boundsWidth}px layout bounds.`,
+    message: `Layout for tab '${tab.label}' is ${Math.round(width)}px wide, exceeding the ${boundsWidth}px layout target width.`,
     context: {
       width,
       boundsWidth,
+      targetWidth: boundsWidth,
       overflowPx: width - boundsWidth,
     },
   });
