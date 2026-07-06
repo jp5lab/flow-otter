@@ -69,6 +69,29 @@ Scenario prompts are written down verbatim in the run record so runs are
 comparable across versions. S1–S3 reuse the README showcase prompts — every
 README claim must stay reproducible, or the README changes.
 
+## S6 Scored Mode
+
+Run the scored layout benchmark with:
+
+```bash
+npm run eval:s6 -- --scored
+```
+
+The runner verifies the frozen S6 threshold and protocol hashes before scoring;
+any mismatch refuses scored mode and writes no run record. It then hash-checks
+the manifest fixtures, cross-checks the frozen first-run `layout_lint` baseline,
+and scores both legs through the engine adapter.
+
+Leg A strips layout preference from the fixture flow before re-layout. Leg B is
+derived at runtime by decompiling the fixture, zeroing the annotated spec
+positions, running the spec-level layout path, and compiling it back; rows record
+`spec_source: "derived-zero-coordinate"` so no derived spec has to be committed.
+
+The verdict is `PASS` only when every scored row is not worse than its frozen
+baseline, operator wiring semantics still match, and the crash count is zero.
+The run record and blinded SVG packet artifacts are written under `eval-results/`
+by default; the answer key stays separate from the judging packet.
+
 ## Run record and ledger
 
 One file per run: `eval-results/<date>-<scenario>-<n>.md` containing:

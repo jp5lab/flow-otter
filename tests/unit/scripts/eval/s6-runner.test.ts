@@ -1,7 +1,14 @@
 /**
  * EVAL-4-skeleton — S6 runner CLI plumbing pins.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -12,6 +19,7 @@ import { describe, expect, it } from 'vitest';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../../../');
 const RUNNER = path.join(ROOT, 'scripts/eval/benchmark/run-s6.mjs');
+const THRESHOLDS = path.join(ROOT, 'eval/benchmark/thresholds.json');
 
 function readJson(pathname: string): unknown {
   return JSON.parse(readFileSync(pathname, 'utf8'));
@@ -62,17 +70,28 @@ describe('run-s6.mjs', () => {
     }
   });
 
-  it('refuses scored mode through the LAYO-4 not-yet-implemented path after pristine freeze checks pass', () => {
-    const res = spawnSync(process.execPath, [RUNNER, '--scored'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-    });
-    const output = `${res.stdout}\n${res.stderr}`;
+  it('refuses scored mode on thresholds hash mismatch before writing a run record', () => {
+    const outDir = mkdtempSync(path.join(os.tmpdir(), 'flow-otter-s6-refusal-out-'));
+    const seamDir = mkdtempSync(path.join(os.tmpdir(), 'flow-otter-s6-refusal-seam-'));
+    try {
+      const thresholdsCopy = path.join(seamDir, 'thresholds.json');
+      copyFileSync(THRESHOLDS, thresholdsCopy);
+      writeFileSync(thresholdsCopy, `${readFileSync(thresholdsCopy, 'utf8')}\n`);
 
-    expect(res.status).not.toBe(0);
-    expect(output).toContain(
-      'scored mode not yet implemented (blocked on post-kill-switch engine API, LAYO-4)',
-    );
-    expect(output).not.toContain('S6 freeze verification FAILED');
+      const res = spawnSync(process.execPath, [RUNNER, '--scored', '--out', outDir], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, FLOWOTTER_S6_THRESHOLDS: thresholdsCopy },
+      });
+      const output = `${res.stdout}\n${res.stderr}`;
+
+      expect(res.status).toBe(1);
+      expect(output).toContain('S6 freeze verification FAILED');
+      expect(output).toContain('eval/benchmark/thresholds.json: FAIL');
+      expect(existsSync(path.join(outDir, 's6-run-record.json'))).toBe(false);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+      rmSync(seamDir, { recursive: true, force: true });
+    }
   });
 });

@@ -3,8 +3,14 @@
 export interface LayoutEngineAdapter {
   readonly name: string;
   readonly version: string;
-  layout(strippedSpec: unknown, opts?: unknown): Promise<unknown>;
+  layout(input: unknown, opts?: LayoutEngineAdapterOptions): Promise<unknown>;
+}
+
+export interface LayoutEngineAdapterOptions {
+  readonly kind?: 'flows-json' | 'spec';
+  readonly layoutOptions?: unknown;
 }
 
 export declare const identityAdapter: LayoutEngineAdapter;
+export declare const layoutToolkitAdapter: LayoutEngineAdapter;
 export declare function resolveAdapter(name: string): LayoutEngineAdapter;
