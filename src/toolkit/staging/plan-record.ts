@@ -14,9 +14,14 @@ import path from 'node:path';
 
 import { z } from 'zod';
 
+import { LANE_NAMES } from '../lanes.js';
+import { SpatialScaffoldSchema } from '../layout/spatial-scaffold.js';
+
 const FILENAME = 'plan.json';
 
-const StageSchema = z.object({
+const LaneSchema = z.enum(LANE_NAMES);
+
+const StageV1Schema = z.object({
   name: z.string().min(1),
   purpose: z.string().min(1),
   estimated_nodes: z.number().int().positive(),
@@ -24,15 +29,18 @@ const StageSchema = z.object({
   organization_rationale: z.string().min(1),
 });
 
-export type PlanStage = z.infer<typeof StageSchema>;
+const StageV2Schema = StageV1Schema.extend({
+  lane: LaneSchema.optional(),
+});
 
-export const PlanRecordSchema = z.object({
-  schema_version: z.literal(1),
+export type PlanStageV1 = z.infer<typeof StageV1Schema>;
+export type PlanStage = z.infer<typeof StageV2Schema>;
+
+const PlanRecordBaseSchema = z.object({
   plan_id: z.string().min(1),
   recorded_at: z.string().min(1),
   actor: z.string(),
   goal: z.string().min(1),
-  stages: z.array(StageSchema).min(1),
   total_estimated_nodes: z.number().int().nonnegative(),
   layout_strategy: z.enum(['dagre_auto', 'elk_layered', 'manual']),
   layout_rationale: z.string().min(1),
@@ -40,15 +48,33 @@ export const PlanRecordSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const PlanRecordV1Schema = PlanRecordBaseSchema.extend({
+  schema_version: z.literal(1),
+  stages: z.array(StageV1Schema).min(1),
+});
+
+export const PlanRecordV2Schema = PlanRecordBaseSchema.extend({
+  schema_version: z.literal(2),
+  stages: z.array(StageV2Schema).min(1),
+  spatial_scaffold: SpatialScaffoldSchema,
+});
+
+export const PlanRecordSchema = z.discriminatedUnion('schema_version', [
+  PlanRecordV1Schema,
+  PlanRecordV2Schema,
+]);
+
+export type PlanRecordV1 = z.infer<typeof PlanRecordV1Schema>;
+export type PlanRecordV2 = z.infer<typeof PlanRecordV2Schema>;
 export type PlanRecord = z.infer<typeof PlanRecordSchema>;
 
 function planPath(dir: string): string {
   return path.join(dir, FILENAME);
 }
 
-export async function writePlan(dir: string, record: PlanRecord): Promise<void> {
+export async function writePlan(dir: string, record: PlanRecordV2): Promise<void> {
   await mkdir(dir, { recursive: true });
-  const validated = PlanRecordSchema.parse(record);
+  const validated = PlanRecordV2Schema.parse(record);
   // Atomic write: write to a per-pid tmp file and rename into place. Readers
   // see either the prior file or the new one — never a half-written file.
   // PID is sufficient to avoid intra-process write races without invoking

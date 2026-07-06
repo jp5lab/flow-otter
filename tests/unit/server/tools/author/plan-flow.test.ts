@@ -55,6 +55,7 @@ describe('plan_flow', () => {
             estimated_nodes: 30,
             organization: 'inline',
             organization_rationale: 'Single tab dashboard support logic',
+            lane: 'indicate',
           },
         ],
       },
@@ -63,10 +64,19 @@ describe('plan_flow', () => {
 
     expect(out.layout_strategy).toBe('manual');
     expect(out.layout_rationale).toContain('Auto-layout is not exposed');
+    expect(out.spatial_scaffold.grid).toBe(20);
+    expect(out.spatial_scaffold.pitch).toBe(200);
+    expect(out.spatial_scaffold.stages[1]?.lane).toBe('indicate');
     expect(out.next_actions).toContain(
       'Refine layout with explicit positions, move_node, and add_group geometry.',
     );
+    expect(() => planFlowTool.outputZod?.parse(out)).not.toThrow();
     const stored = await readPlan(ctx.config.STAGING_DIR);
     expect(stored?.layout_strategy).toBe('manual');
+    expect(stored?.schema_version).toBe(2);
+    if (stored?.schema_version === 2) {
+      expect(stored.spatial_scaffold).toEqual(out.spatial_scaffold);
+      expect(stored.stages[1]?.lane).toBe('indicate');
+    }
   });
 });
