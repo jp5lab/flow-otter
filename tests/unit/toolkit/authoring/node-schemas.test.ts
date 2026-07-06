@@ -95,3 +95,79 @@ describe('delay node schema (Node-RED 5.0 burst mode)', () => {
     expect(hasNodeSchema('delay')).toBe(true);
   });
 });
+
+describe('tls-config node schema (Node-RED 5.0 certificate modes)', () => {
+  const schema = getNodeSchema('tls-config')!;
+
+  it('has a registered schema', () => {
+    expect(hasNodeSchema('tls-config')).toBe(true);
+  });
+
+  it('accepts pfx certificate config', () => {
+    const parsed = schema.safeParse({
+      certType: 'pfx',
+      p12: '/certs/client.p12',
+      p12name: 'client.p12',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts env-var certificate config', () => {
+    const parsed = schema.safeParse({
+      certType: 'env',
+      certEnv: 'TLS_CERT',
+      keyEnv: 'TLS_KEY',
+      caEnv: 'TLS_CA',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts SNI, server certificate verification, and ALPN fields', () => {
+    const out = schema.parse({
+      servername: 'mqtt.example.test',
+      verifyservercert: false,
+      alpnprotocol: 'h2,http/1.1',
+    }) as Record<string, unknown>;
+
+    expect(out['servername']).toBe('mqtt.example.test');
+    expect(out['verifyservercert']).toBe(false);
+    expect(out['alpnprotocol']).toBe('h2,http/1.1');
+  });
+
+  it('rejects invalid certType values', () => {
+    for (const certType of ['file', 'pkcs12']) {
+      expect(schema.safeParse({ certType }).success, certType).toBe(false);
+    }
+  });
+
+  it('materializes editor defaults from an empty config', () => {
+    const out = schema.parse({}) as Record<string, unknown>;
+
+    expect(out).toMatchObject({
+      name: '',
+      certType: 'files',
+      cert: '',
+      key: '',
+      ca: '',
+      certname: '',
+      keyname: '',
+      caname: '',
+      p12: '',
+      p12name: '',
+      certEnv: '',
+      keyEnv: '',
+      caEnv: '',
+      servername: '',
+      verifyservercert: true,
+      alpnprotocol: '',
+    });
+  });
+
+  it('does not materialize credential fields', () => {
+    const out = schema.parse({}) as Record<string, unknown>;
+
+    for (const field of ['certdata', 'keydata', 'cadata', 'p12data', 'passphrase']) {
+      expect(out[field], field).toBeUndefined();
+    }
+  });
+});

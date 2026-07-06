@@ -156,11 +156,40 @@ const HttpRequestPassthrough = z
     ret: z.enum(['txt', 'bin', 'obj']).default('txt'),
     paytoqs: z.enum(['ignore', 'query', 'body']).default('ignore'),
     url: z.string().optional(),
+    /** tls-config config-node id. TLS options, including SNI, come from that
+     *  node; SNI is tls-config.servername. http-request itself has no SNI field. */
     tls: z.string().optional(),
     persist: z.boolean().optional(),
     proxy: z.string().optional(),
     authType: z.enum(['none', 'basic', 'digest', 'bearer']).optional(),
     senderr: z.boolean().optional(),
+  })
+  .passthrough();
+
+// === Config nodes ===
+
+const TlsConfigPassthrough = z
+  .object({
+    name: z.string().default(''),
+    /** Editor default is "files" (plural); the runtime falls back to "files"
+     *  when certType is absent. */
+    certType: z.enum(['files', 'pfx', 'env']).default('files'),
+    cert: z.string().default(''),
+    key: z.string().default(''),
+    ca: z.string().default(''),
+    certname: z.string().default(''),
+    keyname: z.string().default(''),
+    caname: z.string().default(''),
+    p12: z.string().default(''),
+    p12name: z.string().default(''),
+    /** Env-var expressions evaluated by Node-RED when certType is "env". */
+    certEnv: z.string().default(''),
+    keyEnv: z.string().default(''),
+    caEnv: z.string().default(''),
+    /** SNI server name; the runtime trims this before use. */
+    servername: z.string().default(''),
+    verifyservercert: z.boolean().default(true),
+    alpnprotocol: z.string().default(''),
   })
   .passthrough();
 
@@ -374,6 +403,7 @@ export const NODE_SCHEMAS: Readonly<Record<string, z.ZodTypeAny>> = Object.freez
   'http in': HttpInPassthrough,
   'http response': HttpResponsePassthrough,
   'http request': HttpRequestPassthrough,
+  'tls-config': TlsConfigPassthrough,
   csv: CsvPassthrough,
   json: JsonPassthrough,
   xml: XmlPassthrough,

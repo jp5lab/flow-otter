@@ -132,6 +132,21 @@ describe('add_config_node tool', () => {
     expect(await ctx.staging.read()).toBeNull();
   });
 
+  it('rejects credentials in tls-config passthrough without staging', async () => {
+    await expect(
+      addConfigNodeTool.handler(
+        {
+          key: 'tls-main',
+          type: 'tls-config',
+          passthrough: { credentials: { passphrase: 'secret' } },
+        },
+        ctx,
+      ),
+    ).rejects.toThrow(/credentials.*not authored/i);
+
+    expect(await ctx.staging.read()).toBeNull();
+  });
+
   it('validates passthrough against NODE_SCHEMAS when the type is registered', async () => {
     await expect(
       addConfigNodeTool.handler(
@@ -145,6 +160,50 @@ describe('add_config_node tool', () => {
     ).rejects.toThrow(/passthrough for type 'change' failed schema validation/);
 
     expect(await ctx.staging.read()).toBeNull();
+  });
+
+  it('validates tls-config passthrough against its registered schema', async () => {
+    const out = (await addConfigNodeTool.handler(
+      {
+        key: 'tls-main',
+        type: 'tls-config',
+        label: 'TLS Main',
+        passthrough: {
+          certType: 'pfx',
+          p12: '/certs/client.p12',
+          p12name: 'client.p12',
+          servername: 'api.example.test',
+          verifyservercert: false,
+          alpnprotocol: 'h2',
+        },
+      },
+      ctx,
+    )) as {
+      ok: boolean;
+      added_config_node_id?: string;
+      type_had_schema: boolean;
+      diff_summary: { nodes_added: number };
+    };
+
+    expect(out.ok).toBe(true);
+    expect(out.type_had_schema).toBe(true);
+    expect(out.diff_summary.nodes_added).toBe(1);
+
+    const staged = await ctx.staging.read();
+    const configNode = staged?.flows.find((n) => n.id === out.added_config_node_id) as
+      | Record<string, unknown>
+      | undefined;
+    expect(configNode).toMatchObject({
+      type: 'tls-config',
+      name: 'TLS Main',
+      certType: 'pfx',
+      p12: '/certs/client.p12',
+      p12name: 'client.p12',
+      servername: 'api.example.test',
+      verifyservercert: false,
+      alpnprotocol: 'h2',
+      _authoringKey: 'tls-main',
+    });
   });
 
   it('stages a config node and emits no canvas fields', async () => {
