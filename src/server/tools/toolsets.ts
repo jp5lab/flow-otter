@@ -105,6 +105,7 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
     tool_names: [
       'plan_flow',
       'add_node',
+      'add_config_node',
       'add_subflow_instance',
       'add_group',
       'add_comment',
@@ -115,6 +116,7 @@ export const TOOLSETS: Record<ToolsetName, Toolset> = {
       'stage_changes',
       'remove_node',
       'update_node',
+      'update_tab',
       'discard_staged_change',
       'move_node',
       'update_group',

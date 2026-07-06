@@ -27,7 +27,7 @@ export const NODE_RED_CONCEPTS: readonly ConceptEntry[] = [
     name: 'tab',
     purpose:
       'Top-level workspace organizational unit (also called "flow"). Holds nodes, groups, comments. Has optional info (Markdown) and per-tab env vars.',
-    flow_otter_tools: ['list_flows', 'get_flow', 'create_flow'],
+    flow_otter_tools: ['list_flows', 'get_flow', 'create_flow', 'update_tab'],
   },
   {
     name: 'node',
@@ -94,9 +94,9 @@ export const NODE_RED_CONCEPTS: readonly ConceptEntry[] = [
     name: 'config_node',
     purpose:
       'Reusable shared config (MQTT broker, HTTP auth, TLS, etc.). Lives outside any tab; referenced by id from regular nodes.',
-    flow_otter_tools: ['add_node'],
+    flow_otter_tools: ['add_config_node'],
     notes:
-      'FlowOtter treats config nodes as a special type via add_node. Per-instance overrides inside subflow instances are 4.0+.',
+      'Use add_config_node for global config nodes. FlowOtter does NOT author credentials. Per-instance overrides inside subflow instances are 4.0+.',
   },
   {
     name: 'credential',
@@ -967,8 +967,15 @@ export const METHODOLOGY: MethodologyEntry = {
     },
     {
       name: 'structure',
-      description: 'Add nodes (without wires). Use generic add_node by default.',
-      tools: ['add_node', 'add_subflow_instance', 'add_dashboard_widget', 'add_comment'],
+      description:
+        'Add nodes (without wires) and any shared config nodes. Use generic add_node by default for canvas nodes.',
+      tools: [
+        'add_node',
+        'add_config_node',
+        'add_subflow_instance',
+        'add_dashboard_widget',
+        'add_comment',
+      ],
     },
     {
       name: 'wire',

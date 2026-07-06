@@ -8,6 +8,7 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'add_catch_node',
   'add_comment',
   'add_complete_node',
+  'add_config_node',
   'add_dashboard_widget',
   'add_debug_node',
   'add_function_node',
@@ -32,6 +33,7 @@ const EXPECTED_STAGED_AUTHOR_TOOLS = [
   'update_comment',
   'update_group',
   'update_node',
+  'update_tab',
   'wire_nodes',
 ] as const;
 

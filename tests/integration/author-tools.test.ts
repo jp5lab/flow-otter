@@ -83,6 +83,14 @@ const BASE_FLOWS: FlowsJson = [
     name: 'Existing note',
     _authoringKey: 'existing-note',
   },
+  {
+    id: '9999999999999999',
+    type: 'mqtt-broker',
+    name: 'Existing Broker',
+    broker: 'localhost',
+    port: '1883',
+    _authoringKey: 'existing-broker',
+  },
 ];
 
 const AUTHOR_TOOL_CASES: readonly {
@@ -103,6 +111,15 @@ const AUTHOR_TOOL_CASES: readonly {
     input: { tab_id: TAB_1, opts: { label: 'Link Call', passthrough: { links: [LINK_IN_ID] } } },
   },
   { name: 'add_subflow_instance', input: { tab_id: TAB_1, defId: SUBFLOW_ID } },
+  {
+    name: 'add_config_node',
+    input: {
+      key: 'broker-main',
+      type: 'mqtt-broker',
+      label: 'Broker',
+      passthrough: { broker: 'localhost', port: '1883' },
+    },
+  },
   { name: 'add_group', input: { tab_id: TAB_1, name: 'Group' } },
   { name: 'add_comment', input: { tab_id: TAB_1, text: 'Comment', position: { x: 100, y: 420 } } },
   { name: 'wire_nodes', input: { tab_id: TAB_1, from_key: 'source', to_key: 'target' } },
@@ -110,6 +127,15 @@ const AUTHOR_TOOL_CASES: readonly {
   {
     name: 'update_node',
     input: { tab_id: TAB_1, node_key: 'source', label: 'Source Updated' },
+  },
+  {
+    name: 'update_tab',
+    input: {
+      tab_id: TAB_1,
+      label: 'Main Updated',
+      info: 'Updated tab info',
+      env: [{ name: 'MODE', type: 'str', value: 'test' }],
+    },
   },
   {
     name: 'move_node',
@@ -228,6 +254,59 @@ describe('author tools end-to-end', () => {
       expect(canonicalHash(await fetchRuntimeFlows())).toBe(initialHash);
     });
   }
+
+  it('add_config_node stages a global config node without canvas fields', async () => {
+    const staged = (await callTool(rig.registry, rig.container, 'add_config_node', {
+      key: 'broker-explicit',
+      type: 'mqtt-broker',
+      label: 'Broker',
+      passthrough: { broker: 'localhost', port: '1883' },
+    })) as StageResult & { added_config_node_id?: string };
+    expect(staged.ok).toBe(true);
+    expect(staged.added_config_node_id).toBeDefined();
+
+    const pending = await rig.container.staging.read();
+    const configNode = pending?.flows.find((n) => n.id === staged.added_config_node_id) as
+      | Record<string, unknown>
+      | undefined;
+    expect(configNode).toMatchObject({
+      type: 'mqtt-broker',
+      name: 'Broker',
+      broker: 'localhost',
+      _authoringKey: 'broker-explicit',
+    });
+    for (const field of ['x', 'y', 'z', 'wires'] as const) {
+      expect(configNode?.[field]).toBeUndefined();
+    }
+
+    await callTool(rig.registry, rig.container, 'discard_staged_change', {
+      staged_hash: staged.staged_hash,
+    });
+  });
+
+  it('update_tab stages label info and env updates', async () => {
+    const staged = (await callTool(rig.registry, rig.container, 'update_tab', {
+      tab_id: TAB_1,
+      label: 'Main Explicit',
+      info: 'Explicit tab info',
+      env: [{ name: 'MODE', type: 'str', value: 'integration' }],
+    })) as StageResult & { updated: boolean; updated_tab_id: string };
+    expect(staged.ok).toBe(true);
+    expect(staged.updated).toBe(true);
+    expect(staged.updated_tab_id).toBe(TAB_1);
+
+    const pending = await rig.container.staging.read();
+    expect(pending?.flows.find((n) => n.id === TAB_1)).toMatchObject({
+      type: 'tab',
+      label: 'Main Explicit',
+      info: 'Explicit tab info',
+      env: [{ name: 'MODE', type: 'str', value: 'integration' }],
+    });
+
+    await callTool(rig.registry, rig.container, 'discard_staged_change', {
+      staged_hash: staged.staged_hash,
+    });
+  });
 
   it('all D author tools are registered and listable', () => {
     const names = rig.registry.listTools().map((t) => t.name);
