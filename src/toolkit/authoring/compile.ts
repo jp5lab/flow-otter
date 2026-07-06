@@ -1,4 +1,5 @@
 import {
+  configByReferenceIds,
   type CommentNode,
   type FlowsJson,
   type FlowsJsonNode,
@@ -7,6 +8,7 @@ import {
   type RegularNode,
   type TabNode,
   SUBFLOW_INSTANCE_PREFIX,
+  isConfigShapedNode,
 } from '../../shared/flows-json.js';
 import { canonicalHash } from '../../shared/hash.js';
 import { generateNodeId } from '../../shared/ids.js';
@@ -95,6 +97,7 @@ export interface CompileResult {
 
 type Kind = 'tab' | 'node' | 'group' | 'comment' | 'subflowDef' | 'config' | 'junction';
 type BaselineScope = 'global' | 'tab' | 'subflow' | 'unknown';
+const CONFIG_CANVAS_FIELDS = new Set(['z', 'x', 'y', 'wires']);
 
 const AMBIGUOUS = Symbol('ambiguous');
 type ByKindKeyVal = string | typeof AMBIGUOUS;
@@ -150,13 +153,13 @@ interface SubflowResolvedIds {
   readonly junctionKeyToId: Map<string, string>;
 }
 
-function kindOf(node: FlowsJsonNode): Kind {
+function kindOf(node: FlowsJsonNode, referencedConfigIds?: ReadonlySet<string>): Kind {
   if (node.type === 'tab') return 'tab';
   if (node.type === 'subflow') return 'subflowDef';
   if (node.type === 'group') return 'group';
   if (node.type === 'comment') return 'comment';
   if (node.type === 'junction') return 'junction';
-  if (!('z' in node) && !('x' in node) && !('y' in node) && !('wires' in node)) return 'config';
+  if (isConfigShapedNode(node, referencedConfigIds)) return 'config';
   return 'node';
 }
 
@@ -204,6 +207,7 @@ function buildPriorIndex(
     tombstones: new Set(tombstones.map((t) => tombstoneKey(t.tabId, t.kind, t.key))),
   };
   if (!prior) return idx;
+  const referencedConfigIds = configByReferenceIds(prior);
   const tabIds = new Set<string>();
   const subflowDefIds = new Set<string>();
   for (const node of prior) {
@@ -214,7 +218,7 @@ function buildPriorIndex(
     idx.allIds.add(node.id);
     const ext = (node as Record<string, unknown>)[AUTHORING_KEY_FIELD];
     if (typeof ext !== 'string') continue;
-    const kind = kindOf(node);
+    const kind = kindOf(node, referencedConfigIds);
     const containerId =
       kind === 'tab' || kind === 'subflowDef' || kind === 'config'
         ? node.id
@@ -509,9 +513,37 @@ function emitSubflowDef(spec: SubflowDefSpec, id: string): FlowsJsonNode {
   };
 }
 
-function emitConfigNode(spec: ConfigNodeSpec, id: string): RegularNode {
+function configPassthroughForEmit(
+  passthrough: ConfigNodeSpec['passthrough'],
+  preserveCanvasFields: boolean,
+): Record<string, unknown> {
+  const out = { ...(passthrough ?? {}) };
+  if (!preserveCanvasFields) {
+    for (const field of CONFIG_CANVAS_FIELDS) delete out[field];
+  }
+  return out;
+}
+
+function shouldPreservePriorConfigCanvasFields(
+  prior: FlowsJson | undefined,
+  id: string,
+  referencedConfigIds: ReadonlySet<string>,
+): boolean {
+  const priorNode = prior?.find((n) => n.id === id);
+  if (priorNode === undefined || !isConfigShapedNode(priorNode, referencedConfigIds)) return false;
+  for (const field of CONFIG_CANVAS_FIELDS) {
+    if (field in priorNode) return true;
+  }
+  return false;
+}
+
+function emitConfigNode(
+  spec: ConfigNodeSpec,
+  id: string,
+  preserveCanvasFields = false,
+): RegularNode {
   const node: Record<string, unknown> = {
-    ...(spec.passthrough ?? {}),
+    ...configPassthroughForEmit(spec.passthrough, preserveCanvasFields),
     id,
     type: spec.type,
     [AUTHORING_KEY_FIELD]: spec.key,
@@ -628,6 +660,8 @@ function portCountForNode(
 export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): CompileResult {
   const strategy = opts.idStrategy ?? 'hash';
   const prior = buildPriorIndex(opts.prior, opts.idTombstones);
+  const priorConfigRefIds =
+    opts.prior !== undefined ? configByReferenceIds(opts.prior) : new Set<string>();
   const flows: FlowsJsonNode[] = [];
   const diagnostics: CompileDiagnostic[] = [];
   const subflowDefOutCount = buildSubflowDefOutCount(spec.subflowDefs);
@@ -907,7 +941,13 @@ export function compile(spec: AuthoringSpec, opts: CompileOptions = {}): Compile
   for (const configSpec of spec.configNodes ?? []) {
     const id = configKeyToId.get(configSpec.key);
     if (id === undefined) continue;
-    flows.push(emitConfigNode(configSpec, id));
+    flows.push(
+      emitConfigNode(
+        configSpec,
+        id,
+        shouldPreservePriorConfigCanvasFields(opts.prior, id, priorConfigRefIds),
+      ),
+    );
   }
 
   for (const defSpec of spec.subflowDefs ?? []) {

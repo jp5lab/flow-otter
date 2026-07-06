@@ -1,4 +1,8 @@
-import type { FlowsJson } from '../../../shared/flows-json.js';
+import {
+  configByReferenceIds,
+  isConfigShapedNode,
+  type FlowsJson,
+} from '../../../shared/flows-json.js';
 import { canonicalHash } from '../../../shared/hash.js';
 import { compile, type CompileIdTombstone } from '../../../toolkit/authoring/compile.js';
 import { decompile } from '../../../toolkit/authoring/decompile.js';
@@ -377,6 +381,15 @@ export function findNewNodeId(
     if ((n as { z?: string }).z !== tabId) continue;
     const ext = (n as Record<string, unknown>)['_authoringKey'];
     if (ext === authoringKey) return n.id;
+  }
+  return undefined;
+}
+
+export function findNewConfigNodeId(flows: FlowsJson, authoringKey: string): string | undefined {
+  const configIds = configByReferenceIds(flows);
+  for (const n of flows) {
+    const ext = (n as Record<string, unknown>)['_authoringKey'];
+    if (ext === authoringKey && isConfigShapedNode(n, configIds)) return n.id;
   }
   return undefined;
 }

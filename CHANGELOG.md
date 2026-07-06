@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### WSB-8 — Config nodes stay off-canvas
+
+- `add_node` now treats known config-node types such as `mqtt-broker`, Dashboard config nodes, and `tls-config` as global `configNodes` instead of tab canvas nodes, so newly staged config nodes no longer receive junk `x`/`y`/`z`/`wires` fields or renderable workspace placement. The generic tool still returns `added_node_id`, now resolved through a config-node lookup when the add operation produced a global config entry.
+- Decompile/compile now share the config-shape detector used for the e1#9 root cause: ordinary config shape, known config types, and config-by-reference ids all classify as config nodes. Compile strips canvas fields from new config entries, but preserves stamped canvas bytes when they came from the prior flow, so adopted historical flows stay byte-identical instead of being retroactively scrubbed.
+- Added WSB-8 regressions for staged `mqtt-broker` creation with no canvas fields and the canonical e1 decompile→compile fixed point with the historical stamped broker preserved.
+
 ### WSB-7 — `explain_flow` walks junction edges
 
 - `explain_flow` now walks junction nodes through the same wire helper used by structural analysis, so junctions appear as real hop-by-hop nodes in the report (`node → junction`, `junction → node`) instead of being collapsed or skipped. Entrypoint/sink/orphan classification now counts junction-mediated reachability, fixing the canonical e2 `e2spag001`/`e2n12` regression where the downstream alarm chain was split off and the junction was treated as a terminal sink. Read-only analysis only; no staging/deploy path touched.

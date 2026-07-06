@@ -10,6 +10,7 @@ import {
   type NodeKeyResolutionGuidance,
 } from './_node-key-resolution.js';
 import {
+  findNewConfigNodeId,
   findNewNodeId,
   resolveTabId,
   runStagedAuthorOp,
@@ -69,7 +70,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const addNodeTool: Tool<Input, Output> = {
   name: 'add_node',
   description: withStagedAuthorToolDescription(
-    'Generic node-add: stages a new node of any Node-RED type on a tab. Pass `type` (e.g. "change", "switch", "http in") and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
+    'Generic node-add: stages a new node of any Node-RED type on a tab; known config-node types (e.g. "mqtt-broker") are staged globally without canvas fields. Pass `type` (e.g. "change", "switch", "http in") and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
   ),
   tier: 'author',
   inputZod: InputSchema,
@@ -112,6 +113,7 @@ export const addNodeTool: Tool<Input, Output> = {
         tabId: string;
         newNodeKey: string;
         wired: boolean;
+        kind: 'node' | 'config';
         typeHadSchema: boolean;
         guidance: readonly NodeKeyResolutionGuidance[];
       },
@@ -185,11 +187,15 @@ export const addNodeTool: Tool<Input, Output> = {
           spec: nextSpec,
           newNodeKey,
           wired,
+          kind,
         } = addNode(priorSpec, tabId, input.type, addOpts);
-        return { nextSpec, extras: { tabId, newNodeKey, wired, typeHadSchema, guidance } };
+        return { nextSpec, extras: { tabId, newNodeKey, wired, kind, typeHadSchema, guidance } };
       },
       (base, extras) => {
-        const newNodeId = findNewNodeId(base.compiledFlows, extras.tabId, extras.newNodeKey);
+        const newNodeId =
+          extras.kind === 'config'
+            ? findNewConfigNodeId(base.compiledFlows, extras.newNodeKey)
+            : findNewNodeId(base.compiledFlows, extras.tabId, extras.newNodeKey);
         return attachNodeKeyResolutionGuidance(
           {
             ok: base.ok,

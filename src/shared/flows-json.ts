@@ -14,6 +14,38 @@ import { z } from 'zod';
 export const SUBFLOW_INSTANCE_PREFIX = 'subflow:';
 export const RESERVED_TYPES = new Set(['tab', 'subflow', 'group', 'comment', 'junction']);
 
+const KNOWN_CONFIG_NODE_TYPES: ReadonlySet<string> = new Set([
+  'mqtt-broker',
+  'tls-config',
+  'ui-base',
+  'ui-page',
+  'ui-group',
+  'ui-theme',
+  'ui_base',
+  'ui_tab',
+  'ui_group',
+  'ui_theme',
+]);
+
+/**
+ * Scalar string props under these keys never mark their target as a config
+ * node: wiring/topology (`wires`, `links`, `scope`), placement (`g`, `z`),
+ * flags (`d`) and the node's own `id`.
+ */
+export const CONFIG_REF_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
+  'wires',
+  'links',
+  'scope',
+  'g',
+  'z',
+  'd',
+  'id',
+]);
+
+export function isKnownConfigNodeType(type: string): boolean {
+  return KNOWN_CONFIG_NODE_TYPES.has(type);
+}
+
 /**
  * Subflow `env` entry — typed environment-variable definition. The closed
  * `envType` set is `{str, num, bool, json, env, cred, jsonata, conf-type}`;
@@ -235,4 +267,30 @@ export function isRegularNode(n: FlowsJsonNode): n is RegularNode {
 export function isConfigNode(n: FlowsJsonNode): n is RegularNode {
   if (isTab(n) || isSubflowDef(n) || isGroup(n) || isComment(n) || isJunction(n)) return false;
   return !('x' in n) && !('y' in n) && !('wires' in n);
+}
+
+/**
+ * Ids of nodes referenced from another node's scalar string prop. This catches
+ * adopted config nodes that were historically stamped with canvas fields.
+ */
+export function configByReferenceIds(flows: FlowsJson): Set<string> {
+  const ids = new Set<string>();
+  for (const n of flows) ids.add(n.id);
+  const referenced = new Set<string>();
+  for (const n of flows) {
+    for (const [key, value] of Object.entries(n)) {
+      if (CONFIG_REF_EXCLUDED_KEYS.has(key)) continue;
+      if (typeof value === 'string' && value !== n.id && ids.has(value)) referenced.add(value);
+    }
+  }
+  return referenced;
+}
+
+export function isConfigShapedNode(
+  n: FlowsJsonNode,
+  referencedConfigIds?: ReadonlySet<string>,
+): n is RegularNode {
+  const { id, type } = n;
+  if (isTab(n) || isSubflowDef(n) || isGroup(n) || isComment(n) || isJunction(n)) return false;
+  return isConfigNode(n) || isKnownConfigNodeType(type) || referencedConfigIds?.has(id) === true;
 }

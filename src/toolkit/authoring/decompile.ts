@@ -1,4 +1,5 @@
 import {
+  configByReferenceIds,
   type CommentNode,
   type FlowsJson,
   type FlowsJsonNode,
@@ -8,7 +9,7 @@ import {
   type SubflowDefNode,
   type TabNode,
   isComment,
-  isConfigNode,
+  isConfigShapedNode,
   isGroup,
   isJunction,
   isRegularNode,
@@ -143,6 +144,7 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
   const subflowDefsById = new Map<string, SubflowDefNode>();
   const configNodes: RegularNode[] = [];
   const buckets = new Map<string, TabBuckets>();
+  const configIds = configByReferenceIds(flows);
 
   for (const node of flows) {
     if (isTab(node)) {
@@ -156,7 +158,7 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
 
   for (const node of flows) {
     if (isTab(node) || isSubflowDef(node)) continue;
-    if (isConfigNode(node)) {
+    if (isConfigShapedNode(node, configIds)) {
       configNodes.push(node);
       continue;
     }

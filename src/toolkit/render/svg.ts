@@ -28,9 +28,10 @@
  * transform attribute.
  */
 import {
+  configByReferenceIds,
   hasCanvasPosition,
   isComment,
-  isConfigNode,
+  isConfigShapedNode,
   isGroup,
   isJunction,
   isRegularNode,
@@ -82,21 +83,6 @@ const TYPE_COLOR: Readonly<Record<string, string>> = {
   comment: '#ffffff',
   default: '#dddddd',
 };
-
-/**
- * Scalar string props under these keys never mark their target as a config
- * node: wiring/topology (`wires`, `links`, `scope`), placement (`g`, `z`),
- * flags (`d`) and the node's own `id`.
- */
-const CONFIG_REF_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
-  'wires',
-  'links',
-  'scope',
-  'g',
-  'z',
-  'd',
-  'id',
-]);
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? n.toString() : n.toFixed(2);
@@ -262,25 +248,6 @@ export function renderGeometry(flows: FlowsJson, tabId?: string): RenderGeometry
   return computeTabGeometry(tab, flows).entries;
 }
 
-/**
- * Ids of nodes referenced from ANOTHER node's scalar string prop — the
- * config-by-reference exclusion (e1#9 renderer-side workaround; WSB-8 owns
- * the root cause). Self-references (`_authoringKey` equals the node's own id
- * on adopted flows) never count.
- */
-function configByReferenceIds(flows: FlowsJson): Set<string> {
-  const ids = new Set<string>();
-  for (const n of flows) ids.add(n.id);
-  const referenced = new Set<string>();
-  for (const n of flows) {
-    for (const [key, value] of Object.entries(n)) {
-      if (CONFIG_REF_EXCLUDED_KEYS.has(key)) continue;
-      if (typeof value === 'string' && value !== n.id && ids.has(value)) referenced.add(value);
-    }
-  }
-  return referenced;
-}
-
 function wiresOf(n: FlowsJsonNode): string[][] {
   const wires = (n as { wires?: unknown }).wires;
   if (!Array.isArray(wires)) return [];
@@ -356,7 +323,7 @@ function computeTabGeometry(tab: TabNode, flows: FlowsJson): TabGeometry {
     }
     // Config nodes never render: config-by-reference is the primary signal
     // (stamped canvas fields, e1#9); the shape checks are belt-and-braces.
-    if (configIds.has(n.id) || isConfigNode(n) || !isRegularNode(n)) continue;
+    if (isConfigShapedNode(n, configIds) || !isRegularNode(n)) continue;
 
     const rec = n as Record<string, unknown>;
     let inputs: number;

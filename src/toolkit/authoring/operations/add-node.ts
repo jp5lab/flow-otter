@@ -1,6 +1,7 @@
+import { isKnownConfigNodeType } from '../../../shared/flows-json.js';
 import { snapToGrid } from '../../layout/grid.js';
 import { placeRightOf } from '../../layout/placement.js';
-import type { AuthoringSpec, ConnectionSpec, NodeSpec, TabSpec } from '../types.js';
+import type { AuthoringSpec, ConfigNodeSpec, ConnectionSpec, NodeSpec, TabSpec } from '../types.js';
 
 export interface AddNodeOpts {
   /** Caller-supplied stable key. If omitted, derives from type. */
@@ -24,6 +25,7 @@ export interface AddNodeResult {
   newNodeKey: string;
   /** True when a wire was added because sourceNodeKey was supplied. */
   wired: boolean;
+  kind: 'node' | 'config';
 }
 
 class AddNodeError extends Error {
@@ -69,6 +71,26 @@ export function addNode(
   const takenKeys = new Set(tab.nodes.map((n) => n.key));
   const baseKey = opts.key ?? deriveBaseKey(type, opts.label);
   const newKey = uniqueKey(baseKey, takenKeys);
+
+  if (isKnownConfigNodeType(type)) {
+    if (opts.sourceNodeKey !== undefined) {
+      throw new AddNodeError(`Config node type '${type}' cannot be wired from sourceNodeKey.`);
+    }
+    const takenConfigKeys = new Set((spec.configNodes ?? []).map((n) => n.key));
+    const configKey = uniqueKey(baseKey, takenConfigKeys);
+    const newConfigNode: ConfigNodeSpec = {
+      key: configKey,
+      type,
+      ...(opts.label !== undefined ? { label: opts.label } : {}),
+      ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),
+    };
+    return {
+      spec: { ...spec, configNodes: [...(spec.configNodes ?? []), newConfigNode] },
+      newNodeKey: configKey,
+      wired: false,
+      kind: 'config',
+    };
+  }
 
   let position: { x: number; y: number };
   if (opts.position) {
@@ -119,5 +141,6 @@ export function addNode(
     spec: { ...spec, tabs: updatedTabs },
     newNodeKey: newKey,
     wired,
+    kind: 'node',
   };
 }

@@ -64,6 +64,34 @@ describe('canonical e1 fixture: decompile → compile byte identity (REND-2 safe
     expect(canonicalJson(out.flows)).toBe(canonicalJson(flows));
   });
 
+  it('preserves the historical stamped mqtt-broker canvas fields byte-identically', () => {
+    const brokerBefore = flows.find((n) => n.type === 'mqtt-broker') as
+      | Record<string, unknown>
+      | undefined;
+    expect(brokerBefore).toBeDefined();
+    expect(brokerBefore?.['x']).toBe(540);
+    expect(brokerBefore?.['y']).toBe(660);
+    expect(brokerBefore?.['z']).toBe('f6f2187d.f17ca8');
+    expect(brokerBefore?.['wires']).toEqual([[]]);
+
+    const spec = decompile(flows);
+    const brokerSpec = spec.configNodes?.find((n) => n.key === 'broker_main');
+    expect(brokerSpec?.type).toBe('mqtt-broker');
+    expect(spec.tabs.flatMap((t) => t.nodes).some((n) => n.key === 'broker_main')).toBe(false);
+
+    const out = compile(spec, { prior: flows });
+    const brokerAfter = out.flows.find((n) => n.id === brokerBefore?.['id']) as
+      | Record<string, unknown>
+      | undefined;
+    expect(brokerAfter).toBeDefined();
+    expect(brokerAfter?.['type']).toBe('mqtt-broker');
+    expect(brokerAfter?.['x']).toBe(brokerBefore?.['x']);
+    expect(brokerAfter?.['y']).toBe(brokerBefore?.['y']);
+    expect(brokerAfter?.['z']).toBe(brokerBefore?.['z']);
+    expect(brokerAfter?.['wires']).toEqual(brokerBefore?.['wires']);
+    expect(canonicalJson(out.flows)).toBe(canonicalJson(flows));
+  });
+
   it('preserves every node id and _authoringKey exactly', () => {
     const out = compile(decompile(flows), { prior: flows });
     const priorById = new Map(flows.map((n) => [n.id, n]));
