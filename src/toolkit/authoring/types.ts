@@ -36,6 +36,8 @@ export interface NodeSpec {
   readonly type: string;
   /** Visible label (≤ 24 chars by default; enforced by `label-cap` validator). */
   readonly label?: string;
+  /** Per-node info annotation (Markdown; Node-RED 4.1+ renders info badges). */
+  readonly info?: string;
   readonly position: Position;
   /** Membership in a group declared in the same TabSpec. */
   readonly groupKey?: string;
@@ -141,6 +143,9 @@ export interface TabSpec {
 export interface SubflowDefSpec {
   readonly id: string;
   readonly name: string;
+  readonly info?: string;
+  /** Subflow-level typed environment variable declarations. */
+  readonly env?: readonly TabEnvEntry[];
   readonly nodes: readonly NodeSpec[];
   readonly connections: readonly ConnectionSpec[];
   readonly junctions?: readonly JunctionSpec[];

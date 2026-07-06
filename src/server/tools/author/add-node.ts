@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
+import type { RuntimeNodeDefaults } from '../../../adapters/nodered/capabilities.js';
 import { getNodeSchema } from '../../../toolkit/authoring/node-schemas.js';
 import { addNode } from '../../../toolkit/authoring/operations/add-node.js';
 import { type Tool, ValidationFailedError } from '../_tool.js';
+import { getOrProbeRuntimeInfo } from '../../runtime-info.js';
 
 import {
   attachNodeKeyResolutionGuidance,
@@ -26,6 +28,7 @@ const InputSchema = z
       .object({
         key: z.string().min(1).optional(),
         label: z.string().max(24).optional(),
+        info: z.string().optional(),
         position: z.object({ x: z.number().int(), y: z.number().int() }).strict().optional(),
         group_key: z.string().min(1).optional(),
         passthrough: z.record(z.unknown()).optional(),
@@ -47,6 +50,8 @@ const DiagnosticSchema = z.object({
   context: z.record(z.unknown()).optional(),
 });
 
+const DefaultsAppliedFromSchema = z.record(z.enum(['schema', 'settings']));
+
 const OutputSchema = z.object({
   ok: z.boolean(),
   staged_hash: z.string(),
@@ -62,6 +67,7 @@ const OutputSchema = z.object({
   added_node_id: z.string().optional(),
   added_wire: z.object({ from: z.string(), output_port: z.number(), to: z.string() }).optional(),
   type_had_schema: z.boolean(),
+  defaults_applied_from: DefaultsAppliedFromSchema,
   diagnostics: z.array(DiagnosticSchema),
   render: StageRenderOutputSchema,
 });
@@ -70,7 +76,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const addNodeTool: Tool<Input, Output> = {
   name: 'add_node',
   description: withStagedAuthorToolDescription(
-    'Generic node-add: stages a new node of any Node-RED type on a tab; known config-node types (e.g. "mqtt-broker") are staged globally without canvas fields. Pass `type` (e.g. "change", "switch", "http in") and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
+    'Generic node-add: stages a new node of any Node-RED type on a tab; known config-node types (e.g. "mqtt-broker") are staged globally without canvas fields. Pass `type` (e.g. "change", "switch", "http in"), optional `opts.info` for Node-RED info text, and optional `opts.passthrough` for per-type config. If a per-type Zod schema is registered for the node type, `passthrough` is validated against it; runtime nodeDefaults settings are merged when the target supports nodeDefaultsOverride. Output defaults_applied_from reports schema/settings default sources. Optionally wires from `opts.source_node_id`. Does NOT deploy.',
   ),
   tier: 'author',
   inputZod: InputSchema,
@@ -92,6 +98,10 @@ export const addNodeTool: Tool<Input, Output> = {
         properties: {
           key: { type: 'string', minLength: 1 },
           label: { type: 'string', maxLength: 24 },
+          info: {
+            type: 'string',
+            description: 'Node info annotation shown in the Node-RED info sidebar.',
+          },
           position: {
             type: 'object',
             additionalProperties: false,
@@ -115,45 +125,27 @@ export const addNodeTool: Tool<Input, Output> = {
         wired: boolean;
         kind: 'node' | 'config';
         typeHadSchema: boolean;
+        defaultsAppliedFrom: Record<string, 'schema' | 'settings'>;
         guidance: readonly NodeKeyResolutionGuidance[];
       },
       Output
     >(
       ctx,
       { toolName: 'add_node', reason: `add_node:${input.type}` },
-      (priorSpec, priorFlows) => {
+      async (priorSpec, priorFlows) => {
         const tabId = resolveTabId(priorFlows, input.tab_id);
         if (!tabId) {
           throw new ValidationFailedError(`Tab '${input.tab_id}' not found in current flows.`, []);
         }
         rejectCredentialsPassthrough(input.type, input.opts?.passthrough);
 
-        // Validate passthrough against per-type schema if registered. When
-        // the caller omits passthrough entirely, ATTEMPT parse({}) so the
-        // schema's runtime-required defaults (inject.repeat, complete.scope,
-        // link links arrays, …) materialize — agents shouldn't need to know
-        // them. Schemas with required fields and no defaults (e.g. change's
-        // rules) simply skip materialization; omitting passthrough is never
-        // an error.
-        const schema = getNodeSchema(input.type);
-        const typeHadSchema = schema !== undefined;
-        let validatedPassthrough: Record<string, unknown> | undefined = input.opts?.passthrough;
-        if (schema !== undefined && input.opts?.passthrough !== undefined) {
-          const parseResult = schema.safeParse(input.opts.passthrough);
-          if (!parseResult.success) {
-            const issues = parseResult.error.issues
-              .map((i) => `${i.path.join('.')}: ${i.message}`)
-              .join('; ');
-            throw new ValidationFailedError(
-              `passthrough for type '${input.type}' failed schema validation: ${issues}`,
-              parseResult.error.issues,
-            );
-          }
-          validatedPassthrough = parseResult.data as Record<string, unknown>;
-        } else if (schema !== undefined) {
-          const empty = schema.safeParse({});
-          if (empty.success) validatedPassthrough = empty.data as Record<string, unknown>;
-        }
+        const probe = await getOrProbeRuntimeInfo(ctx.container, ctx.clock);
+        const materialized = materializeNodePassthrough(
+          input.type,
+          input.opts?.passthrough,
+          probe.info?.node_defaults,
+        );
+        rejectCredentialsPassthrough(input.type, materialized.passthrough);
 
         let sourceKey: string | undefined;
         let guidance: readonly NodeKeyResolutionGuidance[] = [];
@@ -176,9 +168,10 @@ export const addNodeTool: Tool<Input, Output> = {
         const addOpts: Parameters<typeof addNode>[3] = {};
         if (input.opts?.key !== undefined) addOpts.key = input.opts.key;
         if (input.opts?.label !== undefined) addOpts.label = input.opts.label;
+        if (input.opts?.info !== undefined) addOpts.info = input.opts.info;
         if (input.opts?.position !== undefined) addOpts.position = input.opts.position;
         if (input.opts?.group_key !== undefined) addOpts.groupKey = input.opts.group_key;
-        if (validatedPassthrough !== undefined) addOpts.passthrough = validatedPassthrough;
+        if (materialized.passthrough !== undefined) addOpts.passthrough = materialized.passthrough;
         if (sourceKey !== undefined) addOpts.sourceNodeKey = sourceKey;
         if (input.opts?.source_output_port !== undefined) {
           addOpts.sourceOutputPort = input.opts.source_output_port;
@@ -190,7 +183,18 @@ export const addNodeTool: Tool<Input, Output> = {
           wired,
           kind,
         } = addNode(priorSpec, tabId, input.type, addOpts);
-        return { nextSpec, extras: { tabId, newNodeKey, wired, kind, typeHadSchema, guidance } };
+        return {
+          nextSpec,
+          extras: {
+            tabId,
+            newNodeKey,
+            wired,
+            kind,
+            typeHadSchema: materialized.typeHadSchema,
+            defaultsAppliedFrom: materialized.defaultsAppliedFrom,
+            guidance,
+          },
+        };
       },
       (base, extras) => {
         const newNodeId =
@@ -205,6 +209,7 @@ export const addNodeTool: Tool<Input, Output> = {
             based_on_rev: base.based_on_rev,
             diff_summary: base.diff_summary,
             type_had_schema: extras.typeHadSchema,
+            defaults_applied_from: extras.defaultsAppliedFrom,
             diagnostics: [...base.diagnostics],
             render: base.render,
             ...(newNodeId !== undefined ? { added_node_id: newNodeId } : {}),
@@ -223,6 +228,71 @@ export const addNodeTool: Tool<Input, Output> = {
       },
     ),
 };
+
+interface MaterializedPassthrough {
+  readonly passthrough: Record<string, unknown> | undefined;
+  readonly typeHadSchema: boolean;
+  readonly defaultsAppliedFrom: Record<string, 'schema' | 'settings'>;
+}
+
+function materializeNodePassthrough(
+  type: string,
+  callerPassthrough: Record<string, unknown> | undefined,
+  nodeDefaults: RuntimeNodeDefaults | undefined,
+): MaterializedPassthrough {
+  const schema = getNodeSchema(type);
+  const typeHadSchema = schema !== undefined;
+  const settingsDefaults = nodeDefaults?.[type];
+  const hasSettingsDefaults =
+    settingsDefaults !== undefined && Object.keys(settingsDefaults).length > 0;
+  const hasCallerPassthrough = callerPassthrough !== undefined;
+  const mergedInput =
+    hasSettingsDefaults || hasCallerPassthrough
+      ? {
+          ...(settingsDefaults ?? {}),
+          ...(callerPassthrough ?? {}),
+        }
+      : undefined;
+
+  let passthrough: Record<string, unknown> | undefined;
+  if (schema !== undefined) {
+    const parseInput = mergedInput ?? {};
+    const parseResult = schema.safeParse(parseInput);
+    if (!parseResult.success) {
+      if (mergedInput === undefined) {
+        return { passthrough: undefined, typeHadSchema, defaultsAppliedFrom: {} };
+      }
+      const issues = parseResult.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; ');
+      throw new ValidationFailedError(
+        `passthrough for type '${type}' failed schema validation: ${issues}`,
+        parseResult.error.issues,
+      );
+    }
+    passthrough = parseResult.data as Record<string, unknown>;
+  } else {
+    passthrough = mergedInput;
+  }
+
+  const defaultsAppliedFrom: Record<string, 'schema' | 'settings'> = {};
+  if (passthrough !== undefined) {
+    for (const key of Object.keys(passthrough)) {
+      if (callerPassthrough !== undefined && hasOwn(callerPassthrough, key)) continue;
+      if (settingsDefaults !== undefined && hasOwn(settingsDefaults, key)) {
+        defaultsAppliedFrom[key] = 'settings';
+      } else if (schema !== undefined) {
+        defaultsAppliedFrom[key] = 'schema';
+      }
+    }
+  }
+
+  return { passthrough, typeHadSchema, defaultsAppliedFrom };
+}
+
+function hasOwn(obj: Readonly<Record<string, unknown>>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
 
 function rejectCredentialsPassthrough(
   type: string,

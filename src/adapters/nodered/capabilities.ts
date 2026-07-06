@@ -237,6 +237,8 @@ export interface RuntimeCapabilities {
   readonly capabilities: Record<Capability, boolean>;
 }
 
+export type RuntimeNodeDefaults = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
 /**
  * Cached runtime information about the connected Node-RED instance.
  * Populated lazily by getOrProbeRuntimeInfo() (server/runtime-info.ts).
@@ -245,6 +247,7 @@ export interface RuntimeInfo extends RuntimeCapabilities {
   readonly name: 'node-red';
   readonly is_prerelease: boolean;
   readonly node_js_version?: string;
+  readonly node_defaults?: RuntimeNodeDefaults;
   readonly detected_at: string;
 }
 

@@ -14,6 +14,9 @@ module.exports = {
   },
   functionExternalModules: false,
   functionGlobalContext: {},
+  nodeDefaults: {
+    'flow-otter-defaults-fixture': { sample: 'sterile-default' },
+  },
   debugMaxLength: 1000,
   mqttReconnectTime: 15000,
   serialReconnectTime: 15000,

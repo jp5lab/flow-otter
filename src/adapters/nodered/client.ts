@@ -11,6 +11,7 @@ import {
   RevMismatchError,
 } from './errors.js';
 import type { NodeRedAuth } from './auth.js';
+import type { RuntimeNodeDefaults } from './capabilities.js';
 
 export interface NodeRedClientOptions {
   baseUrl: string;
@@ -29,6 +30,12 @@ const DEFAULT_USER_AGENT = 'FlowOtter/unknown';
 interface FlowsResponse {
   flows: FlowsJson;
   rev: string | null;
+}
+
+export interface NodeRedVersionInfo {
+  readonly version: string;
+  readonly nodeJsVersion?: string;
+  readonly nodeDefaults?: RuntimeNodeDefaults;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -153,14 +160,18 @@ export class NodeRedClient {
    * Callers should cache the result (e.g. via server/runtime-info.ts) rather
    * than calling on every tool invocation.
    */
-  async getNoderedVersion(): Promise<{ version: string; nodeJsVersion?: string }> {
+  async getNoderedVersion(): Promise<NodeRedVersionInfo> {
     const settings = await this.getSettings();
+    const nodeDefaults = parseNodeDefaults(settings['nodeDefaults']);
     const direct = typeof settings['version'] === 'string' ? settings['version'] : null;
     if (direct !== null) {
       // /settings does not expose nodejs.version; we'd need /diagnostics
       // for that. Skip the second roundtrip unless the caller really wants
       // node-js info — they can call getDiagnostics() directly.
-      return { version: direct };
+      return {
+        version: direct,
+        ...(nodeDefaults !== undefined ? { nodeDefaults } : {}),
+      };
     }
     // Fallback: /diagnostics has runtime.version + nodejs.version.
     const diag = await this.getDiagnostics();
@@ -173,7 +184,11 @@ export class NodeRedClient {
     }
     const nj =
       nodejs !== undefined && typeof nodejs['version'] === 'string' ? nodejs['version'] : undefined;
-    return { version: v, ...(nj !== undefined ? { nodeJsVersion: nj } : {}) };
+    return {
+      version: v,
+      ...(nj !== undefined ? { nodeJsVersion: nj } : {}),
+      ...(nodeDefaults !== undefined ? { nodeDefaults } : {}),
+    };
   }
 
   async getNodeTypes(): Promise<unknown> {
@@ -351,6 +366,16 @@ function parseFlowsResponse(parsed: unknown, res: Response): FlowsResponse {
     JSON.stringify(parsed).slice(0, 200),
     'GET /flows: response did not match expected v2 {flows,rev} shape. Node-RED 0.15+ required.',
   );
+}
+
+function parseNodeDefaults(value: unknown): RuntimeNodeDefaults | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const out: Record<string, Readonly<Record<string, unknown>>> = {};
+  for (const [nodeType, defaults] of Object.entries(value)) {
+    if (typeof defaults !== 'object' || defaults === null || Array.isArray(defaults)) continue;
+    out[nodeType] = { ...(defaults as Record<string, unknown>) };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 async function httpError(res: Response, op: string): Promise<NodeRedHttpError> {

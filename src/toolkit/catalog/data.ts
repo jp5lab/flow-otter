@@ -32,7 +32,7 @@ export const NODE_RED_CONCEPTS: readonly ConceptEntry[] = [
   {
     name: 'node',
     purpose:
-      'Single unit of logic. Every node has id, type, x/y position, z (parent tab), wires, name, plus type-specific config in passthrough.',
+      'Single unit of logic. Every node has id, type, x/y position, z (parent tab), wires, name, optional info (Markdown), plus type-specific config in passthrough.',
     flow_otter_tools: ['add_node', 'get_node', 'update_node', 'remove_node', 'move_node'],
   },
   {
@@ -155,7 +155,7 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
     capabilities: ['markdownGhAlerts'],
     flow_otter_specialist: 'add_comment',
     generic_tool: 'add_node',
-    notes: 'GitHub-style Markdown alerts ([!NOTE], etc.) render in Node-RED 5.0+.',
+    notes: 'GitHub-style Markdown alerts ([!NOTE], etc.) render in Node-RED 4.1+ info text.',
   },
   {
     type: 'junction',

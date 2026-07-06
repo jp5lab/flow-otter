@@ -38,6 +38,7 @@ const InputSchema = z
     tab_id: z.string().min(1, 'tab_id is required'),
     node_key: z.string().min(1, 'node_key is required'),
     label: z.string().max(24).optional(),
+    info: z.string().nullable().optional(),
     position: PositionSchema.optional(),
     group_key: z.string().min(1).optional(),
     disabled: z.boolean().optional(),
@@ -86,7 +87,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const updateNodeTool: Tool<Input, Output> = {
   name: 'update_node',
   description: withStagedAuthorToolDescription(
-    'Stages updates to an existing node on a tab. Supports two edit modes: (1) full-property `passthrough` (merge over existing), and (2) `patches[]` — line-based replace/insert/delete on string passthrough fields (function-node `func`, ui-template `format`, template-node `template`). Line numbers are 1-indexed and refer to the ORIGINAL content; patches must be non-overlapping. Per-property order: passthrough applied first, then patches. Validates and lints the result; produces a semantic diff. Does NOT deploy.',
+    'Stages updates to an existing node on a tab. Supports label, position, group membership, node info text, disabled, and two edit modes: (1) full-property `passthrough` (merge over existing), and (2) `patches[]` — line-based replace/insert/delete on string passthrough fields (function-node `func`, ui-template `format`, template-node `template`). Pass null for info to clear it. Line numbers are 1-indexed and refer to the ORIGINAL content; patches must be non-overlapping. Per-property order: passthrough applied first, then patches. Validates and lints the result; produces a semantic diff. Does NOT deploy.',
   ),
   tier: 'author',
   inputZod: InputSchema,
@@ -96,6 +97,10 @@ export const updateNodeTool: Tool<Input, Output> = {
       tab_id: { type: 'string', minLength: 1 },
       node_key: { type: 'string', minLength: 1 },
       label: { type: 'string', maxLength: 24 },
+      info: {
+        type: ['string', 'null'],
+        description: 'Node info annotation shown in the Node-RED info sidebar; null clears it.',
+      },
       position: {
         type: 'object',
         properties: {
@@ -203,6 +208,7 @@ export const updateNodeTool: Tool<Input, Output> = {
 
         const opts: Parameters<typeof updateNode>[3] = {};
         if (input.label !== undefined) opts.label = input.label;
+        if (input.info !== undefined) opts.info = input.info;
         if (input.position !== undefined) opts.position = input.position;
         if (input.group_key !== undefined) opts.groupKey = input.group_key;
         if (input.disabled !== undefined) opts.disabled = input.disabled;

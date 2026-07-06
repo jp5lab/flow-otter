@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { canonicalJson } from '../../../../src/shared/canonical-json.js';
+import type { FlowsJson } from '../../../../src/shared/flows-json.js';
 import { compile } from '../../../../src/toolkit/authoring/compile.js';
 import { decompile } from '../../../../src/toolkit/authoring/decompile.js';
 import type { AuthoringSpec } from '../../../../src/toolkit/authoring/types.js';
@@ -73,6 +74,10 @@ describe('decompile', () => {
         {
           id: 'def-A',
           name: 'MySub',
+          env: [
+            { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+            { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+          ],
           nodes: [{ key: 'inner', type: 'function', position: { x: 100, y: 100 } }],
           connections: [],
           passthrough: { info: 'doc', category: 'utility' },
@@ -85,6 +90,13 @@ describe('decompile', () => {
     expect(back.subflowDefs).toHaveLength(1);
     expect(back.subflowDefs?.[0]?.id).toBe('def-A');
     expect(back.subflowDefs?.[0]?.name).toBe('MySub');
+    expect(back.subflowDefs?.[0]?.info).toBe('doc');
+    expect(back.subflowDefs?.[0]?.passthrough?.['info']).toBeUndefined();
+    expect(back.subflowDefs?.[0]?.env).toEqual([
+      { name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' },
+      { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+    ]);
+    expect(back.subflowDefs?.[0]?.passthrough?.['env']).toBeUndefined();
     expect(back.subflowDefs?.[0]?.nodes).toHaveLength(1);
     expect(back.subflowDefs?.[0]?.nodes[0]?.key).toBe('inner');
 
@@ -127,6 +139,101 @@ describe('decompile', () => {
 
     const second = compile(back, { prior: first.flows });
     expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('round-trips subflow instance conf-type env values through config authoring keys', () => {
+    const spec: AuthoringSpec = {
+      tabs: [
+        {
+          id: 'tab-main',
+          label: 'Main',
+          nodes: [
+            {
+              key: 'instA',
+              type: 'subflow:def-A',
+              position: { x: 200, y: 200 },
+              passthrough: {
+                env: [
+                  { name: 'BROKER', type: 'conf-type', value: 'broker-a' },
+                  { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+                ],
+              },
+            },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+      configNodes: [
+        {
+          key: 'broker-a',
+          type: 'mqtt-broker',
+          label: 'Broker A',
+          passthrough: { broker: 'broker.example', port: 1883 },
+        },
+      ],
+      subflowDefs: [
+        {
+          id: 'def-A',
+          name: 'Sub',
+          env: [{ name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' }],
+          nodes: [],
+          connections: [],
+        },
+      ],
+    };
+    const first = compile(spec);
+    const broker = first.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'broker-a',
+    );
+    const compiledInst = first.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'instA',
+    ) as Record<string, unknown> | undefined;
+    expect((compiledInst?.['env'] as Array<Record<string, unknown>>)[0]?.['value']).toBe(
+      broker?.id,
+    );
+
+    const back = decompile(first.flows);
+    const inst = back.tabs[0]?.nodes[0];
+    expect((inst?.passthrough?.['env'] as Array<Record<string, unknown>>)[0]?.['value']).toBe(
+      'broker-a',
+    );
+
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('preserves dangling subflow instance conf-type env values byte-for-byte', () => {
+    const flows: FlowsJson = [
+      { id: 'tab1', type: 'tab', label: 'Main', _authoringKey: 'tab-main' },
+      {
+        env: [{ name: 'BROKER', type: 'conf-type', value: 'mqtt-broker' }],
+        id: 'sub1',
+        type: 'subflow',
+        name: 'Sub',
+        _authoringKey: 'def-A',
+      },
+      {
+        env: [{ name: 'BROKER', type: 'conf-type', value: 'dangling-config-id' }],
+        id: 'inst1',
+        type: 'subflow:sub1',
+        z: 'tab1',
+        x: 200,
+        y: 200,
+        wires: [[]],
+        _authoringKey: 'instA',
+      },
+    ];
+
+    const back = decompile(flows);
+    const second = compile(back, { prior: flows });
+
+    expect(second.diagnostics.map((d) => d.rule)).toContain(
+      'compile/unresolved-subflow-env-config-ref',
+    );
+    expect(second.diagnostics[0]?.message).toContain('was preserved');
+    expect(JSON.stringify(second.flows)).toBe(JSON.stringify(flows));
   });
 
   it('round-trips config nodes byte-for-byte', () => {
@@ -200,6 +307,45 @@ describe('decompile', () => {
     expect(mqttIn?.passthrough?.['qos']).toBe(1);
     const linkIn = back.tabs[0]?.nodes.find((n) => n.key === 'l-in');
     expect(linkIn?.passthrough?.['links']).toEqual(['l-out']);
+    const second = compile(back, { prior: first.flows });
+    expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
+  });
+
+  it('round-trips regular node info as a top-level field, not passthrough', () => {
+    const spec = {
+      tabs: [
+        {
+          id: 'main',
+          label: 'Main',
+          nodes: [
+            {
+              key: 'worker',
+              type: 'function',
+              label: 'Worker',
+              info: 'Stage purpose lives here.',
+              position: { x: 100, y: 100 },
+              passthrough: { func: 'return msg;', outputs: 1 },
+            },
+          ],
+          connections: [],
+          groups: [],
+          comments: [],
+        },
+      ],
+    } as unknown as AuthoringSpec;
+    const first = compile(spec);
+    const emitted = first.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'worker',
+    ) as Record<string, unknown>;
+    expect(emitted['info']).toBe('Stage purpose lives here.');
+
+    const back = decompile(first.flows);
+    const node = back.tabs[0]?.nodes[0] as
+      | { readonly info?: string; readonly passthrough?: Readonly<Record<string, unknown>> }
+      | undefined;
+    expect(node?.info).toBe('Stage purpose lives here.');
+    expect(node?.passthrough?.['info']).toBeUndefined();
+
     const second = compile(back, { prior: first.flows });
     expect(canonicalJson(second.flows)).toBe(canonicalJson(first.flows));
   });

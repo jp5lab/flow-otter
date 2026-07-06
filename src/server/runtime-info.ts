@@ -47,13 +47,17 @@ export async function getOrProbeRuntimeInfo(
 
   try {
     const v = await client.getNoderedVersion();
+    const capabilities = resolveCapabilities(v.version);
     const info: RuntimeInfo = {
       name: 'node-red',
       version: v.version,
       is_prerelease: isPrerelease(v.version),
       ...(v.nodeJsVersion !== undefined ? { node_js_version: v.nodeJsVersion } : {}),
+      ...(capabilities.nodeDefaultsOverride === true && v.nodeDefaults !== undefined
+        ? { node_defaults: v.nodeDefaults }
+        : {}),
       detected_at: clock().toISOString(),
-      capabilities: resolveCapabilities(v.version),
+      capabilities,
     };
     slot.runtimeInfo = info;
     return { info };

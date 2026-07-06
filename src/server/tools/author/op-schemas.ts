@@ -40,6 +40,7 @@ const AddNodeOpSchema = z
       .object({
         key: z.string().min(1).optional(),
         label: z.string().max(24).optional(),
+        info: z.string().optional(),
         position: IntPositionSchema.optional(),
         group_key: z.string().min(1).optional(),
         passthrough: z.record(z.unknown()).optional(),
@@ -140,6 +141,7 @@ const UpdateNodeOpSchema = z
     tab_id: z.string().min(1),
     node_id: z.string().min(1),
     label: z.string().max(24).optional(),
+    info: z.string().nullable().optional(),
     position: PositionSchema.optional(),
     group_key: z.string().min(1).nullable().optional(),
     disabled: z.boolean().optional(),
@@ -248,6 +250,7 @@ export const stageChangesOpJsonSchema: Readonly<Record<string, unknown>> = {
           properties: {
             key: { type: 'string', minLength: 1 },
             label: { type: 'string', maxLength: 24 },
+            info: { type: 'string' },
             position: positionJsonSchema,
             group_key: { type: 'string', minLength: 1 },
             passthrough: { type: 'object', additionalProperties: true },
@@ -365,6 +368,7 @@ export const stageChangesOpJsonSchema: Readonly<Record<string, unknown>> = {
         tab_id: { type: 'string', minLength: 1 },
         node_id: { type: 'string', minLength: 1 },
         label: { type: 'string', maxLength: 24 },
+        info: { type: ['string', 'null'] },
         position: positionJsonSchema,
         group_key: { anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }] },
         disabled: { type: 'boolean' },

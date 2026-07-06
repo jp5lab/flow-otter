@@ -95,6 +95,9 @@ function buildNextActions(input: Input): string[] {
     'Add nodes for each stage with add_node (preferred) or specialist tools (after enable_toolset author_specialists). Do NOT wire while structuring.',
   );
   out.push(
+    'Record each stage purpose in node/group info so the rendered flow stays self-documenting.',
+  );
+  out.push(
     'Once all nodes are placed, wire them: wire_nodes for single edges, set_wires for bulk.',
   );
   out.push('Refine layout with explicit positions, move_node, and add_group geometry.');

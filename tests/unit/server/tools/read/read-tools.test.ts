@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JsonlAuditLogger } from '../../../../../src/server/audit/jsonl.js';
 import { loadConfig } from '../../../../../src/server/config/load.js';
@@ -317,6 +317,42 @@ describe('read tools (file flow source)', () => {
     expect(out.svg.includes('<svg')).toBe(true);
     const second = (await renderFlowSvgTool.handler({ tab_id: 'tab1' }, ctx)) as { svg: string };
     expect(second.svg).toBe(out.svg);
+  });
+
+  it('render_flow_svg can highlight node types missing from the installed runtime list', async () => {
+    await writeFile(
+      ctx.config.FLOW_FILE_PATH,
+      JSON.stringify([
+        { id: 'tab1', type: 'tab', label: 'Main' },
+        {
+          id: 'missing1',
+          type: 'node-red-contrib-missing',
+          z: 'tab1',
+          x: 100,
+          y: 100,
+          wires: [],
+          name: 'Missing',
+        },
+      ]),
+      'utf8',
+    );
+    const getNodeTypes = vi
+      .fn()
+      .mockResolvedValue([{ id: 'node-red/debug', name: 'debug', types: ['debug'] }]);
+    (ctx as unknown as { noderedClient: { getNodeTypes: typeof getNodeTypes } }).noderedClient = {
+      getNodeTypes,
+    };
+
+    const out = (await renderFlowSvgTool.handler(
+      {
+        tab_id: 'tab1',
+        highlight_unknown_types: true,
+      },
+      ctx,
+    )) as { svg: string };
+
+    expect(getNodeTypes).toHaveBeenCalledTimes(1);
+    expect(out.svg).toContain('fill="#fee"');
   });
 
   it('export_snapshot + list_snapshots + get_snapshot round-trip', async () => {

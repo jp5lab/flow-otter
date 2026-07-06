@@ -61,4 +61,17 @@ describe('addNode placement', () => {
       canonicalJson(compile(expected, { idStrategy: 'fixed' }).flows),
     );
   });
+
+  it('propagates node info into the added NodeSpec', () => {
+    const { spec, newNodeKey } = addNode(baseSpec, 'tab-main', 'function', {
+      key: 'worker',
+      label: 'Worker',
+      info: 'Documents the worker stage.',
+      position: { x: 320, y: 100 },
+    });
+    const node = spec.tabs[0]!.nodes.find((n) => n.key === newNodeKey) as
+      | { readonly info?: string }
+      | undefined;
+    expect(node?.info).toBe('Documents the worker stage.');
+  });
 });

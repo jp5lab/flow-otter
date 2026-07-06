@@ -41,6 +41,7 @@ const STRUCTURAL_FIELDS = new Set([
   'wires',
   'name',
   'g',
+  'info',
   AUTHORING_KEY_FIELD,
   // Runtime-built artifacts that should never round-trip into the AuthoringSpec.
   // _users / _alias are added by the runtime; credentials get stripped to avoid
@@ -77,7 +78,14 @@ const STRUCTURAL_TAB_FIELDS = new Set([
   AUTHORING_KEY_FIELD,
 ]);
 
-const STRUCTURAL_SUBFLOW_DEF_FIELDS = new Set(['id', 'type', 'name', AUTHORING_KEY_FIELD]);
+const STRUCTURAL_SUBFLOW_DEF_FIELDS = new Set([
+  'id',
+  'type',
+  'name',
+  'info',
+  'env',
+  AUTHORING_KEY_FIELD,
+]);
 
 const STRUCTURAL_CONFIG_FIELDS = new Set([
   'id',
@@ -200,6 +208,10 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
   for (const [defId, defNode] of subflowDefsById) {
     subflowDefIdToKey.set(defId, authoringKey(defNode));
   }
+  const configIdToKey = new Map<string, string>();
+  for (const node of configNodes) {
+    configIdToKey.set(node.id, authoringKey(node));
+  }
 
   const tabs: TabSpec[] = [];
   for (const [tabId, tabNode] of tabsById) {
@@ -211,7 +223,9 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     for (const c of bucket.comments) idToKey.set(c.id, authoringKey(c));
     for (const j of bucket.junctions) idToKey.set(j.id, authoringKey(j));
 
-    const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey, subflowDefIdToKey));
+    const nodes: NodeSpec[] = bucket.nodes.map((n) =>
+      buildNodeSpec(n, idToKey, subflowDefIdToKey, configIdToKey),
+    );
     const groups: GroupSpec[] = bucket.groups.map((g) => buildGroupSpec(g, idToKey));
     const comments: CommentSpec[] = bucket.comments.map((c) => buildCommentSpec(c, idToKey));
     const junctions: JunctionSpec[] = bucket.junctions.map((j) => buildJunctionSpec(j, idToKey));
@@ -223,7 +237,7 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     const connections = buildBodyConnections(wireSources, idToKey);
 
     const tabPassthrough = pickPassthrough(tabNode, STRUCTURAL_TAB_FIELDS);
-    const env = parseTabEnv(tabNode.env);
+    const env = parseEnv(tabNode.env);
 
     tabs.push({
       id: authoringKey(tabNode),
@@ -247,7 +261,9 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     const idToKey = new Map<string, string>();
     for (const n of bucket.nodes) idToKey.set(n.id, authoringKey(n));
     for (const j of bucket.junctions) idToKey.set(j.id, authoringKey(j));
-    const nodes: NodeSpec[] = bucket.nodes.map((n) => buildNodeSpec(n, idToKey, subflowDefIdToKey));
+    const nodes: NodeSpec[] = bucket.nodes.map((n) =>
+      buildNodeSpec(n, idToKey, subflowDefIdToKey, configIdToKey),
+    );
     const junctions: JunctionSpec[] = bucket.junctions.map((j) => buildJunctionSpec(j, idToKey));
     const wireSources: WireSource[] = [
       ...bucket.nodes.map((n) => ({ id: n.id, wires: n.wires ?? [] })),
@@ -255,9 +271,12 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
     ];
     const connections = buildBodyConnections(wireSources, idToKey);
     const passthrough = pickPassthrough(defNode, STRUCTURAL_SUBFLOW_DEF_FIELDS);
+    const env = parseEnv(defNode.env);
     subflowDefs.push({
       id: authoringKey(defNode),
       name: defNode.name,
+      ...(typeof defNode.info === 'string' ? { info: defNode.info } : {}),
+      ...(env !== undefined ? { env } : {}),
       nodes,
       connections,
       ...(junctions.length > 0 ? { junctions } : {}),
@@ -274,26 +293,46 @@ export function decompile(flows: FlowsJson): AuthoringSpec {
   };
 }
 
-function parseTabEnv(env: TabNode['env']): TabEnvEntry[] | undefined {
+const TAB_ENV_TYPES: ReadonlySet<string> = new Set([
+  'str',
+  'num',
+  'bool',
+  'json',
+  'env',
+  'cred',
+  'jsonata',
+  'conf-type',
+]);
+
+function parseEnv(env: unknown): TabEnvEntry[] | undefined {
   if (!Array.isArray(env)) return undefined;
-  const out: TabEnvEntry[] = env.map((e) => {
+  const out: TabEnvEntry[] = [];
+  for (const raw of env as readonly unknown[]) {
+    if (!isRecord(raw) || typeof raw['name'] !== 'string' || !isTabEnvType(raw['type'])) {
+      continue;
+    }
     const entry: TabEnvEntry = {
-      name: e.name,
-      type: e.type,
-      ...(e.value !== undefined ? { value: e.value } : {}),
-      ...(e.ui !== undefined ? { ui: e.ui } : {}),
+      name: raw['name'],
+      type: raw['type'],
+      ...(raw['value'] !== undefined ? { value: raw['value'] } : {}),
+      ...(isRecord(raw['ui']) && !Array.isArray(raw['ui']) ? { ui: raw['ui'] } : {}),
     };
-    return entry;
-  });
+    out.push(entry);
+  }
   return out;
+}
+
+function isTabEnvType(value: unknown): value is TabEnvEntry['type'] {
+  return typeof value === 'string' && TAB_ENV_TYPES.has(value);
 }
 
 function buildNodeSpec(
   node: RegularNode,
   idToKey: Map<string, string>,
   subflowDefIdToKey?: ReadonlyMap<string, string>,
+  configIdToKey?: ReadonlyMap<string, string>,
 ): NodeSpec {
-  const passthrough = pickPassthrough(node, STRUCTURAL_FIELDS);
+  let passthrough = pickPassthrough(node, STRUCTURAL_FIELDS);
   const groupKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
   // Reverse the compile-time rewrite: `subflow:<noderedId>` → `subflow:<authoringKey>`
   // when the def has an `_authoringKey`. Without this, a recompile from the
@@ -307,15 +346,46 @@ function buildNodeSpec(
       nodeType = `${SUBFLOW_INSTANCE_PREFIX}${key}`;
     }
   }
+  passthrough = passthroughWithAuthoringEnvConfigRefs(passthrough, nodeType, configIdToKey);
   const spec: NodeSpec = {
     key: authoringKey(node),
     type: nodeType,
     ...(typeof node.name === 'string' ? { label: node.name } : {}),
+    ...(typeof node.info === 'string' ? { info: node.info } : {}),
     position: { x: node.x ?? 0, y: node.y ?? 0 },
     ...(groupKey !== undefined ? { groupKey } : {}),
     ...(Object.keys(passthrough).length > 0 ? { passthrough } : {}),
   };
   return spec;
+}
+
+function passthroughWithAuthoringEnvConfigRefs(
+  passthrough: Record<string, unknown>,
+  nodeType: string,
+  configIdToKey: ReadonlyMap<string, string> | undefined,
+): Record<string, unknown> {
+  if (configIdToKey === undefined || !nodeType.startsWith(SUBFLOW_INSTANCE_PREFIX)) {
+    return passthrough;
+  }
+  const env = passthrough['env'];
+  if (!Array.isArray(env)) return passthrough;
+  let changed = false;
+  const nextEnv = (env as readonly unknown[]).map((entry): unknown => {
+    if (!isRecord(entry) || Array.isArray(entry)) return entry;
+    const next = { ...entry };
+    if (next['type'] !== 'conf-type' || typeof next['value'] !== 'string') return next;
+    const refKey = configIdToKey.get(next['value']);
+    if (refKey === undefined) return next;
+    next['value'] = refKey;
+    changed = true;
+    return next;
+  });
+  if (!changed) return passthrough;
+  return { ...passthrough, env: nextEnv };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function buildGroupSpec(node: GroupNode, idToKey: Map<string, string>): GroupSpec {

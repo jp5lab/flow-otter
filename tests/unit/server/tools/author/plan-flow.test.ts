@@ -70,6 +70,9 @@ describe('plan_flow', () => {
     expect(out.next_actions).toContain(
       'Refine layout with explicit positions, move_node, and add_group geometry.',
     );
+    expect(out.next_actions).toContain(
+      'Record each stage purpose in node/group info so the rendered flow stays self-documenting.',
+    );
     expect(() => planFlowTool.outputZod?.parse(out)).not.toThrow();
     const stored = await readPlan(ctx.config.STAGING_DIR);
     expect(stored?.layout_strategy).toBe('manual');

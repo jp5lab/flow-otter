@@ -10,6 +10,8 @@ export interface AddNodeOpts {
   key?: string;
   /** Visible label (≤ LABEL_CAP_CHARS). */
   label?: string;
+  /** Node info annotation (Markdown in Node-RED's info sidebar). */
+  info?: string;
   /** Position on the canvas. Snapped to grid. */
   position?: { x: number; y: number };
   /** Optional group anchor key. */
@@ -122,6 +124,7 @@ export function addNode(
     key: newKey,
     type,
     ...(opts.label !== undefined ? { label: opts.label } : {}),
+    ...(opts.info !== undefined ? { info: opts.info } : {}),
     position,
     ...(opts.groupKey !== undefined ? { groupKey: opts.groupKey } : {}),
     ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),

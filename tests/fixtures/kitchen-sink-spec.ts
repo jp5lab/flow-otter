@@ -136,6 +136,7 @@ export const KITCHEN_SINK_SPEC: AuthoringSpec = {
     {
       id: 'ks-subflow',
       name: 'Reusable',
+      info: 'Kitchen sink subflow definition.',
       nodes: [
         {
           key: 'inner-function',
@@ -155,7 +156,6 @@ export const KITCHEN_SINK_SPEC: AuthoringSpec = {
       passthrough: {
         in: [{ x: 40, y: 80, wires: [] }],
         out: [{ x: 620, y: 80, wires: [] }],
-        info: 'Kitchen sink subflow definition.',
       },
     },
   ],

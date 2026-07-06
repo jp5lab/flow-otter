@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { FlowsJson } from '../../../shared/flows-json.js';
 import { createSubflowDefinition } from '../../../toolkit/authoring/operations/create-subflow-definition.js';
+import type { TabEnvEntry } from '../../../toolkit/authoring/types.js';
 import { type Tool } from '../_tool.js';
 
 import { runStagedAuthorOp, withStagedAuthorToolDescription } from './_stage-pipeline.js';
@@ -33,12 +34,23 @@ const ConnectionSchema = z
   })
   .strict();
 
+const EnvEntrySchema = z
+  .object({
+    name: z.string().min(1),
+    type: z.enum(['str', 'num', 'bool', 'json', 'env', 'cred', 'jsonata', 'conf-type']),
+    value: z.unknown().optional(),
+    ui: z.record(z.unknown()).optional(),
+  })
+  .strict();
+type EnvInput = z.infer<typeof EnvEntrySchema>;
+
 const InputSchema = z
   .object({
     id: z.string().min(1).optional(),
     name: z.string().min(1, 'name is required').max(24),
     nodes: z.array(NodeSchema).optional(),
     connections: z.array(ConnectionSchema).optional(),
+    env: z.array(EnvEntrySchema).optional(),
     passthrough: z.record(z.unknown()).optional(),
   })
   .strict();
@@ -74,7 +86,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const createSubflowDefinitionTool: Tool<Input, Output> = {
   name: 'create_subflow_definition',
   description: withStagedAuthorToolDescription(
-    'Stages a new subflow definition. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
+    'Stages a new subflow definition, optionally including typed env declarations. Validates and lints the result; produces a semantic diff. Does NOT deploy — call `deploy_staged_change` to push to the runtime.',
   ),
   tier: 'author',
   inputZod: InputSchema,
@@ -120,6 +132,12 @@ export const createSubflowDefinitionTool: Tool<Input, Output> = {
           additionalProperties: false,
         },
       },
+      env: {
+        type: 'array',
+        description:
+          'Subflow env declarations. Entries are {name,type,value?,ui?}; type may be str, num, bool, json, env, cred, jsonata, or conf-type.',
+        items: envEntryJsonSchema(),
+      },
       passthrough: { type: 'object', additionalProperties: true },
     },
     required: ['name'],
@@ -150,6 +168,7 @@ export const createSubflowDefinitionTool: Tool<Input, Output> = {
             toKey: c.to_key,
           }));
         }
+        if (input.env !== undefined) opts.env = normalizeEnvEntries(input.env);
         if (input.passthrough !== undefined) opts.passthrough = input.passthrough;
         const { spec: nextSpec, newDefId } = createSubflowDefinition(priorSpec, opts);
         return { nextSpec, extras: { newDefId } };
@@ -177,4 +196,30 @@ function findNewDefId(flows: FlowsJson, newKey: string): string | undefined {
     if (ext === newKey) return n.id;
   }
   return undefined;
+}
+
+function normalizeEnvEntries(env: readonly EnvInput[]): readonly TabEnvEntry[] {
+  return env.map((entry) => ({
+    name: entry.name,
+    type: entry.type,
+    ...(entry.value !== undefined ? { value: entry.value } : {}),
+    ...(entry.ui !== undefined ? { ui: entry.ui } : {}),
+  }));
+}
+
+function envEntryJsonSchema(): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {
+      name: { type: 'string', minLength: 1 },
+      type: {
+        type: 'string',
+        enum: ['str', 'num', 'bool', 'json', 'env', 'cred', 'jsonata', 'conf-type'],
+      },
+      value: {},
+      ui: { type: 'object', additionalProperties: true },
+    },
+    required: ['name', 'type'],
+    additionalProperties: false,
+  };
 }

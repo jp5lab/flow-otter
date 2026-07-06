@@ -34,6 +34,7 @@ export function tab(opts: TabBuilderOpts): TabSpec {
 interface NodeBuilderOpts {
   key: string;
   label?: string;
+  info?: string;
   position: Position;
   groupKey?: string;
   passthrough?: Readonly<Record<string, unknown>>;
@@ -44,6 +45,7 @@ function buildNode(type: string, opts: NodeBuilderOpts): NodeSpec {
     key: opts.key,
     type,
     ...(opts.label !== undefined ? { label: opts.label } : {}),
+    ...(opts.info !== undefined ? { info: opts.info } : {}),
     position: opts.position,
     ...(opts.groupKey !== undefined ? { groupKey: opts.groupKey } : {}),
     ...(opts.passthrough !== undefined ? { passthrough: opts.passthrough } : {}),

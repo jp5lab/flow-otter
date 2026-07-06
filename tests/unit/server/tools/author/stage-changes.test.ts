@@ -250,6 +250,40 @@ describe('stage_changes batch behavior', () => {
     expect(updated.name).toBe('Runtime id');
   });
 
+  it('batches add_node and update_node info as top-level Node-RED info', async () => {
+    await stage({
+      ops: [
+        {
+          op: 'add_node',
+          tab_id: 'tab1',
+          type: 'function',
+          opts: {
+            key: 'doc-worker',
+            position: { x: 560, y: 260 },
+            info: 'New worker purpose.',
+            passthrough: { func: 'return msg;', outputs: 1 },
+          },
+        },
+        {
+          op: 'update_node',
+          tab_id: 'tab1',
+          node_id: 'source',
+          info: 'Updated source purpose.',
+        },
+      ],
+    });
+
+    const staged = (await staging.read())!;
+    const added = staged.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'doc-worker',
+    ) as Record<string, unknown> | undefined;
+    const source = staged.flows.find(
+      (n) => (n as Record<string, unknown>)['_authoringKey'] === 'source',
+    ) as Record<string, unknown> | undefined;
+    expect(added?.['info']).toBe('New worker purpose.');
+    expect(source?.['info']).toBe('Updated source purpose.');
+  });
+
   it('remove-then-readd of the same tab kind key mints a fresh id', async () => {
     await stage({
       ops: [

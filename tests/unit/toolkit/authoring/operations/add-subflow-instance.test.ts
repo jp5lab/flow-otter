@@ -51,4 +51,19 @@ describe('addSubflowInstance', () => {
     expect(newNodeKey).not.toBe('subflow-def-abc');
     expect(newNodeKey).toBe('subflow-def-abc-2');
   });
+
+  it('stores per-instance env overrides in passthrough', () => {
+    const { spec, newNodeKey } = addSubflowInstance(baseSpec, 'tab-main', 'def-abc', {
+      env: [
+        { name: 'BROKER', type: 'conf-type', value: 'broker-a' },
+        { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+      ],
+    });
+
+    const inserted = spec.tabs[0]?.nodes.find((n) => n.key === newNodeKey);
+    expect(inserted?.passthrough?.['env']).toEqual([
+      { name: 'BROKER', type: 'conf-type', value: 'broker-a' },
+      { name: 'TOPIC', type: 'str', value: 'sensors/temperature' },
+    ]);
+  });
 });
