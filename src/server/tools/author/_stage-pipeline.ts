@@ -260,6 +260,7 @@ export async function compileValidateAndStage(
     labelCap: ctx.config.LABEL_CAP_CHARS,
     canvasMaxX: ctx.config.CANVAS_MAX_X,
     canvasMaxY: ctx.config.CANVAS_MAX_Y,
+    lintViewportWindowWidth: ctx.config.LINT_VIEWPORT_WINDOW_WIDTH,
     ...(ctx.namingContract !== undefined ? { namingContract: ctx.namingContract } : {}),
   });
   if (lintReport.hasErrors) {

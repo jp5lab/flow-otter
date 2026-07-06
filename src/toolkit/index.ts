@@ -34,6 +34,13 @@ export {
   type DiagnosticSeverity,
 } from './validate/index.js';
 export { lintFlows } from './lint/flows-lint.js';
+export { layoutLint, type LayoutLintOptions, type LayoutLintReport } from './lint/layout-lint.js';
+export {
+  collectLayoutGeometry,
+  type LayoutGeometry,
+  type LayoutObject,
+  type LayoutWire,
+} from './lint/geometry.js';
 export {
   renderSvg,
   renderGeometry,

@@ -149,4 +149,22 @@ describe('stage-overwrite guard', () => {
     // The off-grid comment yields exactly one on-grid diagnostic, not duplicates.
     expect(onGrid.length).toBeLessThanOrEqual(1);
   });
+
+  it('still stages when the new comment off-canvas coverage emits only a warning', async () => {
+    const out = (await addCommentTool.handler(
+      { tab_id: 'tab1', text: 'negative center', position: { x: -20, y: 100 } },
+      ctx,
+    )) as {
+      ok: boolean;
+      staged_hash: string;
+      diagnostics: Array<{ severity: string; rule: string; nodeId?: string }>;
+    };
+
+    expect(out.ok).toBe(true);
+    expect(out.staged_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(out.diagnostics).toContainEqual(
+      expect.objectContaining({ severity: 'warning', rule: 'off-canvas' }),
+    );
+    expect(out.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
 });

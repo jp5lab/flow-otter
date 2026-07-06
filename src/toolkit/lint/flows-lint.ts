@@ -3,56 +3,44 @@ import type { NamingContract } from '../naming/schema.js';
 import { runValidators, type Diagnostic, type ValidationReport } from '../validate/index.js';
 import { buildReport } from '../validate/report.js';
 
+import {
+  centeredRect,
+  collectLayoutGeometry,
+  rectHeight,
+  rectWidth,
+  rectWithin,
+  rectsOverlap,
+  type LayoutObject,
+  type Rect,
+} from './geometry.js';
+
 export interface LintOptions {
   labelCap?: number;
   grid?: number;
   canvasMaxX?: number;
   canvasMaxY?: number;
-  /** Approximate node bbox dimensions used for overlap checks. */
+  /** Deprecated compatibility override for overlap boxes; defaults use editor geometry. */
   nodeWidth?: number;
+  /** Deprecated compatibility override for overlap boxes; defaults use editor geometry. */
   nodeHeight?: number;
+  /** Future viewport option; accepted here for stage-pipeline pass-through. */
+  lintViewportWindowWidth?: number;
   namingContract?: NamingContract;
 }
 
 export const DEFAULTS = {
   canvasMaxX: 2400,
   canvasMaxY: 1600,
-  nodeWidth: 120,
-  nodeHeight: 40,
 } as const;
 
 const RULE_OFF_CANVAS = 'off-canvas';
 const RULE_BBOX_OVERLAP = 'bbox-overlap';
 
-interface Bbox {
-  id: string;
-  z: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
-
-function bboxOf(
-  node: { id: string; z?: string; x: number; y: number },
-  width: number,
-  height: number,
-): Bbox {
-  return {
-    id: node.id,
-    z: node.z ?? '',
-    x1: node.x,
-    y1: node.y,
-    x2: node.x + width,
-    y2: node.y + height,
-  };
-}
-
-function bboxOverlaps(a: Bbox, b: Bbox): boolean {
-  if (a.z !== b.z) return false;
-  if (a.x2 <= b.x1 || b.x2 <= a.x1) return false;
-  if (a.y2 <= b.y1 || b.y2 <= a.y1) return false;
-  return true;
+function boxForOverlap(object: LayoutObject, opts: LintOptions): Rect {
+  const w = opts.nodeWidth ?? rectWidth(object.box);
+  const h = opts.nodeHeight ?? rectHeight(object.box);
+  if (w === rectWidth(object.box) && h === rectHeight(object.box)) return object.box;
+  return centeredRect(object.center, w, h);
 }
 
 export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): ValidationReport {
@@ -65,14 +53,26 @@ export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): ValidationR
 
   const maxX = opts.canvasMaxX ?? DEFAULTS.canvasMaxX;
   const maxY = opts.canvasMaxY ?? DEFAULTS.canvasMaxY;
-  const w = opts.nodeWidth ?? DEFAULTS.nodeWidth;
-  const h = opts.nodeHeight ?? DEFAULTS.nodeHeight;
+  const bounds = { x1: 0, y1: 0, x2: maxX, y2: maxY };
+  const geometry = collectLayoutGeometry(flows);
 
-  const bboxes: Bbox[] = [];
   for (const node of flows) {
     if (!hasCanvasPosition(node)) continue;
-    if (node.type === 'group' || node.type === 'comment') continue;
     const z = (node as { z?: string }).z;
+    const object = geometry.objects.get(node.id);
+    if (node.type === 'group' || node.type === 'comment') {
+      if (object !== undefined && !rectWithin(object.box, bounds)) {
+        diagnostics.push({
+          severity: 'warning',
+          rule: RULE_OFF_CANVAS,
+          message: `Canvas object '${node.id}' bounding box is off-canvas (bounds 0..${maxX} × 0..${maxY}).`,
+          nodeId: node.id,
+          ...(typeof z === 'string' ? { tabId: z } : {}),
+          context: { box: object.box, maxX, maxY },
+        });
+      }
+      continue;
+    }
     if (node.x < 0 || node.y < 0 || node.x > maxX || node.y > maxY) {
       diagnostics.push({
         severity: 'error',
@@ -83,23 +83,31 @@ export function lintFlows(flows: FlowsJson, opts: LintOptions = {}): ValidationR
         context: { x: node.x, y: node.y, maxX, maxY },
       });
     }
-    bboxes.push(
-      bboxOf({ id: node.id, ...(typeof z === 'string' ? { z } : {}), x: node.x, y: node.y }, w, h),
-    );
+    if (object === undefined) continue;
   }
 
-  for (let i = 0; i < bboxes.length; i++) {
-    const a = bboxes[i]!;
-    for (let j = i + 1; j < bboxes.length; j++) {
-      const b = bboxes[j]!;
-      if (bboxOverlaps(a, b)) {
+  const overlapObjects = [...geometry.objects.values()].filter(
+    (object) => object.kind === 'node' || object.kind === 'junction',
+  );
+  for (let i = 0; i < overlapObjects.length; i++) {
+    const a = overlapObjects[i]!;
+    const aBox = boxForOverlap(a, opts);
+    for (let j = i + 1; j < overlapObjects.length; j++) {
+      const b = overlapObjects[j]!;
+      if (a.tabId !== b.tabId) continue;
+      const bBox = boxForOverlap(b, opts);
+      if (rectsOverlap(aBox, bBox)) {
         diagnostics.push({
           severity: 'warning',
           rule: RULE_BBOX_OVERLAP,
           message: `Nodes '${a.id}' and '${b.id}' have overlapping bounding boxes.`,
           nodeId: a.id,
-          tabId: a.z,
-          context: { other: b.id, a: { x1: a.x1, y1: a.y1 }, b: { x1: b.x1, y1: b.y1 } },
+          tabId: a.tabId,
+          context: {
+            other: b.id,
+            a: { x1: aBox.x1, y1: aBox.y1 },
+            b: { x1: bBox.x1, y1: bBox.y1 },
+          },
         });
       }
     }

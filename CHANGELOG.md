@@ -2,6 +2,12 @@
 
 ## 1.5.0 (unreleased)
 
+### D-1 — Layout lint core and editor-true lint geometry
+
+- Added the v1.5 layout-lint registry with the eight frozen audit rule ids. The geometric rules now score wire crossings, backward wires, sibling group overlap, and viewport overflow from the shared editor `GeometryProvider`; the four semantic D-2 rules register as abstaining stubs with info diagnostics and do not affect the weighted overall score.
+- Migrated legacy `lintFlows` geometry off the fixed 120×40 top-left approximation: node/junction overlap now uses provider-driven center boxes, while group/comment off-canvas coverage is warning-only and regular node off-canvas remains the existing error gate. `bbox-overlap` and `off-canvas` ids stay stable.
+- Added D-1 regressions for crossing truth tables, provider port anchors, REND-6 overlap/off-canvas cases, layout-lint properties, stage warning pass-through, and the `LINT_VIEWPORT_WINDOW_WIDTH` config default.
+
 ### WSB-8 — Config nodes stay off-canvas
 
 - `add_node` now treats known config-node types such as `mqtt-broker`, Dashboard config nodes, and `tls-config` as global `configNodes` instead of tab canvas nodes, so newly staged config nodes no longer receive junk `x`/`y`/`z`/`wires` fields or renderable workspace placement. The generic tool still returns `added_node_id`, now resolved through a config-node lookup when the add operation produced a global config entry.

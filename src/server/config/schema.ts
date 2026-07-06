@@ -57,6 +57,7 @@ export const ConfigSchema = z.object({
   LABEL_CAP_CHARS: intFromEnv.refine((n) => n > 0).default(24),
   CANVAS_MAX_X: intFromEnv.refine((n) => n > 0).default(2400),
   CANVAS_MAX_Y: intFromEnv.refine((n) => n > 0).default(1600),
+  LINT_VIEWPORT_WINDOW_WIDTH: intFromEnv.refine((n) => n > 0).default(1920),
   NAMING_CONTRACT_PATH: z.string().default('./naming.yaml'),
 
   DEBUG_BUFFER_SIZE: intFromEnv.refine((n) => n >= 1 && n <= 10_000).default(500),
@@ -98,6 +99,7 @@ export const ALL_CONFIG_KEYS: readonly (keyof Config)[] = [
   'LABEL_CAP_CHARS',
   'CANVAS_MAX_X',
   'CANVAS_MAX_Y',
+  'LINT_VIEWPORT_WINDOW_WIDTH',
   'NAMING_CONTRACT_PATH',
   'DEBUG_BUFFER_SIZE',
   'LOG_LEVEL',

@@ -10,6 +10,7 @@ describe('loadConfig', () => {
     expect(cfg.READ_ONLY_MODE).toBe(true);
     expect(cfg.ENABLE_WRITE_TOOLS).toBe(false);
     expect(cfg.SNAPSHOT_RETENTION).toBe(50);
+    expect(cfg.LINT_VIEWPORT_WINDOW_WIDTH).toBe(1920);
   });
 
   it('coerces booleans from strings', () => {
