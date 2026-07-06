@@ -113,9 +113,12 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
   {
     type: 'inject',
     category: 'input',
-    purpose: 'Manual or scheduled trigger; payload from string/number/JSON/flow/global/env.',
+    purpose:
+      'Manual or scheduled trigger; payload from string/number/JSON/ISO timestamp/flow/global/env.',
+    capabilities: ['isoTimestampInject'],
     flow_otter_specialist: 'add_inject_node',
     generic_tool: 'add_node',
+    notes: 'ISO 8601 / Date timestamp formats are available in Node-RED 4.0+.',
   },
   {
     type: 'catch',
@@ -149,14 +152,19 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
     type: 'comment',
     category: 'common',
     purpose: 'Markdown annotation; no runtime behavior.',
+    capabilities: ['markdownGhAlerts'],
     flow_otter_specialist: 'add_comment',
     generic_tool: 'add_node',
+    notes: 'GitHub-style Markdown alerts ([!NOTE], etc.) render in Node-RED 5.0+.',
   },
   {
     type: 'junction',
     category: 'common',
     purpose: 'Visual wire-routing passthrough (3.0+).',
+    min_node_red_version: '3.0.0',
+    capabilities: ['junctions'],
     generic_tool: 'add_node',
+    notes: 'Added in Node-RED 3.0.',
   },
 
   // Common / Output
@@ -178,8 +186,11 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
     type: 'link call',
     category: 'common',
     purpose: 'Subroutine call to link_in; waits for return. Dynamic target since 3.0.',
+    min_node_red_version: '3.0.0',
+    capabilities: ['linkCallNode'],
     flow_otter_specialist: 'add_link_call_node',
     generic_tool: 'add_node',
+    notes: 'Link Call node + return-mode link out are gated as Node-RED 3.1+.',
   },
 
   // Function
@@ -187,21 +198,33 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
     type: 'function',
     category: 'function',
     purpose:
-      'JavaScript handler with On Start / On Message / On Stop tabs; external modules via libs since 1.3, node: prefix since 4.1.',
+      'JavaScript handler with lifecycle tabs, external modules, ESM modules, timeouts, and node.linkcall support.',
+    capabilities: [
+      'functionNodePrefixModules',
+      'esmNodeModules',
+      'globalFunctionTimeout',
+      'functionLinkCall',
+    ],
     flow_otter_specialist: 'add_function_node',
     generic_tool: 'add_node',
+    notes:
+      'node: prefix modules and global function timeout are 4.1+; node.linkcall is 5.0.0-beta.6+; ESM node modules are 5.0 GA+.',
   },
   {
     type: 'switch',
     category: 'function',
     purpose: 'Routes messages by Value/Sequence/Expression/Otherwise rules; can be multi-output.',
+    capabilities: ['jsonata2'],
     generic_tool: 'add_node',
+    notes: 'JSONata expressions use JSONata 2.0 in Node-RED 4.0+.',
   },
   {
     type: 'change',
     category: 'function',
     purpose: 'Set/Change/Move/Delete msg/flow/global properties; JSONata supported.',
+    capabilities: ['jsonata2'],
     generic_tool: 'add_node',
+    notes: 'JSONata expressions use JSONata 2.0 in Node-RED 4.0+.',
   },
   {
     type: 'range',
@@ -218,8 +241,10 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
   {
     type: 'delay',
     category: 'function',
-    purpose: 'Rate limit, fixed delay, queue, or schedule message delivery.',
+    purpose: 'Rate limit, fixed delay, queue, burst, or schedule message delivery.',
+    capabilities: ['delayBurstMode'],
     generic_tool: 'add_node',
+    notes: 'Burst mode uses pauseType:"burst" and is available in Node-RED 5.0.0-beta.2+.',
   },
   {
     type: 'trigger',
@@ -333,7 +358,9 @@ export const CORE_NODE_TYPES: readonly NodeTypeEntry[] = [
     type: 'sort',
     category: 'sequence',
     purpose: 'Sort a sequence by key or JSONata expression.',
+    capabilities: ['jsonata2'],
     generic_tool: 'add_node',
+    notes: 'JSONata expressions use JSONata 2.0 in Node-RED 4.0+.',
   },
   {
     type: 'batch',

@@ -2,6 +2,8 @@
 
 ## 2.0.0 (unreleased)
 
+- **Catalog 4.x/5.x sweep (NR5-11)**: `NodeTypeEntry` gains optional `min_node_red_version` and `capabilities` (typed against the runtime `Capability` union); `get_authoring_guide` core node types now annotate delay burst (5.0.0-beta.2), function `node:`-prefix modules/timeouts (4.1), ESM modules (5.0 GA), `node.linkcall` (5.0.0-beta.6), inject ISO timestamps (4.0), JSONata 2.0 consumers (4.0), and GitHub-style markdown alerts (5.0). A new cross-check test pins catalog capability keys against `allCapabilities()`.
+- **Capability requirements in health_check (NR5-15)**: `health_check` always returns `capability_requirements` — the static capability → Node-RED version-range map — alongside the probe-dependent `runtime.capabilities`. Docs: CLIENT_CONFIG notes the 5.0.0-beta.6 `httpAdminCors` default removal and the `runtimeState.enabled` settings gate; SECURITY documents the 5.0.0-beta.3 creds-alongside-flows behavior.
 - **`version-compat` lint family (NR5-2)**: validation now warns when a flow uses a feature the target Node-RED runtime lacks — delay burst mode (<5.0.0-beta.2), tls-config `pfx`/`env` cert modes, `node:`-prefixed function modules (<4.1), and `node.linkcall(...)` calls detected via AST (<5.0.0-beta.6). Messages state the required version range and the probed target version. File-source targets have no runtime to compare against, so the rule stays silent there — no false positives, reports unchanged.
 
 ### D-6 — plan_flow spatial scaffold and PlanRecord v2

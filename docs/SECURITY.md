@@ -49,6 +49,13 @@ The audit pipeline scrubs secrets at the write boundary in `src/server/audit/red
 
 Regression coverage: `tests/unit/server/audit/redact-regression.test.ts`.
 
+## Credentials Beside External Flow Files
+
+Since Node-RED 5.0.0-beta.3 (PR #4951), a credentials file is created alongside an
+out-of-`userDir` flows file. If Node-RED is pointed at a flows file outside `userDir`, the sibling
+`*_cred.json` now lives next to that file. Treat it as backup and secret-handling scope, and never
+commit it. FlowOtter's file-mode credential lookup honors this `credsAlongsideFlows` behavior.
+
 ## Multi-target State Isolation
 
 `set_target` re-scopes all per-target state under `~/.flow-otter/<env_name>/`. Snapshots, staging directory, audit log file, and persisted `target.json` are isolated per `env_name`. Switching between targets via `set_target` / `clear_target` swaps the active state directory; the previous target's state remains on disk untouched, so accidentally pointing at a sibling project does not corrupt its history. Auth tokens are never persisted; the `auth_env_var` reference mechanism is the recommended way to bridge a token from process env to a persisted target.
