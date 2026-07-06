@@ -19,6 +19,7 @@ import * as functionSideEffects from './rules/function-side-effects.js';
 import * as functionSyntax from './rules/function-syntax.js';
 import * as groupConsistency from './rules/group-consistency.js';
 import * as idUniqueness from './rules/id-uniqueness.js';
+import * as knownIssues from './rules/known-issues.js';
 import * as labelCap from './rules/label-cap.js';
 import * as linkResolution from './rules/link-resolution.js';
 import * as namingContract from './rules/naming-contract.js';
@@ -100,6 +101,7 @@ export function runValidators(flows: FlowsJson, opts: ValidateOptions = {}): Val
     ...invokeCheck(credentialLeak.check, flows, context),
     ...invokeCheck(functionSideEffects.check, flows, context),
     ...invokeCheck(versionCompat.check, flows, context),
+    ...invokeCheck(knownIssues.check, flows, context),
     // ISA-101 enforcement (Item 11):
     ...invokeCheck(unboundedChartAppend.check, flows, context),
     ...screenClutter.check(
