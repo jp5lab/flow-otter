@@ -79,6 +79,28 @@ describe('NodeRedClient.getNodeTypes', () => {
   });
 });
 
+describe('NodeRedClient.getNoderedVersion', () => {
+  it('returns nodeDefaults from the same GET /settings response', async () => {
+    const nodeDefaults = {
+      inject: { repeat: '30', once: true },
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ version: '4.1.10', nodeDefaults }));
+    const client = new NodeRedClient({
+      baseUrl: 'http://localhost:1880',
+      auth: new NoAuth(),
+      fetchImpl,
+      retries: 0,
+    });
+
+    const result = await client.getNoderedVersion();
+
+    expect(result).toEqual({ version: '4.1.10', nodeDefaults });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const url = (fetchImpl.mock.calls[0] ?? [])[0] as string;
+    expect(url).toContain('/settings');
+  });
+});
+
 describe('NodeRedClient.postFlows', () => {
   it('throws RevMismatchError on 409 with actual Node-RED body shape', async () => {
     // Node-RED runtime returns {code:"version_mismatch",message:""} on 409 — no rev field.

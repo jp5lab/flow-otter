@@ -66,6 +66,42 @@ describe('getOrProbeRuntimeInfo', () => {
     expect(probeCount).toBe(1); // cached, not re-probed
   });
 
+  it('captures settings nodeDefaults only when the runtime supports nodeDefaultsOverride', async () => {
+    const fakeClient = {
+      getNoderedVersion: () =>
+        Promise.resolve({
+          version: '4.1.10',
+          nodeDefaults: { inject: { repeat: '30', once: true } },
+        }),
+    };
+    const container = fakeContainer({
+      noderedClient: fakeClient as unknown as Container['noderedClient'],
+    });
+
+    const result = await getOrProbeRuntimeInfo(container);
+
+    expect(result.info?.capabilities.nodeDefaultsOverride).toBe(true);
+    expect(result.info?.node_defaults).toEqual({ inject: { repeat: '30', once: true } });
+  });
+
+  it('ignores settings nodeDefaults when the runtime lacks nodeDefaultsOverride', async () => {
+    const fakeClient = {
+      getNoderedVersion: () =>
+        Promise.resolve({
+          version: '4.1.8',
+          nodeDefaults: { inject: { repeat: '30' } },
+        }),
+    };
+    const container = fakeContainer({
+      noderedClient: fakeClient as unknown as Container['noderedClient'],
+    });
+
+    const result = await getOrProbeRuntimeInfo(container);
+
+    expect(result.info?.capabilities.nodeDefaultsOverride).toBe(false);
+    expect(result.info?.node_defaults).toBeUndefined();
+  });
+
   it('returns a warning when probe fails (no exception bubbled)', async () => {
     const container = fakeContainer({
       noderedClient: {
