@@ -1,6 +1,8 @@
 # Changelog
 
-## 2.0.0 (unreleased)
+## 2.0.0 — 2026-07-06 — Layout engine, declarative flagship, FULLY FIXED declaration
+
+FlowOtter v2.0.0 is the release cut for the 2026-06-10 layout-audit fix campaign. FULLY FIXED was declared on 2026-07-06 at commit `a5b634d`; the committed public audit record is [`docs/audits/2026-07-06-audit-rerun.md`](docs/audits/2026-07-06-audit-rerun.md).
 
 - **Audit-rerun schema-gap fix:** `stage_spec` and `validate_spec` now accept comment-level `headerFor` (target group authoring key) and thread it through `CommentSpec`, two-level layout, and compiled `_authoringHeaderFor`. This closes the blind-judge finding where spec-authored headers could not declare group association, leaving the DECIDE header stranded top-right during audit rerun scoring.
 - **DESIGN-D7 surface consolidation:** default visibility is now 21 tools (5 core plumbing + 16 intent-shaped tools), with `spec_authoring` and `layout` flipped default-on after the S6 gate passed. `discovery`, `analyze`, `snapshots`, `audit`, and per-op `author` are demoted-but-callable during a deprecation window with supersession records (`stage_spec` / `stage_changes` for per-op authoring; removal no earlier than 2.2.0). `author_specialists` and `dangerous` remain enable-required. All tools now advertise `outputSchema` and return `structuredContent` on successful calls.
@@ -69,7 +71,7 @@
 - Header comment → group association resolves an explicit `headerFor` annotation first (spec `headerFor` / flows.json `_authoringHeaderFor`, matched against the group's authoring key with id fallback; unresolvable references fall back silently), else the layout-time-only heuristic for foreign flows: name-prefix match + horizontal overlap + comment sitting ≤80px above the group's top edge, nearest-edge with declaration-order tie-break. Comments with group membership (`g`) are never headers — header ≠ membership. Pinned against the e1 audit fixture's six same-named headers, including the 'DECIDE' case.
 - Added unit coverage (declaration-order partitioning, junction traversal, group non-merging, explicit-wins/fallback headerFor, membership exclusion, config-node exclusion) and fast-check totality + determinism properties for both adapters.
 
-## 1.5.0 (unreleased)
+## 1.5.0 — 2026-07-06 (internal milestone, released with v2.0.0)
 
 ### NR5-13 — Node-RED 5.0 compose leg and live capability assertion
 
@@ -161,7 +163,7 @@
 - New lifecycle ops/tools: `update_group`, `remove_group`, and `update_comment` are registered in the default author toolset and covered in the tool reference. `update_group refit:true` strips `position`+`size` so compile's deterministic `autoFitGroupGeometry` recomputes from current node/junction/comment member positions; ordinary recompiles remain byte-stable because explicit geometry is preserved unless refit is requested. `remove_group` follows Node-RED ungroup semantics: member nodes/junctions/comments and child groups are never deleted, and they reparent to the removed group's parent or become top-level.
 - New op-layer-only primitives: `addJunction` (minimal junction creation for WSB-5's batch union and the layout engine) and `removeComment` landed without MCP tool surfaces; the plan listed only the three lifecycle tools above, while `remove_node` already provides the public comment-removal path. Group membership bookkeeping now keeps `group.nodeKeys` and member `groupKey` fields aligned across update/remove/move paths, preserving every surviving id through compile Pass-A exact matches.
 
-## 1.4.0 (unreleased)
+## 1.4.0 — 2026-07-06 (internal milestone, released with v2.0.0)
 
 ### PHASE1-EXIT fixes
 

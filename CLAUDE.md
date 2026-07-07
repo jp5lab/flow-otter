@@ -7,7 +7,8 @@ refusal, tiered env-gates, read-only default) is the whole point and must never
 regress. TypeScript ESM, Node ≥20, 75 MCP tools (21 default-visible) behind
 progressive-disclosure
 toolsets. It deliberately sits at the workspace root outside the bucket layout; the
-published line is v1.3.0, with the v1.4.0 fix campaign in flight on local `main`.
+v2.0.0 release was cut locally on 2026-07-06 after the FULLY FIXED declaration,
+and is awaiting the user's push/publish.
 
 ## Commands
 
@@ -36,14 +37,13 @@ Per-commit gate ladder: typecheck / lint / format / tests / build / tool-coverag
 - Budgets/steps files are pinned by unit tests (`tests/unit/scripts/eval/`) —
   loosening a gate is intentionally loud. Protocol: `docs/EVALUATION.md`.
 
-## Current state (2026-06-11 pause)
+## Current state (2026-07-06 release cut)
 
-`main` is **16 commits ahead of origin, nothing pushed**. HEAD `6af21c5` is labeled
-"partial EVAL-6 / interrupted" but was amended to contain the full EVAL-6 file set
-(`eval:canary`, steps files, AUDIT-RERUN.md) — trust the tree over the message.
-**PHASE1-EXIT has NOT run**: treat the 16 commits as unvalidated-as-a-whole. Resume
-sequence + house rules: `eval-results/2026-06-10-layout-audit/BACKLOG.md` (local,
-gitignored). Plan: `docs/plans/2026-06-10-fix-plan.md`; audit: `docs/audits/`.
+The 2026-06-10 layout-audit fix campaign is complete. FULLY FIXED was declared
+2026-07-06 at commit `a5b634d` per `scripts/eval/replay/AUDIT-RERUN.md`; the
+sanitized public record is `docs/audits/2026-07-06-audit-rerun.md`. The v2.0.0
+release cut remains local and unpushed per house rules. `eval-results/2026-06-10-layout-audit/BACKLOG.md`
+remains the detailed local record; do not force-add `eval-results/`.
 
 ## House rules
 
