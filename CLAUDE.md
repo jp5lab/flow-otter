@@ -52,6 +52,15 @@ artifacts live under the gitignored `eval-results/` — never force-add it.
 - `.mcp.json` registers this repo's own built server (`dist/bin/flow-otter.js`,
   `FLOW_SOURCE=file`, `READ_ONLY_MODE=true`) into every session here — a stale
   `dist/` means you're dogfooding old code.
+- **Single branch: `main`.** No feature/PR branches live on the remote; work merges
+  to main and pushes fast-forward. Delete any stray branch after its content lands.
+- **Relocate, don't delete.** Anything valuable locally but unpublishable (notes,
+  captures, real-host data) moves to the gitignored `/local/` (or `eval-results/`
+  for eval artifacts) — never resolve a hygiene finding by destroying data.
+- **No CI, no bot PRs — deliberate.** GitHub Actions is disabled repo-wide and
+  Dependabot security-update PRs are off (vulnerability alerts stay on). The gate
+  ladder runs locally per commit. Do not add workflows, dependabot.yml, or
+  re-enable Actions; fix advisories directly on main instead.
 
 Docs: `docs/ARCHITECTURE.md` (write pipeline), `docs/TOOL_REFERENCE.md`,
 `docs/DESIGN.md` (strategy + phase gates), `docs/NON_GOALS.md`, `docs/AGENT_QUICKSTART.md`.
