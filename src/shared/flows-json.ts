@@ -143,6 +143,8 @@ export const CommentNodeSchema = z
     name: z.string().optional(),
     info: z.string().optional(),
     g: z.string().optional(),
+    /** FlowOtter authoring extension: comment is a header for this group key. */
+    _authoringHeaderFor: z.string().optional(),
   })
   .passthrough();
 

@@ -47,7 +47,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const validateSpecTool: Tool<Input, Output> = {
   name: 'validate_spec',
   description:
-    'Read-only diagnostics for a declarative geometry-free AuthoringSpec. It applies the same compile, validation, lint, diff, and two-level computed-placement path as stage_spec but never writes the staging slot, never requires deploy consent, and does not refuse because a staged change is already pending. Declared tabs are authoritative replacements; omitted tabs are preserved. Raw x/y/position/w/h geometry is refused because FlowOtter computes placement.',
+    'Read-only diagnostics for a declarative geometry-free AuthoringSpec. It applies the same compile, validation, lint, diff, and two-level computed-placement path as stage_spec but never writes the staging slot, never requires deploy consent, and does not refuse because a staged change is already pending. Declared tabs are authoritative replacements; omitted tabs are preserved. Comment specs may set headerFor to the target group key so layout places the comment as a group header. Raw x/y/position/w/h geometry is refused because FlowOtter computes placement.',
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: {

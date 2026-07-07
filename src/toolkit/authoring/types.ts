@@ -91,6 +91,8 @@ export interface CommentSpec {
   readonly key: string;
   readonly text: string;
   readonly position: Position;
+  /** Header association target: authoring key of a group in the same tab. */
+  readonly headerFor?: string;
   /** Width/height in pixels. */
   readonly size?: { readonly w: number; readonly h: number };
   readonly info?: string;

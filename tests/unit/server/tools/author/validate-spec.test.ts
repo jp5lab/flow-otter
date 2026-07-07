@@ -72,6 +72,37 @@ const BASE_SPEC: ValidateSpecInput['spec'] = {
   ],
 };
 
+function specWithHeaderFor(headerFor = 'processing-group'): unknown {
+  return {
+    spec: {
+      tabs: [
+        {
+          id: 'tab1',
+          label: 'Main',
+          nodes: [
+            { key: 'sensor', type: 'inject', label: 'Sensor', groupKey: 'processing-group' },
+            { key: 'target', type: 'debug', label: 'Target', groupKey: 'processing-group' },
+            { key: 'extra', type: 'debug', label: 'Extra' },
+          ],
+          connections: [
+            { fromKey: 'sensor', outputPort: 0, toKey: 'target' },
+            { fromKey: 'sensor', outputPort: 0, toKey: 'extra' },
+          ],
+          groups: [
+            {
+              key: 'processing-group',
+              name: 'PROCESS',
+              nodeKeys: ['sensor', 'target'],
+            },
+          ],
+          comments: [{ key: 'process-header', text: 'PROCESS', headerFor }],
+          junctions: [],
+        },
+      ],
+    },
+  };
+}
+
 let ctx: ToolContext;
 let staging: StagedStore;
 let cleanup: () => Promise<void>;
@@ -180,6 +211,27 @@ describe('validate_spec', () => {
     expect(out.diff_summary.nodes_added).toBeGreaterThan(0);
     expect(out.layout_report.engine).toBe('two_level');
     expect((await staging.read())?.stagedHash).toBe(first.staged_hash);
+  });
+
+  it('accepts comment headerFor through the same spec schema as stage_spec', async () => {
+    const parsed = validateSpecTool.inputZod.safeParse(specWithHeaderFor());
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) throw parsed.error;
+
+    const out = await validateSpecTool.handler(parsed.data, ctx);
+
+    expect(out.ok).toBe(true);
+    expect(out.staged).toBe(false);
+    expect(out.layout_report.engine).toBe('two_level');
+    expect(await staging.read()).toBeNull();
+
+    const unresolved = validateSpecTool.inputZod.safeParse(specWithHeaderFor('missing-group'));
+    expect(unresolved.success).toBe(true);
+    if (!unresolved.success) throw unresolved.error;
+    await expect(validateSpecTool.handler(unresolved.data, ctx)).resolves.toMatchObject({
+      ok: true,
+      staged: false,
+    });
   });
 
   it('returns validation errors as diagnostics instead of staging or throwing', async () => {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { FlowsJson, FlowsJsonNode } from '../../../../src/shared/flows-json.js';
-import type { CommentSpec, TabSpec } from '../../../../src/toolkit/authoring/types.js';
+import type { TabSpec } from '../../../../src/toolkit/authoring/types.js';
 import {
   deriveFlowsJsonSections,
   deriveTabSpecSections,
@@ -146,13 +146,13 @@ describe('deriveTabSpecSections', () => {
             text: 'HEUR via explicit',
             position: { x: 250, y: 60 },
             headerFor: 'explicit',
-          } as CommentSpec & { readonly headerFor: string },
+          },
           {
             key: 'c-fallback',
             text: 'HEUR via fallback',
             position: { x: 250, y: 60 },
             headerFor: 'missing',
-          } as CommentSpec & { readonly headerFor: string },
+          },
         ],
       }),
     );

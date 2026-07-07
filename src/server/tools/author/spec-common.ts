@@ -102,6 +102,7 @@ const CommentSchema = z
   .object({
     key: z.string().min(1),
     text: z.string(),
+    headerFor: z.string().min(1).optional(),
     info: z.string().optional(),
     groupKey: z.string().min(1).optional(),
     x: ForbiddenGeometryFieldSchema,
@@ -483,6 +484,7 @@ function materializeComment(input: z.infer<typeof CommentSchema>, position: Posi
     key: input.key,
     text: input.text,
     position,
+    ...(input.headerFor !== undefined ? { headerFor: input.headerFor } : {}),
     ...(input.info !== undefined ? { info: input.info } : {}),
     ...(input.groupKey !== undefined ? { groupKey: input.groupKey } : {}),
   };
@@ -919,6 +921,7 @@ const commentJsonSchema = {
   properties: {
     key: { type: 'string', minLength: 1 },
     text: { type: 'string' },
+    headerFor: { type: 'string', minLength: 1 },
     info: { type: 'string' },
     groupKey: { type: 'string', minLength: 1 },
     x: forbiddenGeometryJsonSchema,

@@ -31,6 +31,7 @@ import {
 } from './types.js';
 
 export const AUTHORING_KEY_FIELD = '_authoringKey';
+export const AUTHORING_HEADER_FOR_FIELD = '_authoringHeaderFor';
 
 /**
  * Default group style matching the Node-RED editor's own new-group default.
@@ -612,6 +613,7 @@ function emitComment(
     name: spec.text,
     ...(spec.info !== undefined ? { info: spec.info } : {}),
     ...(groupId !== undefined ? { g: groupId } : {}),
+    ...(spec.headerFor !== undefined ? { [AUTHORING_HEADER_FOR_FIELD]: spec.headerFor } : {}),
     [AUTHORING_KEY_FIELD]: spec.key,
   };
 }

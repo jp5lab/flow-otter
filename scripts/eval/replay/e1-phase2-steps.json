@@ -274,12 +274,36 @@
                     }
                   ],
                   "comments": [
-                    { "key": "comment", "text": "ACQUIRE" },
-                    { "key": "comment-2", "text": "CONDITION" },
-                    { "key": "comment-3", "text": "DECIDE" },
-                    { "key": "comment-4", "text": "ACT (alarm path)" },
-                    { "key": "comment-5", "text": "INDICATE (normal)" },
-                    { "key": "comment-6", "text": "ERROR LANE (all errors)" }
+                    {
+                      "key": "comment",
+                      "text": "ACQUIRE",
+                      "headerFor": "group"
+                    },
+                    {
+                      "key": "comment-2",
+                      "text": "CONDITION",
+                      "headerFor": "group-2"
+                    },
+                    {
+                      "key": "comment-3",
+                      "text": "DECIDE",
+                      "headerFor": "group-3"
+                    },
+                    {
+                      "key": "comment-4",
+                      "text": "ACT (alarm path)",
+                      "headerFor": "group-4"
+                    },
+                    {
+                      "key": "comment-5",
+                      "text": "INDICATE (normal)",
+                      "headerFor": "group-5"
+                    },
+                    {
+                      "key": "comment-6",
+                      "text": "ERROR LANE (all errors)",
+                      "headerFor": "group-6"
+                    }
                   ]
                 }
               ],

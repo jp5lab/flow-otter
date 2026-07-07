@@ -51,7 +51,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const stageSpecTool: Tool<Input, Output> = {
   name: 'stage_spec',
   description: withStagedAuthorToolDescription(
-    'Stages a declarative geometry-free AuthoringSpec as ONE staged change. Declared tabs are authoritative whole-tab replacements; tabs omitted from spec.tabs are preserved. configNodes and subflowDefs are preserved when omitted and replaced wholesale when supplied. Existing objects with matching _authoringKey/id preserve Node-RED ids and pinned geometry; FlowOtter computes all placement with the two-level layout engine. Use layout_hints for lane_hints and section_order; raw x/y/position/w/h geometry is refused. dry_run validates/diffs/reports without writing the staging slot. Does NOT deploy.',
+    'Stages a declarative geometry-free AuthoringSpec as ONE staged change. Declared tabs are authoritative whole-tab replacements; tabs omitted from spec.tabs are preserved. configNodes and subflowDefs are preserved when omitted and replaced wholesale when supplied. Existing objects with matching _authoringKey/id preserve Node-RED ids and pinned geometry; FlowOtter computes all placement with the two-level layout engine. Comment specs may set headerFor to the target group key so layout places the comment as a group header. Use layout_hints for lane_hints and section_order; raw x/y/position/w/h geometry is refused. dry_run validates/diffs/reports without writing the staging slot. Does NOT deploy.',
   ),
   tier: 'author',
   inputZod: InputSchema,

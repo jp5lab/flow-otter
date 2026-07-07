@@ -18,7 +18,7 @@ import {
   SUBFLOW_INSTANCE_PREFIX,
 } from '../../shared/flows-json.js';
 
-import { AUTHORING_KEY_FIELD, DEFAULT_GROUP_STYLE } from './compile.js';
+import { AUTHORING_HEADER_FOR_FIELD, AUTHORING_KEY_FIELD, DEFAULT_GROUP_STYLE } from './compile.js';
 import type {
   AuthoringSpec,
   CommentSpec,
@@ -431,11 +431,20 @@ function buildCommentSpec(node: CommentNode, idToKey: Map<string, string>): Comm
   const groupKey = typeof node.g === 'string' ? idToKey.get(node.g) : undefined;
   const size =
     typeof node.w === 'number' && typeof node.h === 'number' ? { w: node.w, h: node.h } : undefined;
+  const rawHeaderFor =
+    typeof node[AUTHORING_HEADER_FOR_FIELD] === 'string'
+      ? node[AUTHORING_HEADER_FOR_FIELD]
+      : typeof (node as Record<string, unknown>)['headerFor'] === 'string'
+        ? ((node as Record<string, unknown>)['headerFor'] as string)
+        : undefined;
+  const headerFor =
+    rawHeaderFor !== undefined ? (idToKey.get(rawHeaderFor) ?? rawHeaderFor) : undefined;
   return {
     key: authoringKey(node),
     text: node.name ?? '',
     position: { x: node.x, y: node.y },
     ...(size !== undefined ? { size } : {}),
+    ...(headerFor !== undefined ? { headerFor } : {}),
     ...(typeof node.info === 'string' ? { info: node.info } : {}),
     ...(groupKey !== undefined ? { groupKey } : {}),
   };

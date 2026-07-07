@@ -50,7 +50,7 @@ function header(key: string, text: string, groupKey: string): CommentSpec {
     text,
     position: { x: 0, y: 0 },
     headerFor: groupKey,
-  } as CommentSpec & { readonly headerFor: string };
+  };
 }
 
 function tab(overrides: Partial<AuthoringSpec['tabs'][number]>): AuthoringSpec['tabs'][number] {

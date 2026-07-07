@@ -19,7 +19,11 @@ import { createLogger } from '../../../../../src/shared/logger.js';
 import { compile } from '../../../../../src/toolkit/authoring/compile.js';
 import type { AuthoringSpec } from '../../../../../src/toolkit/authoring/types.js';
 import { isOnGrid } from '../../../../../src/toolkit/layout/grid.js';
-import { rectsDisjoint, tabLayoutObjects } from '../../../../../src/toolkit/layout/index.js';
+import {
+  horizontalOverlap,
+  rectsDisjoint,
+  tabLayoutObjects,
+} from '../../../../../src/toolkit/layout/index.js';
 import { FilesystemSnapshotStore } from '../../../../../src/toolkit/snapshot/filesystem.js';
 import { StagedStore } from '../../../../../src/toolkit/staging/staged-store.js';
 
@@ -154,6 +158,43 @@ function tabIdByKey(flows: FlowsJson, key: string): string {
   return tab.id;
 }
 
+function headerSpecInput(headerFor = 'processing-group'): unknown {
+  return {
+    spec: {
+      tabs: [
+        {
+          id: 'tab1',
+          label: 'Main',
+          nodes: [
+            { key: 'sensor', type: 'inject', label: 'Sensor', groupKey: 'processing-group' },
+            {
+              key: 'normalize',
+              type: 'function',
+              label: 'Normalize',
+              groupKey: 'processing-group',
+              passthrough: { func: 'return msg;', outputs: 1 },
+            },
+            { key: 'accepted', type: 'debug', label: 'Accepted' },
+          ],
+          connections: [
+            { fromKey: 'sensor', outputPort: 0, toKey: 'normalize' },
+            { fromKey: 'normalize', outputPort: 0, toKey: 'accepted' },
+          ],
+          groups: [
+            {
+              key: 'processing-group',
+              name: 'PROCESS',
+              nodeKeys: ['sensor', 'normalize'],
+            },
+          ],
+          comments: [{ key: 'process-header', text: 'PROCESS', headerFor }],
+          junctions: [],
+        },
+      ],
+    },
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('expected JSON schema object');
@@ -190,8 +231,52 @@ describe('stage_spec', () => {
     const nodeSchema = asRecord(nodes['items']);
     const nodeProperties = asRecord(nodeSchema['properties']);
     const xProperty = asRecord(nodeProperties['x']);
+    const comments = asRecord(tabProperties['comments']);
+    const commentSchema = asRecord(comments['items']);
+    const commentProperties = asRecord(commentSchema['properties']);
+    const headerForProperty = asRecord(commentProperties['headerFor']);
     expect(nodeSchema['additionalProperties']).toBe(false);
     expect(xProperty['description']).toContain('FlowOtter computes placement');
+    expect(commentSchema['additionalProperties']).toBe(false);
+    expect(headerForProperty['minLength']).toBe(1);
+  });
+
+  it('accepts comment headerFor and stages the header above its group', async () => {
+    const parsed = stageSpecTool.inputZod.safeParse(headerSpecInput());
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) throw parsed.error;
+
+    const out = await stage(parsed.data);
+
+    expect(out.ok).toBe(true);
+    const staged = (await staging.read())!;
+    const tabId = tabIdByKey(staged.flows, 'tab1');
+    const header = nodeByKey(staged.flows, 'process-header');
+    const group = nodeByKey(staged.flows, 'processing-group');
+    expect(header['_authoringHeaderFor']).toBe('processing-group');
+
+    const objects = tabLayoutObjects(staged.flows, tabId);
+    const headerBox = objects.get(header.id as string)?.box;
+    const groupBox = objects.get(group.id as string)?.box;
+    if (headerBox === undefined || groupBox === undefined) {
+      throw new Error('missing header/group layout boxes');
+    }
+    expect(headerBox.y2).toBeLessThan(groupBox.y1);
+    expect(horizontalOverlap(headerBox, groupBox)).toBeGreaterThan(0);
+  });
+
+  it('does not throw when comment headerFor cannot be resolved', async () => {
+    const parsed = stageSpecTool.inputZod.safeParse(headerSpecInput('missing-group'));
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) throw parsed.error;
+
+    const out = await stage({ ...parsed.data, dry_run: true });
+
+    expect(out.ok).toBe(true);
+    expect(out.diagnostics.some((diagnostic) => diagnostic.message.includes('missing-group'))).toBe(
+      false,
+    );
+    expect(await staging.read()).toBeNull();
   });
 
   it('preserves existing ids and pinned positions while computing new node placement', async () => {
