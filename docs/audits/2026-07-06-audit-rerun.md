@@ -2,7 +2,7 @@
 
 **Audit question:** After the 2026-06-10 layout audit found FlowOtter's final screens readable but its toolchain over-budget, can the fixed v2 surface produce operator-legible Node-RED layouts within the committed budgets, with the safety spine still intact?
 
-**Subject:** FlowOtter fix-campaign tree at declaring commit `a5b634d` (`a5b634d42463d1db516ec299d45553663b774362`), evaluated before the v2.0.0 release version bump. Date: 2026-07-06. Runtime: sterile Node-RED 4.1.11 + Mosquitto Docker stack. No real runtime was touched.
+**Subject:** FlowOtter fix-campaign tree at declaring commit `740dd5d` (`740dd5d42463d1db516ec299d45553663b774362`), evaluated before the v2.0.0 release version bump. Date: 2026-07-06. Runtime: sterile Node-RED 4.1.11 + Mosquitto Docker stack. No real runtime was touched.
 
 **Protocol:** `scripts/eval/replay/AUDIT-RERUN.md`, sha256 `2ca25e1923020eb9d3fc49bf1f6a7882fc2ef77b5818a1046804d385530ce12c`.
 
@@ -58,7 +58,7 @@ Anchor integrity note: the named e1 anchor image from the original audit artifac
 
 ### Round 2
 
-The capture-parity flaw was corrected by judging e1 at the anchor's 2200px width. The header association product gap was fixed in the declaring commit by adding comment-level `headerFor` support to `stage_spec` / `validate_spec`, threading it through `CommentSpec`, two-level layout, and compiled `_authoringHeaderFor`. The affected replay leg re-passed twice at `a5b634d`.
+The capture-parity flaw was corrected by judging e1 at the anchor's 2200px width. The header association product gap was fixed in the declaring commit by adding comment-level `headerFor` support to `stage_spec` / `validate_spec`, threading it through `CommentSpec`, two-level layout, and compiled `_authoringHeaderFor`. The affected replay leg re-passed twice at `740dd5d`.
 
 | Scenario | Cold-read | Conventions | Verdict |
 | -------- | --------: | ----------: | ------- |
@@ -76,4 +76,4 @@ The e1 Round-2 capture was geometrically indistinguishable from the hand-arrange
 
 ## Verdict Line
 
-**FULLY FIXED declared 2026-07-06 at commit `a5b634d`: all required gates green, pinned budgets and frozen thresholds untouched, safety spine intact.**
+**FULLY FIXED declared 2026-07-06 at commit `740dd5d`: all required gates green, pinned budgets and frozen thresholds untouched, safety spine intact.**

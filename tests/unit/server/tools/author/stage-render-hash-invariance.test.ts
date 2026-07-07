@@ -2,7 +2,7 @@
  * REND-8 test-first pin (2026-06-10 layout-audit fix plan): staged-byte
  * identity with/without render enrichment.
  *
- * Written and shown green at pre-REND-8 HEAD (commit 85594eb) BEFORE the
+ * Written and shown green at pre-REND-8 HEAD (commit a8fa390) BEFORE the
  * enrichment landed. The hashes are LITERALS captured at that HEAD, so this
  * suite proves the safety sketch line "pinned by hash byte-identity
  * with/without enrichment": if REND-8's post-`staging.write` render

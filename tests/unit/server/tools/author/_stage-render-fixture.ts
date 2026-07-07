@@ -50,7 +50,7 @@ export const PIN_COMMENT_INPUT = {
 };
 
 /**
- * LITERAL hashes captured at pre-REND-8 HEAD (commit 85594eb, REND-5) for
+ * LITERAL hashes captured at pre-REND-8 HEAD (commit a8fa390, REND-5) for
  * `PIN_COMMENT_INPUT` staged against `FIXTURE_FLOWS` with the fixed clock /
  * actor / agent_id below. REND-8's enrichment is output-only, so these MUST
  * never move: `PINNED_STAGED_HASH` is the canonical hash of the staged flows
