@@ -4,7 +4,13 @@ import { lintFlows, type LintOptions } from '../../../toolkit/lint/flows-lint.js
 import type { Tool } from '../_tool.js';
 import { runtimeCapabilitiesForTool } from '../_runtime-options.js';
 
-const InputSchema = z.object({}).strict();
+import { loadValidationSource } from './_validation-against.js';
+
+const InputSchema = z
+  .object({
+    against: z.enum(['staged', 'runtime']).optional(),
+  })
+  .strict();
 type Input = z.infer<typeof InputSchema>;
 
 const DiagnosticSchema = z.object({
@@ -18,6 +24,9 @@ const DiagnosticSchema = z.object({
 
 const OutputSchema = z.object({
   rev: z.string().nullable(),
+  against: z.enum(['staged', 'runtime']).optional(),
+  staged_hash: z.string().nullable().optional(),
+  based_on_snapshot_hash: z.string().nullable().optional(),
   diagnostics: z.array(DiagnosticSchema),
   has_errors: z.boolean(),
   errors: z.number().int().nonnegative(),
@@ -39,14 +48,30 @@ type Output = z.infer<typeof OutputSchema>;
 
 export const validateAllFlowsTool: Tool<Input, Output> = {
   name: 'validate_all_flows',
-  description: 'Runs all validation rules over the entire flows document. Read-only.',
+  description:
+    "Runs all validation rules over the entire flows document. against:'staged' validates the pending staged change; the default ('runtime') validates the deployed runtime flows, which do NOT include pending staged changes. Read-only.",
   tier: 'read',
   inputZod: InputSchema,
-  inputJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
+  inputJsonSchema: {
+    type: 'object',
+    properties: {
+      against: {
+        type: 'string',
+        enum: ['staged', 'runtime'],
+        description:
+          "What to validate: 'staged' = the pending staged change (errors if the staging slot is empty), 'runtime' = the deployed runtime flows (default).",
+      },
+    },
+    additionalProperties: false,
+  },
   outputZod: OutputSchema,
-  handler: async (_input, ctx) => {
-    void _input;
-    const { flows, rev } = await ctx.flowSource.load();
+  handler: async (input, ctx) => {
+    const includeAgainstMetadata = input.against !== undefined;
+    const source = await loadValidationSource(
+      ctx,
+      input.against ?? 'runtime',
+      'validate_all_flows',
+    );
     const validateOpts: LintOptions = {
       labelCap: ctx.config.LABEL_CAP_CHARS,
       canvasMaxX: ctx.config.CANVAS_MAX_X,
@@ -57,10 +82,10 @@ export const validateAllFlowsTool: Tool<Input, Output> = {
     if (ctx.namingContract !== undefined) validateOpts.namingContract = ctx.namingContract;
     const runtime = await runtimeCapabilitiesForTool(ctx);
     if (runtime !== undefined) validateOpts.runtime = runtime;
-    const report = lintFlows(flows, validateOpts);
+    const report = lintFlows(source.flows, validateOpts);
     if (report.layout === undefined) throw new Error('layout lint report missing');
-    return {
-      rev,
+    const out = {
+      rev: source.rev,
       diagnostics: report.diagnostics.map((d) => ({
         severity: d.severity,
         rule: d.rule,
@@ -73,6 +98,13 @@ export const validateAllFlowsTool: Tool<Input, Output> = {
       errors: report.errors.length,
       warnings: report.warnings.length,
       layout: report.layout,
+    };
+    if (!includeAgainstMetadata) return out;
+    return {
+      ...out,
+      against: source.against,
+      staged_hash: source.stagedHash,
+      based_on_snapshot_hash: source.basedOnSnapshotHash,
     };
   },
 };

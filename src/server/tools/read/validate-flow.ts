@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
-import { isTab } from '../../../shared/flows-json.js';
 import { lintFlows, type LintOptions } from '../../../toolkit/lint/flows-lint.js';
 import { ValidationFailedError, type Tool } from '../_tool.js';
 import { runtimeCapabilitiesForTool } from '../_runtime-options.js';
 
+import { loadValidationSource, resolveTabNodeRedId } from './_validation-against.js';
+
 const InputSchema = z
   .object({
     tab_id: z.string().min(1),
+    against: z.enum(['staged', 'runtime']).optional(),
   })
   .strict();
 type Input = z.infer<typeof InputSchema>;
@@ -24,6 +26,9 @@ const DiagnosticSchema = z.object({
 const OutputSchema = z.object({
   rev: z.string().nullable(),
   tab_id: z.string(),
+  against: z.enum(['staged', 'runtime']).optional(),
+  staged_hash: z.string().nullable().optional(),
+  based_on_snapshot_hash: z.string().nullable().optional(),
   diagnostics: z.array(DiagnosticSchema),
   has_errors: z.boolean(),
   errors: z.number().int().nonnegative(),
@@ -46,23 +51,39 @@ type Output = z.infer<typeof OutputSchema>;
 export const validateFlowTool: Tool<Input, Output> = {
   name: 'validate_flow',
   description:
-    'Runs all validation rules against the flows of a single tab and returns the diagnostics. Read-only.',
+    "Runs all validation rules against a single tab and returns diagnostics plus layout scores. against:'staged' validates the pending staged change; the default ('runtime') validates the deployed runtime flows, which do NOT include pending staged changes. On the staged path, tab_id accepts either the staged tab's _authoringKey or its materialized Node-RED id. Read-only.",
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: {
     type: 'object',
-    properties: { tab_id: { type: 'string', minLength: 1 } },
+    properties: {
+      tab_id: { type: 'string', minLength: 1 },
+      against: {
+        type: 'string',
+        enum: ['staged', 'runtime'],
+        description:
+          "What to validate: 'staged' = the pending staged change (errors if the staging slot is empty), 'runtime' = the deployed runtime flows (default).",
+      },
+    },
     required: ['tab_id'],
     additionalProperties: false,
   },
   outputZod: OutputSchema,
   handler: async (input, ctx) => {
-    const { flows, rev } = await ctx.flowSource.load();
-    const tab = flows.find((n) => isTab(n) && n.id === input.tab_id);
-    if (!tab) throw new ValidationFailedError(`Tab '${input.tab_id}' not found.`, []);
+    const includeAgainstMetadata = input.against !== undefined;
+    const source = await loadValidationSource(ctx, input.against ?? 'runtime', 'validate_flow');
+    const tabId = resolveTabNodeRedId(source.flows, input.tab_id, {
+      acceptAuthoringKey: source.against === 'staged',
+    });
+    if (tabId === undefined) {
+      throw new ValidationFailedError(
+        `Tab '${input.tab_id}' not found${source.against === 'staged' ? ' in the staged change' : ''}.`,
+        [],
+      );
+    }
 
-    const scoped = flows.filter((n) =>
-      isTab(n) ? n.id === input.tab_id : (n as { z?: unknown }).z === input.tab_id,
+    const scoped = source.flows.filter((n) =>
+      n.type === 'tab' ? n.id === tabId : (n as { z?: unknown }).z === tabId,
     );
     const validateOpts: LintOptions = {
       labelCap: ctx.config.LABEL_CAP_CHARS,
@@ -76,9 +97,9 @@ export const validateFlowTool: Tool<Input, Output> = {
     if (runtime !== undefined) validateOpts.runtime = runtime;
     const report = lintFlows(scoped, validateOpts);
     if (report.layout === undefined) throw new Error('layout lint report missing');
-    return {
-      rev,
-      tab_id: input.tab_id,
+    const out = {
+      rev: source.rev,
+      tab_id: tabId,
       diagnostics: report.diagnostics.map((d) => ({
         severity: d.severity,
         rule: d.rule,
@@ -91,6 +112,13 @@ export const validateFlowTool: Tool<Input, Output> = {
       errors: report.errors.length,
       warnings: report.warnings.length,
       layout: report.layout,
+    };
+    if (!includeAgainstMetadata) return out;
+    return {
+      ...out,
+      against: source.against,
+      staged_hash: source.stagedHash,
+      based_on_snapshot_hash: source.basedOnSnapshotHash,
     };
   },
 };

@@ -106,7 +106,7 @@ export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+): sta
 LAYOUT CONVENTIONS: 20px grid; stages left-to-right at 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport); minimize crossings; no backward wires. validate_flow returns diagnostics + layout scores.
 
 4. REVIEW → VALIDATE → DEPLOY:
-- render_flow_png(against:'staged') returns png_path — Read it; render_flow_svg for SVG. Show user; validate_flow; get_staged_change gives staged_hash; preview_flow_diff before deploy_staged_change. User confirms.
+- render_flow_png(against:'staged') returns png_path — Read it; render_flow_svg for SVG. Show user; validate_flow(against:'staged'); get_staged_change gives staged_hash; preview_flow_diff before deploy_staged_change. User confirms.
 
 DISCOVERY: get_authoring_guide catalog (node types, widgets, templates, validators, layout_conventions, ISA-101); list_available_toolsets/enable_toolset unlock tools.
 
