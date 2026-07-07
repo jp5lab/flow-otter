@@ -30,6 +30,11 @@
 
 - `plan_flow` now emits a deterministic spatial scaffold (20px grid, 200px pitch, 1920/1420 viewport, monotonic per-stage x-centers, lane y-bands with the error band ≥120px below main) and accepts an optional per-stage `lane` hint (`main`/`indicate`/`error`); the plan sidecar is upgraded to PlanRecord schema v2 (v1 sidecars still read back-compatibly, `layout_strategy` remains `manual`).
 
+### D-7 — R4 separation and S7 in-band convention capstone
+
+- Added the D-7 R4 acceptance suite over the hash-pinned 2026-06-10 fixtures. It regenerates e1 dagre/ELK audit-era derivatives in memory, consumes `r4_separation` from the frozen thresholds file, asserts score separation, pins the raw-spaghetti audit metrics, engine-output comment-pile/off-canvas/group-overlap/lane-inversion expectations, and records the `nodered-4.1` GeometryProvider identity.
+- Added pure layout acceptance counters for comment piles and off-canvas groups, plus an S7 static probe proving all eight layout criteria, scored rule ids, and numeric conventions/constants are visible through server instructions, `get_authoring_guide`, or `plan_flow` output.
+
 ### LAYO-4 slice C — Layout entry points and width compaction
 
 - `layoutFlowsWithElk` now compacts over-wide lane sublayouts toward the shared 1420px visible-viewport budget from `spatial-scaffold.ts`: it preserves ELK layer order, reduces excessive horizontal inter-layer gaps deterministically, refits group/header geometry from the compacted participant positions, and still emits the frozen `layout/width-overflow` warning when the target width is not topologically reachable.
