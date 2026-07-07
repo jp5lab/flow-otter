@@ -6,9 +6,8 @@ the safety spine (idempotent compilation, snapshot-before-deploy with hash-drift
 refusal, tiered env-gates, read-only default) is the whole point and must never
 regress. TypeScript ESM, Node ≥20, 75 MCP tools (21 default-visible) behind
 progressive-disclosure
-toolsets. It deliberately sits at the workspace root outside the bucket layout; the
-v2.0.0 release was cut locally on 2026-07-06 after the FULLY FIXED declaration,
-and is awaiting the user's push/publish.
+toolsets. It deliberately sits at the workspace root outside the bucket layout. The
+current line is v2.0.0, released 2026-07-06 after the FULLY FIXED declaration.
 
 ## Commands
 
@@ -37,13 +36,12 @@ Per-commit gate ladder: typecheck / lint / format / tests / build / tool-coverag
 - Budgets/steps files are pinned by unit tests (`tests/unit/scripts/eval/`) —
   loosening a gate is intentionally loud. Protocol: `docs/EVALUATION.md`.
 
-## Current state (2026-07-06 release cut)
+## Current state (v2.0.0)
 
 The 2026-06-10 layout-audit fix campaign is complete. FULLY FIXED was declared
-2026-07-06 at commit `a5b634d` per `scripts/eval/replay/AUDIT-RERUN.md`; the
-sanitized public record is `docs/audits/2026-07-06-audit-rerun.md`. The v2.0.0
-release cut remains local and unpushed per house rules. `eval-results/2026-06-10-layout-audit/BACKLOG.md`
-remains the detailed local record; do not force-add `eval-results/`.
+2026-07-06 per `scripts/eval/replay/AUDIT-RERUN.md`; the sanitized public
+record is `docs/audits/2026-07-06-audit-rerun.md`. Detailed evaluation
+artifacts live under the gitignored `eval-results/` — never force-add it.
 
 ## House rules
 
