@@ -24,5 +24,10 @@ audit.jsonl
 # Local evaluation campaign outputs (may contain real target URLs) — never commit
 eval-results/
 
+# Developer-local material of any kind (notes, data, drafts, captures) that is
+# valuable on this machine but must never reach the public repo. Relocate here
+# instead of deleting when something can't be published.
+/local/
+
 # A real flows.json materialized at the repo root (file mode per .env.example) may contain real broker hosts/topics — never commit it. Root-anchored so tests/fixtures stay trackable.
 /flows.json
