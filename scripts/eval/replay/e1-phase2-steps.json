@@ -32,55 +32,294 @@
         {
           "tool": "stage_spec",
           "args": {
-            "tab_id": "f6f2187d.f17ca8",
             "reason": "audit e1 phase-2 computed layout replay",
             "spec": {
-              "goal": "Recompute the e1 operator flow from semantic stages without hand-authored coordinates.",
-              "layout_strategy": "computed",
-              "stages": [
+              "tabs": [
                 {
-                  "key": "acquire",
-                  "label": "ACQUIRE",
-                  "lane": "main",
-                  "members": ["mqtt_in", "inject_test"]
-                },
-                {
-                  "key": "condition",
-                  "label": "CONDITION",
-                  "lane": "main",
-                  "members": ["parse", "scale"]
-                },
-                {
-                  "key": "decide",
-                  "label": "DECIDE",
-                  "lane": "main",
-                  "members": ["tswitch"]
-                },
-                {
-                  "key": "act",
-                  "label": "ACT",
-                  "lane": "main",
-                  "members": ["debounce", "format_alarm", "notify"]
-                },
-                {
-                  "key": "indicate",
-                  "label": "INDICATE",
-                  "lane": "indicate",
-                  "members": ["current_temp"]
-                },
-                {
-                  "key": "error",
-                  "label": "ERROR LANE",
-                  "lane": "error",
-                  "members": ["catch_all", "format_error", "error_log"]
+                  "id": "f6f2187d.f17ca8",
+                  "label": "Flow 1",
+                  "disabled": false,
+                  "info": "",
+                  "nodes": [
+                    {
+                      "key": "inject_test",
+                      "type": "inject",
+                      "label": "Test pulse (sim)",
+                      "groupKey": "group",
+                      "passthrough": {
+                        "props": [{ "p": "payload" }, { "p": "topic", "vt": "str" }],
+                        "repeat": "",
+                        "crontab": "",
+                        "once": false,
+                        "onceDelay": 0.1,
+                        "topic": "factory-line-a/temperature",
+                        "payload": "{\"raw\":1234}",
+                        "payloadType": "json"
+                      }
+                    },
+                    {
+                      "key": "error_log",
+                      "type": "debug",
+                      "label": "Error log",
+                      "groupKey": "group-6",
+                      "passthrough": {
+                        "active": true,
+                        "tosidebar": true,
+                        "console": false,
+                        "tostatus": false,
+                        "complete": "true",
+                        "targetType": "full",
+                        "statusVal": "",
+                        "statusType": "auto"
+                      }
+                    },
+                    {
+                      "key": "scale",
+                      "type": "function",
+                      "label": "Scale raw -> degC",
+                      "groupKey": "group-2",
+                      "passthrough": {
+                        "func": "msg.payload.degC = msg.payload.raw / 10;\nreturn msg;",
+                        "outputs": 1,
+                        "noerr": 0,
+                        "initialize": "",
+                        "finalize": "",
+                        "libs": []
+                      }
+                    },
+                    {
+                      "key": "tswitch",
+                      "type": "switch",
+                      "label": "T >= 80 degC?",
+                      "groupKey": "group-3",
+                      "passthrough": {
+                        "property": "payload.degC",
+                        "propertyType": "msg",
+                        "rules": [{ "t": "gte", "v": "80", "vt": "num" }, { "t": "else" }],
+                        "checkall": "false",
+                        "repair": false,
+                        "outputs": 2
+                      }
+                    },
+                    {
+                      "key": "parse",
+                      "type": "function",
+                      "label": "Parse reading",
+                      "groupKey": "group-2",
+                      "passthrough": {
+                        "func": "if (typeof msg.payload === 'string') {\n    msg.payload = JSON.parse(msg.payload);\n}\nreturn msg;",
+                        "outputs": 1,
+                        "noerr": 0,
+                        "initialize": "",
+                        "finalize": "",
+                        "libs": []
+                      }
+                    },
+                    {
+                      "key": "format_error",
+                      "type": "function",
+                      "label": "Format error",
+                      "groupKey": "group-6",
+                      "passthrough": {
+                        "func": "msg.payload = {\n    error: msg.error && msg.error.message,\n    source: msg.error && msg.error.source && msg.error.source.name,\n    at: new Date().toISOString()\n};\nreturn msg;",
+                        "outputs": 1,
+                        "noerr": 0,
+                        "initialize": "",
+                        "finalize": "",
+                        "libs": []
+                      }
+                    },
+                    {
+                      "key": "notify",
+                      "type": "debug",
+                      "label": "Notify operator",
+                      "groupKey": "group-4",
+                      "passthrough": {
+                        "active": true,
+                        "tosidebar": true,
+                        "console": false,
+                        "tostatus": false,
+                        "complete": "payload",
+                        "targetType": "msg",
+                        "statusVal": "",
+                        "statusType": "auto"
+                      }
+                    },
+                    {
+                      "key": "debounce",
+                      "type": "function",
+                      "label": "Debounce repeat alarms",
+                      "groupKey": "group-3",
+                      "passthrough": {
+                        "func": "const now = Date.now();\nconst last = context.get('lastAlarmAt') || 0;\nif (now - last < 60000) {\n    return null;\n}\ncontext.set('lastAlarmAt', now);\nreturn msg;",
+                        "outputs": 1,
+                        "noerr": 0,
+                        "initialize": "",
+                        "finalize": "",
+                        "libs": []
+                      }
+                    },
+                    {
+                      "key": "catch_all",
+                      "type": "catch",
+                      "label": "All errors",
+                      "groupKey": "group-6",
+                      "passthrough": { "scope": null, "uncaught": false }
+                    },
+                    {
+                      "key": "format_alarm",
+                      "type": "function",
+                      "label": "Format alarm",
+                      "groupKey": "group-4",
+                      "passthrough": {
+                        "func": "msg.payload = {\n    alarm: 'HIGH_TEMP',\n    line: 'A',\n    degC: msg.payload.degC,\n    at: new Date().toISOString()\n};\nmsg.topic = 'factory-line-a/alerts';\nreturn msg;",
+                        "outputs": 1,
+                        "noerr": 0,
+                        "initialize": "",
+                        "finalize": "",
+                        "libs": []
+                      }
+                    },
+                    {
+                      "key": "mqtt_in",
+                      "type": "mqtt in",
+                      "label": "Temp sensor (line A)",
+                      "groupKey": "group",
+                      "passthrough": {
+                        "topic": "factory-line-a/temperature",
+                        "qos": "2",
+                        "datatype": "auto-detect",
+                        "broker": "987eef4ff5597e9c"
+                      }
+                    },
+                    {
+                      "key": "current_temp",
+                      "type": "debug",
+                      "label": "Current temp",
+                      "groupKey": "group-5",
+                      "passthrough": {
+                        "active": true,
+                        "tosidebar": true,
+                        "console": false,
+                        "tostatus": true,
+                        "complete": "payload.degC",
+                        "targetType": "msg",
+                        "statusVal": "payload.degC",
+                        "statusType": "msg"
+                      }
+                    },
+                    {
+                      "key": "mqtt_alerts",
+                      "type": "mqtt out",
+                      "label": "alerts topic",
+                      "groupKey": "group-4",
+                      "passthrough": {
+                        "topic": "factory-line-a/alerts",
+                        "qos": "1",
+                        "retain": "",
+                        "broker": "987eef4ff5597e9c"
+                      }
+                    },
+                    {
+                      "key": "validate",
+                      "type": "function",
+                      "label": "Validate range 0-200",
+                      "groupKey": "group-2",
+                      "passthrough": {
+                        "func": "const r = msg.payload && msg.payload.raw;\nif (typeof r !== 'number' || r < 0 || r > 2000) {\n    node.error('reading outside 0-200 degC range (raw=' + r + ')', msg);\n    return null;\n}\nreturn msg;",
+                        "outputs": 1,
+                        "noerr": 0,
+                        "initialize": "",
+                        "finalize": "",
+                        "libs": []
+                      }
+                    }
+                  ],
+                  "connections": [
+                    { "fromKey": "inject_test", "outputPort": 0, "toKey": "parse" },
+                    { "fromKey": "scale", "outputPort": 0, "toKey": "tswitch" },
+                    { "fromKey": "tswitch", "outputPort": 0, "toKey": "debounce" },
+                    { "fromKey": "tswitch", "outputPort": 1, "toKey": "current_temp" },
+                    { "fromKey": "parse", "outputPort": 0, "toKey": "validate" },
+                    { "fromKey": "format_error", "outputPort": 0, "toKey": "error_log" },
+                    { "fromKey": "debounce", "outputPort": 0, "toKey": "format_alarm" },
+                    { "fromKey": "catch_all", "outputPort": 0, "toKey": "format_error" },
+                    { "fromKey": "format_alarm", "outputPort": 0, "toKey": "notify" },
+                    { "fromKey": "format_alarm", "outputPort": 0, "toKey": "mqtt_alerts" },
+                    { "fromKey": "mqtt_in", "outputPort": 0, "toKey": "parse" },
+                    { "fromKey": "validate", "outputPort": 0, "toKey": "scale" }
+                  ],
+                  "groups": [
+                    { "key": "group", "name": "ACQUIRE", "nodeKeys": ["inject_test", "mqtt_in"] },
+                    {
+                      "key": "group-2",
+                      "name": "CONDITION",
+                      "nodeKeys": ["scale", "parse", "validate"]
+                    },
+                    {
+                      "key": "group-3",
+                      "name": "DECIDE",
+                      "nodeKeys": ["tswitch", "debounce"]
+                    },
+                    {
+                      "key": "group-4",
+                      "name": "ACT",
+                      "nodeKeys": ["notify", "format_alarm", "mqtt_alerts"]
+                    },
+                    { "key": "group-5", "name": "INDICATE", "nodeKeys": ["current_temp"] },
+                    {
+                      "key": "group-6",
+                      "name": "ERROR LANE",
+                      "nodeKeys": ["error_log", "format_error", "catch_all"]
+                    }
+                  ],
+                  "comments": [
+                    { "key": "comment", "text": "ACQUIRE" },
+                    { "key": "comment-2", "text": "CONDITION" },
+                    { "key": "comment-3", "text": "DECIDE" },
+                    { "key": "comment-4", "text": "ACT (alarm path)" },
+                    { "key": "comment-5", "text": "INDICATE (normal)" },
+                    { "key": "comment-6", "text": "ERROR LANE (all errors)" }
+                  ]
                 }
               ],
-              "rules": [
-                "main flow left-to-right",
-                "switch port 0 stays above later ports",
-                "error lane below main path",
-                "groups enclose stage members"
+              "configNodes": [
+                {
+                  "key": "broker_main",
+                  "type": "mqtt-broker",
+                  "label": "mosquitto-local",
+                  "passthrough": {
+                    "broker": "mosquitto",
+                    "port": "1883",
+                    "clientid": "",
+                    "autoConnect": true,
+                    "usetls": false,
+                    "protocolVersion": "4",
+                    "keepalive": "60",
+                    "cleansession": true,
+                    "birthTopic": "",
+                    "birthQos": "0",
+                    "birthPayload": "",
+                    "closeTopic": "",
+                    "closeQos": "0",
+                    "closePayload": "",
+                    "willTopic": "",
+                    "willQos": "0",
+                    "willPayload": ""
+                  }
+                }
               ]
+            },
+            "layout_hints": {
+              "lane_hints": {
+                "group": "main",
+                "group-2": "main",
+                "group-3": "main",
+                "group-4": "main",
+                "group-5": "indicate",
+                "group-6": "error"
+              },
+              "section_order": ["group", "group-2", "group-3", "group-4", "group-5", "group-6"]
             }
           },
           "expect": { "error": false, "match": "\"staged_hash\"" }
