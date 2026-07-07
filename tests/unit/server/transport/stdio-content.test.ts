@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ToolContentBlock } from '../../../../src/server/tools/_tool.js';
-import { buildSuccessContent } from '../../../../src/server/transport/stdio.js';
+import {
+  buildCallToolSuccessResult,
+  buildSuccessContent,
+} from '../../../../src/server/transport/stdio.js';
 
 /**
  * REND-5 — stdio success-path content regression.
@@ -59,5 +62,37 @@ describe('buildSuccessContent (stdio default-path pin)', () => {
     };
     const content = await buildSuccessContent(tool, {}, {});
     expect(content).toEqual([{ type: 'text', text: 'async' }]);
+  });
+
+  it('schema-backed success results include structuredContent matching the JSON text block', async () => {
+    const result = {
+      ok: true,
+      staged_hash: 'abc123',
+      nested: { values: [1, 2, 3] },
+      _guidance: [{ message: 'review staged diff' }],
+    };
+    const response = await buildCallToolSuccessResult(
+      {
+        outputJsonSchema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' } },
+        },
+      },
+      result,
+      {},
+    );
+
+    expect(response.structuredContent).toEqual(result);
+    expect(response.content).toHaveLength(1);
+    const text = response.content[0];
+    expect(text?.type).toBe('text');
+    expect(JSON.parse((text as { text: string }).text)).toEqual(response.structuredContent);
+  });
+
+  it('success results without outputSchema keep content-only shape', async () => {
+    const response = await buildCallToolSuccessResult({}, { ok: true }, {});
+    expect(response).toEqual({
+      content: [{ type: 'text', text: JSON.stringify({ ok: true }, null, 2) }],
+    });
   });
 });

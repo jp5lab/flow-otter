@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { FlowsJson } from '../../src/shared/flows-json.js';
 import { canonicalHash } from '../../src/shared/hash.js';
+import { toolsetOf } from '../../src/server/tools/toolsets.js';
 
 import { buildIntegrationRig, callTool, type TestRig } from './helpers.js';
 
@@ -308,10 +309,17 @@ describe('author tools end-to-end', () => {
     });
   });
 
-  it('all D author tools are registered and listable', () => {
+  it('all D author tools are registered and reachable', () => {
     const names = rig.registry.listTools().map((t) => t.name);
+    const visibleToolsets = new Set(rig.registry.enabledToolsets());
     for (const c of AUTHOR_TOOL_CASES) {
-      expect(names, `tool ${c.name} should be registered`).toContain(c.name);
+      expect(rig.registry.find(c.name)?.name, `tool ${c.name} should resolve`).toBe(c.name);
+      const shouldBeListable = visibleToolsets.has(toolsetOf(c.name));
+      if (shouldBeListable) {
+        expect(names, `tool ${c.name} should be listable`).toContain(c.name);
+      } else {
+        expect(names, `tool ${c.name} should be hidden but callable`).not.toContain(c.name);
+      }
     }
   });
 

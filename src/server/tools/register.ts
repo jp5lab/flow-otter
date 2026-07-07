@@ -8,7 +8,7 @@ export interface ToolRegistry {
   register<TIn, TOut>(tool: Tool<TIn, TOut>): void;
   /** Visible tools (filtered by enabled toolsets + tier enablement). */
   listTools(): readonly InvokableTool[];
-  /** Resolve a tool by name, but only if its toolset is currently enabled. */
+  /** Resolve a tool by name if visible, or if its disabled toolset remains callable. */
   find(name: string): InvokableTool | undefined;
   /** Enabled toolsets (read-only snapshot of current state). */
   enabledToolsets(): readonly ToolsetName[];
@@ -46,6 +46,11 @@ export function buildRegistry(
     return enabled.has(toolsetOf(name));
   }
 
+  function isCallable(name: string): boolean {
+    const owner = TOOLSETS[toolsetOf(name)];
+    return enabled.has(owner.name) || owner.callable_when_disabled;
+  }
+
   return {
     register: <TIn, TOut>(tool: Tool<TIn, TOut>): void => {
       ingest(tool as unknown as Tool<unknown, unknown>);
@@ -54,7 +59,7 @@ export function buildRegistry(
     find: (name) => {
       const t = allByName.get(name);
       if (t === undefined) return undefined;
-      if (!isVisible(name)) return undefined;
+      if (!isCallable(name)) return undefined;
       return t;
     },
     enabledToolsets: () => [...enabled],

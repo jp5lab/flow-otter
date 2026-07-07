@@ -14,6 +14,30 @@ let root: string;
 let container: Container;
 let registry: ToolRegistry;
 
+const DEFAULT_VISIBLE_TOOLS = [
+  'clear_target',
+  'deploy_staged_change',
+  'discard_staged_change',
+  'enable_toolset',
+  'get_authoring_guide',
+  'get_flow',
+  'get_staged_change',
+  'health_check',
+  'layout_flow',
+  'list_available_toolsets',
+  'list_flows',
+  'plan_flow',
+  'preview_flow_diff',
+  'render_flow_png',
+  'rollback_last_change',
+  'set_flows_state',
+  'set_target',
+  'stage_changes',
+  'stage_spec',
+  'validate_flow',
+  'validate_spec',
+] as const;
+
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'toolset-discovery-'));
   const flowsPath = path.join(root, 'flows.json');
@@ -55,16 +79,48 @@ describe('toolset discovery through the registry', () => {
     expect(guide.layout_conventions).toHaveLength(8);
 
     const listed = (await callTool(registry, container, 'list_available_toolsets', {})) as {
-      toolsets: Array<{ name: string; currently_enabled: boolean }>;
+      toolsets: Array<{
+        name: string;
+        currently_enabled: boolean;
+        callable_when_disabled: boolean;
+        demotion?: {
+          since: string;
+          superseded_by: string;
+          removal: string;
+        };
+      }>;
     };
     expect(listed.toolsets.find((t) => t.name === 'core')?.currently_enabled).toBe(true);
+    expect(listed.toolsets.find((t) => t.name === 'author')?.currently_enabled).toBe(false);
+    expect(listed.toolsets.find((t) => t.name === 'author')?.callable_when_disabled).toBe(true);
+    expect(listed.toolsets.find((t) => t.name === 'author')?.demotion).toMatchObject({
+      since: '2.0.0',
+      removal: 'no earlier than 2.2.0',
+    });
     expect(listed.toolsets.find((t) => t.name === 'author_specialists')?.currently_enabled).toBe(
       false,
     );
+    expect(
+      listed.toolsets.find((t) => t.name === 'author_specialists')?.callable_when_disabled,
+    ).toBe(false);
 
-    const visible = registry.listTools().map((t) => t.name);
+    const visible = registry
+      .listTools()
+      .map((t) => t.name)
+      .sort();
+    expect(visible).toEqual([...DEFAULT_VISIBLE_TOOLS]);
     expect(visible).toContain('plan_flow');
+    expect(visible).not.toContain('add_node');
     expect(visible).not.toContain('add_inject_node');
+  });
+
+  it('demoted toolsets stay callable while hidden', async () => {
+    expect(registry.listTools().map((t) => t.name)).not.toContain('get_server_config_summary');
+    const summary = (await callTool(registry, container, 'get_server_config_summary', {})) as {
+      config: Record<string, unknown>;
+    };
+    expect(summary.config['ENVIRONMENT_NAME']).toBe('integration-toolset-discovery');
+    expect(registry.find('add_inject_node')).toBeUndefined();
   });
 
   it('enable_toolset makes specialist tools visible without touching flow state', async () => {

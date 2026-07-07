@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { toolsetOf } from '../../src/server/tools/toolsets.js';
+
 import { FIXTURE_INJECT_ID, FIXTURE_TAB_ID } from './global-setup.js';
 import { buildIntegrationRig, callTool, type TestRig } from './helpers.js';
 
@@ -200,7 +202,7 @@ describe('read tools against seeded Node-RED', () => {
     expect(tools.some((t) => t.startsWith('list_flows') || t.startsWith('get_'))).toBe(true);
   });
 
-  it('every read tool is registered and listable', () => {
+  it('every read tool is registered and reachable', () => {
     const expected = [
       'health_check',
       'get_server_config_summary',
@@ -228,8 +230,15 @@ describe('read tools against seeded Node-RED', () => {
       'get_audit_log_recent',
     ];
     const names = rig.registry.listTools().map((t) => t.name);
+    const visibleToolsets = new Set(rig.registry.enabledToolsets());
     for (const name of expected) {
-      expect(names, `tool ${name} should be registered`).toContain(name);
+      expect(rig.registry.find(name)?.name, `tool ${name} should resolve`).toBe(name);
+      const shouldBeListable = visibleToolsets.has(toolsetOf(name));
+      if (shouldBeListable) {
+        expect(names, `tool ${name} should be listable`).toContain(name);
+      } else {
+        expect(names, `tool ${name} should be hidden but callable`).not.toContain(name);
+      }
     }
   });
 });

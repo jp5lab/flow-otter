@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { canonicalHash } from '../../shared/hash.js';
 import type { AuditEvent, AuditResult } from '../audit/schema.js';
@@ -143,6 +144,7 @@ export interface InvokableTool {
   readonly tier: ToolTier;
   readonly inputZod: z.ZodType<unknown>;
   readonly inputJsonSchema: Readonly<Record<string, unknown>>;
+  readonly outputJsonSchema?: Readonly<Record<string, unknown>>;
   /** Resolved annotations (tier defaults merged with per-tool overrides). */
   readonly annotations: ToolAnnotations;
   /** Success-path content builder pass-through; see Tool.buildContent. */
@@ -201,13 +203,48 @@ function classifyError(err: unknown): AuditResult {
   return 'error';
 }
 
+function relaxAdditionalProperties(schema: unknown): void {
+  if (Array.isArray(schema)) {
+    for (const item of schema) relaxAdditionalProperties(item);
+    return;
+  }
+  if (typeof schema !== 'object' || schema === null) return;
+  const record = schema as Record<string, unknown>;
+  if (record['additionalProperties'] === false) {
+    delete record['additionalProperties'];
+  }
+  for (const value of Object.values(record)) relaxAdditionalProperties(value);
+}
+
+function outputJsonSchemaFromZod(
+  toolName: string,
+  schema: z.ZodType<unknown>,
+): Readonly<Record<string, unknown>> {
+  const jsonSchema = zodToJsonSchema(schema as never, {
+    $refStrategy: 'none',
+    target: 'jsonSchema7',
+    allowedAdditionalProperties: undefined,
+    rejectedAdditionalProperties: undefined,
+  }) as Record<string, unknown>;
+  delete jsonSchema['$schema'];
+  relaxAdditionalProperties(jsonSchema);
+  if (jsonSchema['type'] !== 'object') {
+    throw new Error(`Output schema for ${toolName} must be a top-level object.`);
+  }
+  return jsonSchema;
+}
+
 export function makeInvokable<TIn, TOut>(tool: Tool<TIn, TOut>): InvokableTool {
+  const outputJsonSchema =
+    tool.outputZod !== undefined ? outputJsonSchemaFromZod(tool.name, tool.outputZod) : undefined;
+
   return {
     name: tool.name,
     description: tool.description,
     tier: tool.tier,
     inputZod: tool.inputZod,
     inputJsonSchema: tool.inputJsonSchema,
+    ...(outputJsonSchema !== undefined ? { outputJsonSchema } : {}),
     annotations: resolveAnnotations(tool.tier, tool.annotations),
     ...(tool.buildContent !== undefined
       ? {

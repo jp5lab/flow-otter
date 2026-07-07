@@ -89,30 +89,30 @@ export const SERVER_INFO = {
  * `instructions`. Claude Code truncates server instructions at ~2KB; keep
  * under that ceiling. Update via tests/unit/server/instructions.test.ts.
  */
-export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+) for agents: staging, validation, snapshots, atomic deploys. Use 4 phases.
+export const SERVER_INSTRUCTIONS = `FlowOtter authors Node-RED flows (4.0+): staging, validation, snapshots, deploys. Use 4 phases.
 
-1. PLAN — for flows >10 nodes or operator dashboards, call plan_flow. Restate 3-7 stages; decide organization BEFORE nodes.
+1. PLAN — for flows >10 nodes or dashboards, call plan_flow. Restate 3-7 stages; organize BEFORE nodes.
 
 2. ORGANIZE — decision tree:
-- Pattern repeats 2+ times → create_subflow_definition + add_subflow_instance
-- Nodes share one purpose → add_group (nestable)
-- Wire spans tabs/distance → add_link_out_node + add_link_in_node
-- Stage is independent → new tab
+- Repeat 2+ times → create_subflow_definition + add_subflow_instance
+- Same purpose → add_group
+- Cross-tab/long wire → add_link_out_node + add_link_in_node
+- Independent stage → new tab
 
 3. STRUCTURE → WIRE → LAYOUT:
-- Author ops write ONE staged change; pending stage blocks next author op until deploy_staged_change or discard_staged_change. Layout: positions/groups/move_node.
-- stage_changes batches many ops into ONE staged change.
+- Default: stage_spec or stage_changes; enable_toolset('author') re-lists per-op editing (add_node/move_node/etc.). Pending stage blocks next author op until deploy_staged_change or discard_staged_change.
+- stage_changes batches many ops into ONE staged change. Layout with layout_flow or move_node/groups.
 
 LAYOUT CONVENTIONS: 20px grid; stages left-to-right at 140-220px column pitch; error lane ≥120px BELOW the happy path; switch port 0 (affirmative) on top; tab ≤1420px wide (visible viewport); minimize crossings; no backward wires. validate_flow returns diagnostics + layout scores.
 
 4. REVIEW → VALIDATE → DEPLOY:
 - render_flow_png(against:'staged') returns png_path — Read it; render_flow_svg for SVG. Show user; validate_flow; get_staged_change gives staged_hash; preview_flow_diff before deploy_staged_change. User confirms.
 
-DISCOVERY: get_authoring_guide returns catalog (node types, widgets, templates, validators, layout_conventions, ISA-101); list_available_toolsets/enable_toolset unlock tools.
+DISCOVERY: get_authoring_guide catalog (node types, widgets, templates, validators, layout_conventions, ISA-101); list_available_toolsets/enable_toolset unlock tools.
 
 SPECIALISTS: prefer generic add_node({type, ...}) for contrib + core types; enable author_specialists only when type-specific schemas matter.
 
-DASHBOARDS: Dashboard 2.0 follows ISA-101 — grayscale, color = severity, trends > instantaneous, destructive controls confirm.
+DASHBOARDS: ISA-101 — grayscale, color = severity, trends > instantaneous.
 
 VERSIONING: Node-RED version detected on set_target; gated features via health_check.capabilities.
 

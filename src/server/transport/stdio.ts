@@ -33,6 +33,21 @@ export async function buildSuccessContent(
   return [{ type: 'text', text: JSON.stringify(result, null, 2) }];
 }
 
+export async function buildCallToolSuccessResult(
+  tool: Pick<InvokableTool, 'buildContent' | 'outputJsonSchema'>,
+  result: unknown,
+  input: unknown,
+): Promise<{ content: ToolContentBlock[]; structuredContent?: Record<string, unknown> }> {
+  const content = await buildSuccessContent(tool, result, input);
+  if (tool.outputJsonSchema === undefined) {
+    return { content };
+  }
+  if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+    throw new Error('Tool advertised an object outputSchema but returned a non-object result.');
+  }
+  return { content, structuredContent: result as Record<string, unknown> };
+}
+
 export interface StartStdioOptions {
   container: Container;
   registry: ToolRegistry;
@@ -60,6 +75,7 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
       name: t.name,
       description: t.description,
       inputSchema: t.inputJsonSchema,
+      ...(t.outputJsonSchema !== undefined ? { outputSchema: t.outputJsonSchema } : {}),
       annotations: t.annotations,
     }));
     return { tools };
@@ -114,9 +130,7 @@ export async function startStdio(opts: StartStdioOptions): Promise<{
     try {
       const validated = tool.inputZod.parse(args ?? {});
       const result = await tool.invoke(validated, opts.container);
-      return {
-        content: await buildSuccessContent(tool, result, validated),
-      };
+      return await buildCallToolSuccessResult(tool, result, validated);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       opts.container.logger.error({ tool: name, err: message }, 'tool invocation failed');

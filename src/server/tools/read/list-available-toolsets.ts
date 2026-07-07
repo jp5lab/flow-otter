@@ -11,6 +11,14 @@ const ToolsetEntrySchema = z.object({
   description: z.string(),
   default_enabled: z.boolean(),
   currently_enabled: z.boolean(),
+  callable_when_disabled: z.boolean(),
+  demotion: z
+    .object({
+      since: z.literal('2.0.0'),
+      superseded_by: z.string(),
+      removal: z.literal('no earlier than 2.2.0'),
+    })
+    .optional(),
   tool_names: z.array(z.string()),
 });
 
@@ -23,7 +31,7 @@ type Output = z.infer<typeof OutputSchema>;
 export const listAvailableToolsetsTool: Tool<Input, Output> = {
   name: 'list_available_toolsets',
   description:
-    "Lists all toolsets FlowOtter ships with, indicating which are enabled in the current session. Use enable_toolset to load a non-default toolset (e.g., 'author_specialists' for typed add_<type>_node tools). Read-only.",
+    "Lists all toolsets FlowOtter ships with, indicating which are enabled, hidden-but-callable during a deprecation window, or enable-required in the current session. Use enable_toolset to re-list hidden toolsets or load opt-in sets such as 'author_specialists'. Read-only.",
   tier: 'read',
   inputZod: InputSchema,
   inputJsonSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -41,6 +49,8 @@ export const listAvailableToolsetsTool: Tool<Input, Output> = {
         description: t.description,
         default_enabled: t.default_enabled,
         currently_enabled: enabled.has(t.name),
+        callable_when_disabled: t.callable_when_disabled,
+        ...(t.demotion !== undefined ? { demotion: t.demotion } : {}),
         tool_names: [...t.tool_names],
       };
     });

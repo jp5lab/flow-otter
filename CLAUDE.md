@@ -4,7 +4,8 @@ FlowOtter (`@jp5lab/flow-otter`) is an MCP server that lets AI agents safely aut
 validate, diff, deploy, and roll back Node-RED flows through a typed authoring layer —
 the safety spine (idempotent compilation, snapshot-before-deploy with hash-drift
 refusal, tiered env-gates, read-only default) is the whole point and must never
-regress. TypeScript ESM, Node ≥20, ~66 MCP tools behind progressive-disclosure
+regress. TypeScript ESM, Node ≥20, 75 MCP tools (21 default-visible) behind
+progressive-disclosure
 toolsets. It deliberately sits at the workspace root outside the bucket layout; the
 published line is v1.3.0, with the v1.4.0 fix campaign in flight on local `main`.
 
